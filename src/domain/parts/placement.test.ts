@@ -59,6 +59,21 @@ describe('part placement and connectors', () => {
     expect(resolveConnectorPose(exit)).toBeNull()
   })
 
+  it('inherits a nonzero entrance height when resolving the slope exit elevation', () => {
+    const target: ConnectorPose = {
+      position: point3D(0, 0, 300),
+      heading: rotation45(0),
+    }
+    const slope = placePartAtConnector(SLOPE, target)
+    const exit = getWorldConnector(slope, 'exit')
+
+    expect(exit.position.z.status).toBe('verified')
+    expect(isKnownDimension(exit.position.z) && exit.position.z.value).toBe(415)
+    expect(exit.position.x.status).toBe('unknown')
+    expect(exit.position.y.status).toBe('unknown')
+    expect(resolveConnectorPose(exit)).toBeNull()
+  })
+
   it('keeps entrance and exit coordinates correct after a 45-degree rotation', () => {
     const target: ConnectorPose = {
       position: point3D(100, 200, 30),
