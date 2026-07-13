@@ -136,11 +136,15 @@
 形状データは計測プロトコルに従い、次を分離して記録する。
 
 - 2D投影外形：ローカルXYのポリゴン
-- 走行面、下面、左右側壁：長手方向`sMm`ごとのYZ断面
+- 走行面、下面、左右・内外側壁：長手方向stationごとのYZ断面
 - 正常接触除外範囲：正式接続時だけ有効なコネクタローカル体積
 - collision profile：上記をまとめた不変のversion付きデータ
 
-collision profileは`profileId@semantic-version`で識別し、公開済み版を上書きしない。現在は全パーツで`activeCollisionProfile: null`であり、仮の直方体を採用しない。
+sampled collision profileの標準stationは`ratio: 0`から`ratio: 1`まで0.05刻みの21点とし、形状変化点には任意の追加stationを許可する。`sMm`はスロープ等、`thetaDeg`はバンク等で実測できた場合だけ保持し、未確認値は`unknown / null`のままとする。
+
+測定点列を形状の正本とし、補間値を正本へ書き戻さない。初期補間は既知の実測2点間だけの線形補間とし、unknown区間の外挿や、明示的なunknown stationを飛び越える補間を行わない。補間結果は方式と元station参照を持ち、実測値と区別する。補間interfaceを将来差し替えても、元の測定点と旧profile versionを保持する。
+
+collision profileは`profileId@semantic-version`とvariant IDで識別し、公開済み版を上書きしない。現在は全パーツで`activeCollisionProfile: null`であり、仮の直方体を採用しない。
 
 ## 記入例：未確認形状
 
