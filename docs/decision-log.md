@@ -108,3 +108,15 @@
 - readinessはprofile statusと分離し、`structurally-valid`、`height-chain-ready`、`collision-ready`、`not-ready`を用途別に返す。不足時はstation IDと項目を列挙する。
 - collision-readyの対象側壁はパーツの意味に応じて呼び出し側が指定し、全対象stationの走行面、下面、対象側壁、有効高さ・有効幅を必須とする。
 - `unknown` profileはactive不可とし、`provisional` profileも指定用途のreadinessを満たす場合だけ用途指定APIでactiveにする。partial provisional profileをcollision-readyとして選択しない。
+
+### Collision broad phaseとindeterminate安全方針
+
+- sampled collision profileのstation断面は、中心線位置と接線角度でローカルXYZへ展開し、配置のZ軸45度回転とXYZ平行移動で世界座標へ変換する。元profileと配置情報は変更しない。
+- YZ断面点はstation中心線を原点とする横・上方向オフセットとして扱い、`unknown / null`、未知中心線、未知接線角度を0へ置き換えない。
+- 保守的AABBはcollision readiness、中心線位置、接線角度、対象形状点、配置姿勢がすべて既知の場合だけ生成する。不足時は部分点から架空AABBを作らない。
+- AABB境界には座標値と`Number.EPSILON`から導出する計算上のパディングだけを用い、物理公差や接触許容距離と混同しない。
+- broad phaseはpart instance IDで全一意ペアを安定整列し、`clear`、`candidate`、`indeterminate`、`excluded-normal-contact`を返す。AABB重複は`candidate`であって`collision`ではない。
+- 不完全profileまたは配置情報を含むペアは、見かけ上離れていても`clear`へ確定せず、`indeterminate`として不足stationと不足項目を返す。
+- 正常接触除外契約は、正式接続関係と接続両端の既知`normalContactExclusion` volumeがある場合だけ返す。未接続、片側だけ既知、unknown volumeには適用しない。
+- Phase 2.0の`excluded-normal-contact`は除外volume外の衝突がないことを保証しない。後続narrow phaseで正常接触部分だけを除外し、残りの形状を評価する。
+- broad phaseの対象はコースパーツ本体だけとし、支柱、橋脚、補強材、固定具、テープ、会場床は含めない。
