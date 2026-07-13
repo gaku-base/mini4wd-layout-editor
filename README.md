@@ -24,6 +24,17 @@ npm run build
 
 Pull Requestとmainへのpushでは、GitHub ActionsがNode.js 22とnpmキャッシュを使用し、上記4つの検証を自動実行します。
 
+## 開発フロー
+
+このリポジトリは、GitHub Issueを正式な作業指示、CodexのDraft Pull Requestを実装結果として扱うレベル2半自動運用を採用します。
+
+- Codexの最優先ルール：`AGENTS.md`
+- ChatGPT・Codex・人の役割と手順：`docs/codex-workflow.md`
+- Codex実装タスクの作成：`.github/ISSUE_TEMPLATE/codex-task.md`
+- Pull Request報告形式：`.github/pull_request_template.md`
+
+`main`への直接pushと自動マージは禁止し、GitHub Actions成功、仕様照合、がくさんの最終承認後に人がマージします。
+
 ## Phase 1のドメインモデル
 
 - 内部座標はmm単位のXYZ型
