@@ -1,86 +1,142 @@
 # パーツ寸法マスター
 
+本書はパーツごとの採用値と準備状態を管理する。計測方法、記録形式、座標・外形・3Dプロファイル、正常接触除外範囲、collision profileの版管理は [`measurement-protocol.md`](measurement-protocol.md) に従う。
+
+初期対象は3レーンのストレート、45度コーナー、スロープとする。支柱、橋脚、補強材、固定具、テープ、会場床は対象外とする。
+
 ## 状態の定義
 
-- `verified`：確定値。根拠が明確で実装に使用してよい。
-- `provisional`：暫定値。構造検証には使えるが正式判定へ使用しない。
-- `unknown`：未確認。推測で埋めない。
+- `verified`：一次資料、再現可能な実物計測、独立確認、またはプロジェクト所有者の明示承認がある確定値。
+- `provisional`：合法かつ追跡可能な測定値はあるが、独立確認、精度、基準点定義のいずれかが不足する暫定値。
+- `unknown`：追跡可能な数値がない状態。数値欄は`null`とし、推測で埋めない。
+
+状態と別に、証跡の質を`high` / `medium` / `low` / `none`の信頼度で記録する。判定の詳細は計測プロトコル4章を参照する。
+
+## マスターレコードの必須項目
+
+各数値または同じ条件で取得した数値群は、次の項目を持つ。
+
+| 項目 | 内容 |
+|---|---|
+| 状態 | `verified` / `provisional` / `unknown` |
+| 値・単位 | 物理寸法はmm、角度はdegree。unknownは`null` |
+| 値の種類 | 公称値、実測値、画面観察値、導出値、座標定義 |
+| 測定元 | 種別、資料・Issue・公開ページの参照、観察条件 |
+| 測定日 | `YYYY-MM-DD`。不明または未測定は`null` |
+| 測定者 | 追跡可能な担当者ID。不明または未測定は`null` |
+| 許容誤差 | 値、単位、状態。未確認は数値を入れず`unknown` |
+| 信頼度 | `high` / `medium` / `low` / `none` |
+| 備考 | 未確認理由、基準点、測定条件、レビュー状況 |
 
 ## 現在の確定値
 
-| パーツ／項目 | 値 | 単位 | 状態 | 根拠 |
-|---|---:|---|---|---|
-| ストレート1枚 長さ | 540 | mm | verified | ユーザー指定・添付寸法図 |
-| スロープ1枚 高低差 | 115 | mm | verified | ユーザー指定 |
+| パーツ／項目 | 値 | 単位 | 状態 | 測定元 | 測定日 | 測定者 | 許容誤差 | 信頼度 | 備考 |
+|---|---:|---|---|---|---|---|---|---|---|
+| ストレート1枚 長さ | 540 | mm | verified | ユーザー指定・添付寸法図、Issue #1 / #6 | unknown | unknown | unknown | high | 公称値。物理公差は未確認 |
+| スロープ1枚 高低差 | 115 | mm | verified | ユーザー指定、Issue #1 / #6 | unknown | unknown | unknown | high | 公称値。物理公差は未確認 |
 
 ## 添付寸法図から読み取れる検算値
 
 以下は画像資料の読取値であり、正式なパーツマスターへ採用する前に3D形状と照合する。
 
-| 項目 | 読取値 | 単位 | 状態 |
-|---|---:|---|---|
-| ストレート3枚 | 1620 | mm | provisional |
-| 90度コーナー外形 | 717 × 717 | mm | provisional |
-| 180度コーナー外形 | 1434 × 717 | mm | provisional |
+| 項目 | 読取値 | 単位 | 状態 | 測定元 | 測定日 | 測定者 | 許容誤差 | 信頼度 | 備考 |
+|---|---:|---|---|---|---|---|---|---|---|
+| ストレート3枚 | 1620 | mm | provisional | 添付寸法図の読取・540mmからの検算 | unknown | unknown | unknown | medium | 正式採用前に実形状と照合する |
+| 90度コーナー外形 | 717 × 717 | mm | provisional | 添付寸法図の読取 | unknown | unknown | unknown | low | 初期対象外。正式採用前に再計測する |
+| 180度コーナー外形 | 1434 × 717 | mm | provisional | 添付寸法図の読取 | unknown | unknown | unknown | low | 初期対象外。正式採用前に再計測する |
 
-## 第1段階のパーツ
+## 初期対象パーツ
 
 ### ストレート
 
-| 項目 | 値 | 状態 |
-|---|---:|---|
-| 長さ | 540mm | verified |
-| 幅 | 未確認 | unknown |
-| 全高 | 未確認 | unknown |
-| 入口高さ | 0mm（配置基準高を加算） | verified concept |
-| 出口高さ差 | 0mm | verified concept |
-| 2D外形 | 未確認 | unknown |
-| 3D衝突形状 | 未作成 | unknown |
+| 項目 | 値 | 状態 | 測定元・根拠 | 測定日 | 測定者 | 許容誤差 | 信頼度 |
+|---|---:|---|---|---|---|---|---|
+| 長さ | 540mm | verified | ユーザー確定の公称値 | unknown | unknown | unknown | high |
+| 幅 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 入口ローカル座標 | X=0、Y=0、Z=0 | verified | 物理寸法ではなく座標原点の定義 | unknown | unknown | not-applicable | high |
+| 出口ローカルX | 540mm | verified | 確定済み長さを座標へ適用 | unknown | unknown | unknown | high |
+| 出口ローカルY・Z | 0mm | verified | 直進・高さ差なしの座標定義 | unknown | unknown | not-applicable | high |
+| 入口・出口角度 | 0degree | verified | ローカル走行方向の座標定義 | unknown | unknown | not-applicable | high |
+| 2D投影外形 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 走行面・下面・側壁 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
 
 ### 45度コーナー
 
-| 項目 | 値 | 状態 |
-|---|---:|---|
-| 曲率半径 | 未確認 | unknown |
-| 外形 | 未確認 | unknown |
-| 入口角度 | 配置角度 | verified concept |
-| 出口角度差 | 45度 | provisional pending part verification |
-| 3D衝突形状 | 未作成 | unknown |
+| 項目 | 値 | 状態 | 測定元・根拠 | 測定日 | 測定者 | 許容誤差 | 信頼度 |
+|---|---:|---|---|---|---|---|---|
+| 曲率半径 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 全幅・全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 入口ローカル座標 | X=0、Y=0、Z=0 | verified | 物理寸法ではなく座標原点の定義 | unknown | unknown | not-applicable | high |
+| 出口ローカル座標 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 入口角度 | 0degree | verified | ローカル走行方向の座標定義 | unknown | unknown | not-applicable | high |
+| 出口角度差 | 45degree | provisional | 既存仕様。実パーツの基準点と角度許容差は未確認 | unknown | unknown | unknown | low |
+| 2D投影外形 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 走行面・下面・側壁 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
 
 ### スロープ
 
-| 項目 | 値 | 状態 |
-|---|---:|---|
-| 水平長 | 未確認 | unknown |
-| 高低差 | 115mm | verified |
-| 入口高さ | 接続元出口高さ | verified concept |
-| 出口高さ | 入口高さ＋115mm（上り時） | verified concept |
-| 下面プロファイル | 未確認 | unknown |
-| 側壁プロファイル | 未確認 | unknown |
-| 通過可能空間 | 3D形状から取得予定 | unknown |
-| 3D衝突形状 | 未作成 | unknown |
+| 項目 | 値 | 状態 | 測定元・根拠 | 測定日 | 測定者 | 許容誤差 | 信頼度 |
+|---|---:|---|---|---|---|---|---|
+| 水平長 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 高低差 | 115mm | verified | ユーザー確定の公称値 | unknown | unknown | unknown | high |
+| 全幅・全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 入口ローカル座標 | X=0、Y=0、Z=0 | verified | 物理寸法ではなく座標原点の定義 | unknown | unknown | not-applicable | high |
+| 出口ローカルX・Y | `null` | unknown | 水平形状が未計測 | unknown | unknown | unknown | none |
+| 出口ローカルZ | 115mm | verified | 確定済み高低差を座標へ適用 | unknown | unknown | unknown | high |
+| 入口・出口角度 | `null` | unknown | 実パーツの接線方向は未計測 | unknown | unknown | unknown | none |
+| 2D投影外形 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 走行面プロファイル | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 長手方向下面プロファイル | `null` | unknown | 未計測。`sMm`ごとのYZ断面が必要 | unknown | unknown | unknown | none |
+| 側壁プロファイル | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
 
-## 3D形状計測方針
+## 形状データとcollision profile
 
-NOIR Course Layout Makerの3D表示を寸法・形状把握の参考にする。ただし、コード、画像、3Dモデル、素材はコピーしない。
+形状データは計測プロトコルに従い、次を分離して記録する。
 
-各パーツについて最低限、以下を計測・定義する。
+- 2D投影外形：ローカルXYのポリゴン
+- 走行面、下面、左右側壁：長手方向`sMm`ごとのYZ断面
+- 正常接触除外範囲：正式接続時だけ有効なコネクタローカル体積
+- collision profile：上記をまとめた不変のversion付きデータ
 
-1. 全長・全幅・全高
-2. 入口・出口コネクタ位置
-3. 入口・出口方向
-4. 入口・出口高さ
-5. 2D投影外形
-6. 走行面形状
-7. 下面形状
-8. 側壁形状
-9. 接続部の正常接触領域
-10. 独自の簡略3D衝突形状
+collision profileは`profileId@semantic-version`で識別し、公開済み版を上書きしない。現在は全パーツで`activeCollisionProfile: null`であり、仮の直方体を採用しない。
+
+## 記入例：未確認形状
+
+未確認寸法には架空の数値を入れない。
+
+```yaml
+partId: three-lane-slope
+outline2d:
+  status: unknown
+  outerRingsMm: null
+  holesMm: null
+profile3d:
+  status: unknown
+  interpolation: unknown
+  stations: null
+normalContactExclusions:
+  status: unknown
+  volumes: null
+activeCollisionProfile: null
+```
+
+外部の公開画面を将来参考にする場合も、人による通常の観察から得た数値だけを記録する。NOIRサイトのコード、画像、3Dモデル、メッシュ、テクスチャ、ロゴをコピー・保存せず、開発者ツール等による抽出、保護回避、自動巡回、大量アクセスを行わない。
 
 ## 未決事項
 
 - 3レーン全パーツの正式一覧
 - 3レーン幅、壁高、底面厚
 - スロープの水平長と曲線形状
+- 初期対象3パーツの測定日、測定者、物理公差
+- 入口・出口コネクタの物理基準点
+- 正常接触除外範囲
+- 初回collision profileのversionと採用レビュー
 - レーンチェンジャー、バンク、ウェーブの精密形状
 - 接触注意と干渉エラーの許容差
