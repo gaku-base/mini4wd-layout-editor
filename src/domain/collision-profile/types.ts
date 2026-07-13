@@ -21,6 +21,13 @@ export interface SampleMetadata {
   readonly evidenceRefs: readonly string[]
   readonly tolerance: Tolerance
   readonly uncertainty: Uncertainty
+  readonly provenance: MeasurementProvenance | null
+}
+
+export interface MeasurementProvenance {
+  readonly sessionId: string
+  readonly measuredAt: string | null
+  readonly measuredBy: string | null
 }
 
 export interface MeasuredSample<T> {

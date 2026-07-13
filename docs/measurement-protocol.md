@@ -529,6 +529,32 @@ activeCollisionProfile: null
 
 profileの`status`は`verified | provisional | unknown`を許可する。unknownのdraft profileは安全に保持できるが、必要な形状が存在しない間はパーツマスターの`activeCollisionProfile`を`null`のままにする。
 
+### 8.4 疎な手動測定値の取り込みとreadiness
+
+手動採寸結果はMarkdownを自動解析せず、レビュー済みの構造化入力としてdomain層へ渡す。入力はsession ID、part／variant ID、profile ID／version、測定日、測定者、証拠参照と、各stationのID、ratio、任意の`sMm`／`thetaDeg`、走行面、下面、側壁、有効高さ・有効幅を持つ。各値は`provisional`または`unknown / null`に限定し、tolerance、uncertainty、unknown理由を保持する。
+
+取り込み規則：
+
+1. 標準21 stationを生成し、既存profileがある場合は既存stationを重ねる。
+2. 疎な測定stationと同じratioの標準unknown stationを、明示測定stationで置き換える。
+3. 標準格子外の形状変化点は追加stationとして統合する。
+4. 入力で省略された項目は既存値を維持し、既存値もない場合は`unknown / null`のままにする。
+5. 明示的なunknown入力は理由とともにunknownとして取り込む。0や推測値で埋めない。
+6. 取り込んだ実測値は`provisional`とし、入力や既存値からprofileを`verified`へ自動昇格しない。
+7. 補間結果は取り込み対象にせず、正本stationへ書き込まない。
+8. 元の構造化入力、標準station配列、既存profileを変更せず、新しいprofileを返す。
+
+ratioの比較には無次元の固定許容差`1e-10`を使用する。これはJavaScriptの浮動小数点表現差を吸収するためだけの値であり、mmやdegreeの測定誤差・許容誤差ではない。許容差内のratioは同一位置として扱い、`0.3`と`0.30000000000000004`を重複stationにしない。明示測定stationは一致する標準unknown stationの正確なratioを引き継ぐ。
+
+profileの`status`とは別に、次の用途別readinessを評価する。
+
+- `structurally-valid`：schema version、入口・出口、ratio範囲、station ID、重複、昇順が有効。
+- `height-chain-ready`：structurally-validであり、入口・出口の走行面YZ点列から高さ関係を解決できる。
+- `collision-ready`：structurally-validであり、対象とする全stationに走行面、下面、呼び出し側が指定した対象側壁、有効高さ、有効幅がある。
+- `not-ready`：対象用途の条件を満たさず、不足station IDと不足項目を返す。
+
+左右側壁を使うスロープと内外側壁を使うバンクでは必要項目が異なるため、collision readinessの呼び出し側が対象側壁を明示する。追加stationも指定対象に含まれる。`provisional` profileは指定用途のreadinessを満たす場合だけ用途指定active選択APIで選択でき、partial provisional profileをcollision-readyとして扱わない。従来のactive選択APIはstructurally-validだけを確認する互換ラッパーであり、衝突判定可否の根拠に使用してはならない。
+
 ## 9. 正常接続部の干渉除外範囲
 
 正式に接続されたコネクタ同士の正常接触だけを除外するため、各コネクタに`normalContactExclusion`を定義する。接続関係のないパーツや、除外範囲を越えた食い込みには適用しない。
@@ -584,6 +610,7 @@ geometry:
 6. 差し替え時は旧版を削除せず、`supersedes`と変更理由を残す。
 7. 保存済みレイアウトは使用した`profileId@version`を保持し、後から再現できるようにする。
 8. `unknown`で形状データが存在しない場合、架空のprofileを作らず`activeCollisionProfile: null`とする。
+9. active選択はprofile statusだけで判断せず、使用目的に対応するreadinessを確認する。
 
 collision profileを差し替える処理は将来の実装対象であり、本Issueでは文書仕様だけを定義する。
 

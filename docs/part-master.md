@@ -146,6 +146,12 @@ sampled collision profileの標準stationは`ratio: 0`から`ratio: 1`まで0.05
 
 collision profileは`profileId@semantic-version`とvariant IDで識別し、公開済み版を上書きしない。現在は全パーツで`activeCollisionProfile: null`であり、仮の直方体を採用しない。
 
+手動採寸の疎な入力はMarkdownから自動抽出せず、session ID、測定日、測定者、証拠参照、tolerance、uncertaintyを持つ構造化入力へレビュー後に転記する。domain取り込み処理は標準21 stationへ測定済みstationだけを重ね、未測定16点等を`unknown / null`のまま残す。形状変化点の追加stationも統合するが、補間値を正本stationへ書き込まず、取り込みだけで`verified`へ昇格しない。
+
+ratio統合の固定許容差`1e-10`は浮動小数点表現の正規化専用であり、物理公差ではない。元入力、既存profile、標準stationは変更せず、新しい不変profile versionを生成する。
+
+active profileの候補は、statusとは別に`structurally-valid`、`height-chain-ready`、`collision-ready`を用途ごとに確認する。不足がある場合は`not-ready`としてstation IDと不足項目を記録する。partial provisional profileは構造検証や高さ連鎖の検討には使えても、必要な走行面、下面、対象側壁、有効高さ・有効幅が揃うまでcollision-readyとしてactiveにしない。
+
 ## 記入例：未確認形状
 
 未確認寸法には架空の数値を入れない。
