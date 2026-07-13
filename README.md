@@ -22,6 +22,8 @@ npm test
 npm run build
 ```
 
+Pull Requestとmainへのpushでは、GitHub ActionsがNode.js 22とnpmキャッシュを使用し、上記4つの検証を自動実行します。
+
 ## Phase 1のドメインモデル
 
 - 内部座標はmm単位のXYZ型
