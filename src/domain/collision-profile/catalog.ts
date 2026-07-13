@@ -3,6 +3,12 @@ import type {
   CollisionProfileReference,
   SampledCollisionProfile,
 } from './types'
+import {
+  assessCollisionProfileReadiness,
+  type CollisionReadinessRequirements,
+  type ProfileReadinessAssessment,
+  type ProfileUsePurpose,
+} from './readiness'
 
 export function collisionProfileReference(
   profile: SampledCollisionProfile,
@@ -38,9 +44,30 @@ export function addCollisionProfileVersion(
   return { ...catalog, profiles: [...catalog.profiles, profile] }
 }
 
-export function selectActiveCollisionProfile(
+export interface ActiveCollisionProfileSelectionOptions {
+  readonly purpose: ProfileUsePurpose
+  readonly collisionRequirements?: CollisionReadinessRequirements
+}
+
+export class ProfileNotReadyError extends Error {
+  readonly purpose: ProfileUsePurpose
+  readonly assessment: ProfileReadinessAssessment
+
+  constructor(
+    purpose: ProfileUsePurpose,
+    assessment: ProfileReadinessAssessment,
+  ) {
+    super(`Collision profile is not ready for ${purpose}`)
+    this.name = 'ProfileNotReadyError'
+    this.purpose = purpose
+    this.assessment = assessment
+  }
+}
+
+export function selectActiveCollisionProfileForPurpose(
   catalog: CollisionProfileCatalog,
   active: CollisionProfileReference,
+  options: ActiveCollisionProfileSelectionOptions,
 ): CollisionProfileCatalog {
   const selected = catalog.profiles.find((profile) =>
     sameReference(collisionProfileReference(profile), active),
@@ -54,5 +81,33 @@ export function selectActiveCollisionProfile(
     throw new Error('An unknown collision profile cannot be selected as active')
   }
 
+  const assessment = assessCollisionProfileReadiness(
+    selected,
+    options.collisionRequirements,
+  )
+  const status =
+    options.purpose === 'structurally-valid'
+      ? assessment.structural.status
+      : options.purpose === 'height-chain-ready'
+        ? assessment.heightChain.status
+        : assessment.collision.status
+
+  if (status !== options.purpose) {
+    throw new ProfileNotReadyError(options.purpose, assessment)
+  }
+
   return { ...catalog, active: { ...active } }
+}
+
+/**
+ * Compatibility wrapper for Issue #13 callers. It proves structural validity only;
+ * collision use must call selectActiveCollisionProfileForPurpose explicitly.
+ */
+export function selectActiveCollisionProfile(
+  catalog: CollisionProfileCatalog,
+  active: CollisionProfileReference,
+): CollisionProfileCatalog {
+  return selectActiveCollisionProfileForPurpose(catalog, active, {
+    purpose: 'structurally-valid',
+  })
 }

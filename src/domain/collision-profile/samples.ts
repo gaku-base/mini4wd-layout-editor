@@ -13,6 +13,7 @@ function unknownMetadata(unit: MeasurementUnit, evidenceRefs: readonly string[])
     evidenceRefs: [...evidenceRefs],
     tolerance: { status: 'unknown', plus: null, minus: null, unit },
     uncertainty: { status: 'unknown', value: null, unit },
+    provenance: null,
   }
 }
 

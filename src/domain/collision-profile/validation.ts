@@ -3,6 +3,7 @@ import type {
   SampledCollisionProfile,
   SourceSample,
 } from './types'
+import { normalizeRatio, ratiosEquivalent } from './stations'
 
 export type CollisionProfileValidationCode =
   | 'invalid-profile-id'
@@ -72,7 +73,12 @@ export function validateCollisionProfile(
 
   const stations = profile.stations ?? []
 
-  if (!stations.some((station) => station.position.ratio === 0 && station.role === 'entrance')) {
+  if (
+    !stations.some(
+      (station) =>
+        ratiosEquivalent(station.position.ratio, 0) && station.role === 'entrance',
+    )
+  ) {
     issues.push({
       code: 'missing-entrance',
       path: 'stations',
@@ -80,7 +86,12 @@ export function validateCollisionProfile(
     })
   }
 
-  if (!stations.some((station) => station.position.ratio === 1 && station.role === 'exit')) {
+  if (
+    !stations.some(
+      (station) =>
+        ratiosEquivalent(station.position.ratio, 1) && station.role === 'exit',
+    )
+  ) {
     issues.push({
       code: 'missing-exit',
       path: 'stations',
@@ -89,14 +100,17 @@ export function validateCollisionProfile(
   }
 
   const ids = new Set<string>()
-  const ratios = new Set<number>()
+  const ratios: number[] = []
   let previousRatio = Number.NEGATIVE_INFINITY
 
   stations.forEach((station, index) => {
     const path = `stations[${index}]`
     const ratio = station.position.ratio
+    let normalizedRatio = ratio
 
-    if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
+    try {
+      normalizedRatio = normalizeRatio(ratio)
+    } catch {
       issues.push({
         code: 'ratio-out-of-range',
         path: `${path}.position.ratio`,
@@ -113,23 +127,26 @@ export function validateCollisionProfile(
     }
     ids.add(station.id)
 
-    if (ratios.has(ratio)) {
+    if (ratios.some((candidate) => ratiosEquivalent(candidate, normalizedRatio))) {
       issues.push({
         code: 'duplicate-station-ratio',
         path: `${path}.position.ratio`,
         message: `Station ratio ${ratio} is duplicated`,
       })
     }
-    ratios.add(ratio)
+    ratios.push(normalizedRatio)
 
-    if (ratio < previousRatio) {
+    if (
+      normalizedRatio < previousRatio &&
+      !ratiosEquivalent(normalizedRatio, previousRatio)
+    ) {
       issues.push({
         code: 'stations-out-of-order',
         path: `${path}.position.ratio`,
         message: 'Stations must be ordered by ascending ratio',
       })
     }
-    previousRatio = ratio
+    previousRatio = normalizedRatio
 
     stationSamples(station).forEach((sample, sampleIndex) => {
       if (sample.status === 'unknown' && sample.value !== null) {

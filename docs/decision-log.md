@@ -98,3 +98,13 @@
 - 初期補間は既知の実測2点間だけの線形補間とし、unknown区間を外挿せず、明示的なunknown stationを飛び越えない。
 - 補間値には方式と両側の測定station参照を付けて実測値と区別し、測定点列へ書き戻さない。
 - 補間interfaceとprofile version／variantの選択は純粋関数で扱い、差し替え時も旧版と元測定点を変更しない。
+
+### 疎な測定値の取り込みとreadiness
+
+- 手動採寸値はMarkdownを自動解析せず、session、対象profile、測定者、測定日、証拠、tolerance、uncertaintyを持つ構造化入力としてdomain層へ渡す。
+- 疎な測定stationは標準21 stationへ重ね、同じratioの標準unknownを置き換える。未測定項目は`unknown / null`、形状変化点は追加stationとして保持する。
+- 取り込みは元入力、既存profile、標準stationを変更しない純粋関数とし、補間値を正本へ書き込まず、`verified`へ自動昇格しない。
+- ratio比較には無次元の固定許容差`1e-10`を使い、浮動小数点表現差だけを正規化する。物理測定誤差や公差には使用しない。
+- readinessはprofile statusと分離し、`structurally-valid`、`height-chain-ready`、`collision-ready`、`not-ready`を用途別に返す。不足時はstation IDと項目を列挙する。
+- collision-readyの対象側壁はパーツの意味に応じて呼び出し側が指定し、全対象stationの走行面、下面、対象側壁、有効高さ・有効幅を必須とする。
+- `unknown` profileはactive不可とし、`provisional` profileも指定用途のreadinessを満たす場合だけ用途指定APIでactiveにする。partial provisional profileをcollision-readyとして選択しない。

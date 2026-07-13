@@ -3,6 +3,10 @@ import { unknownSample } from './samples'
 
 export const STANDARD_STATION_INTERVAL_PERCENT = 5
 export const STANDARD_STATION_COUNT = 21
+/** Dimensionless floating-point tolerance; this is not a physical measurement tolerance. */
+export const RATIO_NORMALIZATION_EPSILON = 1e-10
+
+const RATIO_DECIMAL_PLACES = 12
 
 function stationRole(percent: number): StationRole {
   if (percent === 0) return 'entrance'
@@ -11,28 +15,51 @@ function stationRole(percent: number): StationRole {
   return 'intermediate'
 }
 
-function assertRatio(ratio: number): void {
-  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) {
+export function ratiosEquivalent(left: number, right: number): boolean {
+  return (
+    Number.isFinite(left) &&
+    Number.isFinite(right) &&
+    Math.abs(left - right) <= RATIO_NORMALIZATION_EPSILON
+  )
+}
+
+export function normalizeRatio(ratio: number): number {
+  if (
+    !Number.isFinite(ratio) ||
+    ratio < -RATIO_NORMALIZATION_EPSILON ||
+    ratio > 1 + RATIO_NORMALIZATION_EPSILON
+  ) {
     throw new RangeError('Station ratio must be a finite number from 0 to 1')
   }
+
+  const boundedRatio = Math.min(1, Math.max(0, ratio))
+  const standardIndex = Math.round(
+    (boundedRatio * 100) / STANDARD_STATION_INTERVAL_PERCENT,
+  )
+  const standardRatio =
+    (standardIndex * STANDARD_STATION_INTERVAL_PERCENT) / 100
+
+  if (ratiosEquivalent(boundedRatio, standardRatio)) return standardRatio
+
+  return Number(boundedRatio.toFixed(RATIO_DECIMAL_PLACES))
 }
 
 export function createUnknownStation(
   id: string,
   ratio: number,
   origin: CollisionProfileStation['origin'] = 'additional',
-  role: StationRole = stationRole(ratio * 100),
+  role?: StationRole,
 ): CollisionProfileStation {
-  assertRatio(ratio)
+  const normalizedRatio = normalizeRatio(ratio)
   const reason = `Station ${id} has not been measured`
   const unknownPolyline = () => unknownSample(reason, 'mm')
 
   return {
     id,
-    role,
+    role: role ?? stationRole(normalizedRatio * 100),
     origin,
     position: {
-      ratio,
+      ratio: normalizedRatio,
       sMm: unknownSample(reason, 'mm'),
       thetaDeg: unknownSample(reason, 'degree'),
     },
@@ -70,14 +97,30 @@ export function mergeAndNormalizeStations(
   baseStations: readonly CollisionProfileStation[],
   additionalStations: readonly CollisionProfileStation[],
 ): readonly CollisionProfileStation[] {
-  const byRatio = new Map<number, CollisionProfileStation>()
+  const merged: CollisionProfileStation[] = []
 
   for (const station of [...baseStations, ...additionalStations]) {
-    assertRatio(station.position.ratio)
-    byRatio.set(station.position.ratio, station)
+    const normalizedRatio = normalizeRatio(station.position.ratio)
+    const matchingIndex = merged.findIndex((candidate) =>
+      ratiosEquivalent(candidate.position.ratio, normalizedRatio),
+    )
+    const normalizedStation: CollisionProfileStation = {
+      ...station,
+      position: { ...station.position, ratio: normalizedRatio },
+    }
+
+    if (matchingIndex === -1) {
+      merged.push(normalizedStation)
+    } else {
+      const matchedRatio = merged[matchingIndex].position.ratio
+      merged[matchingIndex] = {
+        ...normalizedStation,
+        position: { ...normalizedStation.position, ratio: matchedRatio },
+      }
+    }
   }
 
-  return [...byRatio.values()].sort(
+  return merged.sort(
     (left, right) => left.position.ratio - right.position.ratio,
   )
 }
