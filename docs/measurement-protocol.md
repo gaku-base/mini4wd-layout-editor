@@ -318,7 +318,8 @@ profile3d:
   stations:
     - id: string
       role: entrance | intermediate | center | exit
-      positionParameter: sMm | thetaDeg
+      positionParameter: ratio | sMm | thetaDeg
+      ratio: number
       sMm: number | null
       thetaDeg: number | null
       centerlinePositionMm: { x: number, y: number, z: number }
@@ -330,9 +331,9 @@ profile3d:
         right: [[y, z], ...] | null
 ```
 
-`stations`内の全数値は`profile3d.measurement`を継承する。`positionParameter`で選んだ`sMm`または`thetaDeg`を必須とし、もう一方が未確認なら`null`にする。走行面、下面、左右側壁で測定元や精度が異なる場合は、`runningSurface`、`underside`、`sideWalls`を別プロファイルへ分ける。
+`ratio`は入口を0、出口を1とする無次元の採寸位置であり、全stationで必須とする。`sMm`または`thetaDeg`は実測できた場合だけ値を持ち、未確認なら`unknown / null`にする。`stations`内の物理数値は`profile3d.measurement`を継承する。走行面、下面、左右側壁で測定元や精度が異なる場合は、`runningSurface`、`underside`、`sideWalls`を別プロファイルへ分ける。
 
-`interpolation`は実測station間の補間方法である。測定密度や曲線モデルが未確認なら`unknown`とし、後続の厳密干渉判定に使用しない。
+`interpolation`は実測station間の補間方法である。初期実装の既定値は`linear`とするが、既知の実測2点に挟まれた区間の照会結果だけに使用する。測定点列自体を補間値で上書きせず、測定密度や曲線モデルが未確認なら後続の厳密干渉判定に使用しない。
 
 ### 8.1 スロープ下面の長手方向形式
 
@@ -417,7 +418,8 @@ bankProfile:
   stations:
     - id: string
       role: entrance | intermediate | center | exit
-      positionParameter: sMm | thetaDeg
+      positionParameter: ratio | sMm | thetaDeg
+      ratio: number
       sMm: number | null
       thetaDeg: number | null
       centerlinePositionMm: { x: number, y: number, z: number }
@@ -502,6 +504,31 @@ passableSpaceEnvelope3d: null
 activeCollisionProfile: null
 ```
 
+### 8.3 sampled collision profileのstation規則
+
+実装上のcollision profileは、数学的な単一曲線式ではなくstationの測定点列を正本とする。
+
+- 標準stationは`ratio: 0`から`ratio: 1`まで0.05刻みの21点とする。
+- 標準stationに加え、走行面、下面、側壁などの形状変化点へ任意の`ratio`を持つ追加stationを登録できる。
+- 手動採寸ワークシートの25%刻み等はセッション開始時の基本視点である。collision profileへ転記する際は21点の標準格子を生成し、採寸していない5% stationを`unknown / null`のまま残す。
+- station配列は`ratio`昇順へ正規化し、同じ`ratio`の生成済みunknown stationは明示的な追加stationで置き換えられる。station IDはprofile内で重複させない。
+- 入口`ratio: 0`と出口`ratio: 1`は必須とし、範囲外ratio、重複ID、逆順stationを検証エラーとする。
+- 各stationの`sMm`、`thetaDeg`、走行面、下面、左右・内外側壁、有効高さ、有効幅は、`measured`または`unknown`の正本値として保持する。
+- `unknown`は`value: null`とし、標準stationを作るために未確認寸法を0等で埋めない。
+- 各正本値には不確かさ、許容誤差、測定根拠参照を保持する。未確認の不確かさ・許容誤差にも数値を置かず`null`とする。
+
+補間は正本stationから別途導出する照会結果であり、次を守る。
+
+1. 初期既定方式は線形補間とする。
+2. 対象ratioの直前・直後に実測値がある場合だけ補間する。
+3. 片側しか実測値がない場合は外挿せず`unknown / null`を返す。
+4. 間に明示的なunknown stationがある区間を飛び越えて補間しない。
+5. 補間値は`sampleKind: interpolated`、方式、両側のstation IDとratioを持ち、`sampleKind: measured`と区別する。
+6. 補間結果を測定点列へ書き戻さない。
+7. 補間interfaceは差し替え可能とし、将来のmonotone cubicや形状保持方式でも元測定点を変更しない。
+
+profileの`status`は`verified | provisional | unknown`を許可する。unknownのdraft profileは安全に保持できるが、必要な形状が存在しない間はパーツマスターの`activeCollisionProfile`を`null`のままにする。
+
 ## 9. 正常接続部の干渉除外範囲
 
 正式に接続されたコネクタ同士の正常接触だけを除外するため、各コネクタに`normalContactExclusion`を定義する。接続関係のないパーツや、除外範囲を越えた食い込みには適用しない。
@@ -534,7 +561,7 @@ profileId: string
 partId: string
 version: <semantic-version>
 schemaVersion: <semantic-version>
-status: verified | provisional
+status: verified | provisional | unknown
 measurementRevision: string
 supersedes: <profileId@version> | null
 createdAt: YYYY-MM-DD

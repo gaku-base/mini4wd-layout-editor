@@ -87,3 +87,14 @@
 - 誤差成分や基準点を評価できない場合は数値を作らず`unknown`とし、公開画面から得た値は原則`provisional`とする。
 - 一時スクリーンショットは手動計測にだけ使用し、リポジトリへ登録しない。外部3Dデータの取得、抽出、解析、ダウンロードは禁止する。
 - ワークシートからmeasurement recordやcollision profileへ転記する際は別レビューを行い、ワークシートだけで`verified`へ昇格しない。
+
+### sampled collision profile
+
+- スロープとバンクのcollision profileは単一曲線式ではなく、長手方向stationの測定点列を正本とする。
+- 標準stationは入口0%から出口100%まで5%刻みの21点とし、形状変化点には任意の追加stationを許可する。
+- 手動採寸セッションの25%刻み等は基本視点、sampled collision profileの5%刻みは標準格子として区別し、未測定の標準stationは`unknown / null`で保持する。
+- station位置は必須の`ratio`と、実測できた場合の`sMm`、バンク等で必要な`thetaDeg`を保持する。未確認値は`unknown / null`のままとする。
+- station配列はratio昇順へ正規化し、入口0%と出口100%を必須とする。範囲外ratio、重複ID、逆順stationは検証エラーとする。
+- 初期補間は既知の実測2点間だけの線形補間とし、unknown区間を外挿せず、明示的なunknown stationを飛び越えない。
+- 補間値には方式と両側の測定station参照を付けて実測値と区別し、測定点列へ書き戻さない。
+- 補間interfaceとprofile version／variantの選択は純粋関数で扱い、差し替え時も旧版と元測定点を変更しない。
