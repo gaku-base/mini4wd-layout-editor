@@ -9,6 +9,7 @@
 - ストレート
 - 45度コーナー
 - スロープ
+- バンク
 
 判定対象はコースパーツ本体のみとする。支柱、橋脚、補強材、固定具、テープ、会場床は、計測マスターと干渉判定の対象外とする。
 
@@ -36,7 +37,7 @@
 - 長さ、座標、半径、高さ、クリアランス、許容誤差はmmで記録する。
 - 角度と角度許容誤差はdegreeで記録する。
 - 日付は`YYYY-MM-DD`形式とする。
-- バージョン、配列インデックス、識別子は寸法ではないため、寸法状態の対象外とする。
+- バージョン、反復回数、配列インデックス、識別子は寸法ではないため、寸法状態の対象外とする。
 
 ### 3.2 パーツローカル座標
 
@@ -51,7 +52,7 @@
 
 角度は+Xを0度とし、+Z軸まわりの右手系回転で表す。UI操作に使用する角度は45度刻みだが、実パーツの計測値は測定結果と許容誤差を保持し、丸めて`verified`にしてはならない。
 
-曲線パーツとスロープの長手方向位置は、入口から中心基準線に沿った距離`sMm`で表す。これにより、単純なX座標だけでは表現できないコーナーや曲線状スロープにも同じ形式を使用できる。
+曲線パーツとスロープの長手方向位置は、入口から中心基準線に沿った距離`sMm`で表す。中心角を基準に観察するバンクは`thetaDeg`も使用できる。これにより、単純なX座標だけでは表現できないコーナー、スロープ、バンクにも同じ形式を使用できる。
 
 ## 4. 寸法状態と信頼度
 
@@ -113,6 +114,15 @@ source:
   type: user-confirmed | physical-measurement | primary-document | public-screen-observation | derived | none
   reference: string | null
   observationNote: string | null
+observation:
+  viewpoints: [string, ...] | null
+  calibrationReference: string | null
+  calculationMethod: string | null
+  repeatCount: integer | null
+  dispersion:
+    status: verified | provisional | unknown | not-applicable
+    value: number | null
+    unit: mm | degree
 measuredAt: YYYY-MM-DD | null
 measuredBy: string | null
 tolerance:
@@ -141,6 +151,12 @@ source:
   type: user-confirmed
   reference: "Issue #1 / Issue #6"
   observationNote: "ストレート1枚の公称長"
+observation:
+  viewpoints: null
+  calibrationReference: null
+  calculationMethod: null
+  repeatCount: null
+  dispersion: { status: not-applicable, value: null, unit: mm }
 measuredAt: null
 measuredBy: null
 tolerance:
@@ -165,6 +181,12 @@ source:
   type: none
   reference: null
   observationNote: null
+observation:
+  viewpoints: null
+  calibrationReference: null
+  calculationMethod: null
+  repeatCount: null
+  dispersion: { status: unknown, value: null, unit: mm }
 measuredAt: null
 measuredBy: null
 tolerance:
@@ -265,6 +287,12 @@ outline2d:
   status: unknown
   measurement:
     source: { type: none, reference: null, observationNote: null }
+    observation:
+      viewpoints: null
+      calibrationReference: null
+      calculationMethod: null
+      repeatCount: null
+      dispersion: { status: unknown, value: null, unit: mm }
     measuredAt: null
     measuredBy: null
     tolerance: { status: unknown, plus: null, minus: null, unit: mm }
@@ -289,7 +317,10 @@ profile3d:
   interpolation: none | linear | spline | unknown
   stations:
     - id: string
-      sMm: number
+      role: entrance | intermediate | center | exit
+      positionParameter: sMm | thetaDeg
+      sMm: number | null
+      thetaDeg: number | null
       centerlinePositionMm: { x: number, y: number, z: number }
       tangentHeadingDeg: number
       runningSurfacePolylineYZMm: [[y, z], ...] | null
@@ -299,7 +330,7 @@ profile3d:
         right: [[y, z], ...] | null
 ```
 
-`stations`内の全数値は`profile3d.measurement`を継承する。走行面、下面、左右側壁で測定元や精度が異なる場合は、`runningSurface`、`underside`、`sideWalls`を別プロファイルへ分ける。
+`stations`内の全数値は`profile3d.measurement`を継承する。`positionParameter`で選んだ`sMm`または`thetaDeg`を必須とし、もう一方が未確認なら`null`にする。走行面、下面、左右側壁で測定元や精度が異なる場合は、`runningSurface`、`underside`、`sideWalls`を別プロファイルへ分ける。
 
 `interpolation`は実測station間の補間方法である。測定密度や曲線モデルが未確認なら`unknown`とし、後続の厳密干渉判定に使用しない。
 
@@ -329,6 +360,12 @@ profile3d:
   status: unknown
   measurement:
     source: { type: none, reference: null, observationNote: null }
+    observation:
+      viewpoints: null
+      calibrationReference: null
+      calculationMethod: null
+      repeatCount: null
+      dispersion: { status: unknown, value: null, unit: mm }
     measuredAt: null
     measuredBy: null
     tolerance: { status: unknown, plus: null, minus: null, unit: mm }
@@ -343,6 +380,126 @@ undersideEnvelope:
   derivedFromProfileVersion: null
   inheritsMeasurementMetadata: true
   samples: null
+```
+
+### 8.2 バンクの計測形式
+
+バンクは平面曲線だけでなく、長手方向と横断方向の勾配、下面、内外側壁、下を通過できる空間を同時に表現する。入口・中央・出口に加えて複数の中間stationを設定し、傾斜が変化する区間を省略しない。
+
+#### 基本寸法
+
+次の項目を個別の共通測定レコードとして持つ。
+
+```yaml
+bankDimensions:
+  totalLengthMm: <共通測定レコード>
+  centerAngleDeg: <共通測定レコード>
+  centerlineRadiusMm: <共通測定レコード>
+  innerRadiusMm: <共通測定レコード>
+  outerRadiusMm: <共通測定レコード>
+  totalWidthMm: <共通測定レコード>
+  totalHeightMm: <共通測定レコード>
+```
+
+中心線半径は中心基準線、内外半径はパーツ本体の2D投影外形を基準とする。基準線や外形の物理的な定義が確定するまでは、半径を推定せず`unknown`とする。
+
+#### stationと断面
+
+stationは`role`で入口、中央、出口、中間断面を区別する。位置は入口から中心基準線に沿う`sMm`、または入口を0degreeとする中心角`thetaDeg`のどちらかで管理する。両方を記録する場合、導出側は`valueKind: derived`とし、元の測定値を参照する。
+
+```yaml
+bankProfile:
+  status: verified | provisional | unknown
+  measurement: <共通測定メタデータ>
+  coordinateFrame: part-local-xyz
+  inheritsMeasurementMetadata: true
+  interpolation: none | linear | spline | unknown
+  stations:
+    - id: string
+      role: entrance | intermediate | center | exit
+      positionParameter: sMm | thetaDeg
+      sMm: number | null
+      thetaDeg: number | null
+      centerlinePositionMm: { x: number, y: number, z: number }
+      tangentHeadingDeg: number
+      runningSurfaceCenterZMm: number
+      crossSlopeDeg: number
+      runningSurfacePolylineYZMm: [[y, z], ...]
+      undersidePolylineYZMm: [[y, z], ...]
+      walls:
+        inner:
+          lowerEdgeMm: { y: number, z: number }
+          upperEdgeMm: { y: number, z: number }
+          polylineYZMm: [[y, z], ...]
+        outer:
+          lowerEdgeMm: { y: number, z: number }
+          upperEdgeMm: { y: number, z: number }
+          polylineYZMm: [[y, z], ...]
+      passableClearance:
+        effectiveHeightMm: number
+        effectiveWidthMm: number
+        freeSpaceEnvelopeYZMm: [[y, z], ...]
+```
+
+各数値は`bankProfile.measurement`を継承する。走行面、横断勾配、下面、内外側壁、通過可能空間で測定元や精度が異なる場合は、それぞれに個別の共通測定メタデータを持たせる。
+
+- `runningSurfaceCenterZMm`：中心基準線上の走行面高さ
+- `crossSlopeDeg`：stationの接線方向から見た横断勾配。符号規約はprofileの向きとともに記録する
+- `undersidePolylineYZMm`：下面全体の横断形状。単一の下面高さだけで代用しない
+- `walls.inner` / `walls.outer`：内外側壁の上端、下端、必要な中間点
+- `effectiveHeightMm` / `effectiveWidthMm`：そのstationで連続して通過に使える有効寸法
+- `freeSpaceEnvelopeYZMm`：下面と側壁で囲まれた通過可能空間の断面
+
+通過可能空間はstation間で連続する必要がある。単一断面の有効高さ・有効幅だけで通過可能と確定せず、後続エンジンは全stationと補間規則から空間エンベロープを評価する。
+
+collision profileには、station断面から導出した連続空間を次の参照形式で保持できる。元stationや補間規則が変わった場合は再生成し、版が一致しないエンベロープを使用しない。
+
+```yaml
+passableSpaceEnvelope3d:
+  status: verified | provisional | unknown
+  derivedFromProfileVersion: string | null
+  interpolation: none | linear | spline | unknown
+  stationEnvelopeRefs: [string, ...] | null
+```
+
+入口・出口コネクタは6章の形式でXYZ、`headingDeg`、`elevationDeltaMm`を記録する。正常接続部は9章の`normalContactExclusions`をコネクタごとに持ち、正式接続時だけ除外する。
+
+#### 未計測バンクの記入例
+
+以下は可読性のための省略記法であり、保存時には各項目を5章の共通測定レコードへ展開する。
+
+```yaml
+bankDimensions:
+  totalLengthMm: { status: unknown, value: null, unit: mm, confidence: none }
+  centerAngleDeg: { status: unknown, value: null, unit: degree, confidence: none }
+  centerlineRadiusMm: { status: unknown, value: null, unit: mm, confidence: none }
+  innerRadiusMm: { status: unknown, value: null, unit: mm, confidence: none }
+  outerRadiusMm: { status: unknown, value: null, unit: mm, confidence: none }
+  totalWidthMm: { status: unknown, value: null, unit: mm, confidence: none }
+  totalHeightMm: { status: unknown, value: null, unit: mm, confidence: none }
+bankProfile:
+  status: unknown
+  measurement:
+    source: { type: none, reference: null, observationNote: null }
+    observation:
+      viewpoints: null
+      calibrationReference: null
+      calculationMethod: null
+      repeatCount: null
+      dispersion: { status: unknown, value: null, unit: mm }
+    measuredAt: null
+    measuredBy: null
+    tolerance: { status: unknown, plus: null, minus: null, unit: mm }
+    confidence: none
+    notes: "入口、中央、出口、中間断面は未計測"
+  coordinateFrame: part-local-xyz
+  inheritsMeasurementMetadata: true
+  interpolation: unknown
+  stations: null
+connectors: null
+normalContactExclusions: null
+passableSpaceEnvelope3d: null
+activeCollisionProfile: null
 ```
 
 ## 9. 正常接続部の干渉除外範囲
@@ -386,6 +543,7 @@ changeSummary: string
 geometry:
   outline2d: <7章の形式>
   profile3d: <8章の形式>
+  passableSpaceEnvelope3d: <8章の形式>
   normalContactExclusions: <9章の形式>
 ```
 
@@ -402,16 +560,49 @@ geometry:
 
 collision profileを差し替える処理は将来の実装対象であり、本Issueでは文書仕様だけを定義する。
 
+### 10.1 方向反転・左右向きの再利用
+
+同一の実パーツを逆方向に走行する場合や、左右向きの派生profileを作る場合は、元の測定点を複製・再測定したように扱わず、変換規則と元profile versionを記録する。
+
+```yaml
+profileVariant:
+  sourceProfile: <profileId@version>
+  status: verified | provisional
+  transform:
+    travelDirection: preserve | reverse
+    turnSide: preserve | mirror-left-right
+    stationOrder: preserve | reverse
+    connectorMap:
+      entrance: entrance | exit
+      exit: exit | entrance
+    yAxis: preserve | negate
+    crossSlopeSign: preserve | negate
+    polygonWinding: preserve | reverse
+    elevationDeltaSign: preserve | negate
+  evidence: string
+```
+
+再利用ルール：
+
+1. スロープの上り／下りは同じ物理形状を反対方向に通る場合だけ再利用できる。station順と入口・出口を入れ替え、高低差の符号を反転する。Z形状自体を上下反転しない。
+2. バンクの入口／出口方向反転も同じ物理形状に限り、station順、コネクタ、接線方向、長手方向パラメータを変換する。
+3. 左右向きはY座標、横断勾配の符号、ポリゴン巻き方向を変換し、内側・外側の意味ラベルを変換後の半径側へ対応付ける。
+4. 左右の実パーツが鏡像同形であることを測定または一次資料で確認できない場合、mirror variantを作らず別profileを`unknown`から計測する。
+5. variantの状態と信頼度は元profileを超えてはならない。変換規則が未検証なら`provisional`とする。
+6. 保存済みレイアウトは元profile versionとvariant変換の両方を保持し、再現可能にする。
+
 ## 11. 計測・レビュー手順
 
 1. パーツID、版、測定対象項目、基準点を先に定義する。
 2. 参照方法が本書2章に適合するか確認する。疑義があれば作業を停止する。
-3. 測定元、測定日、測定者、器具または観察条件を記録する。
+3. 測定元、測定日、測定者、器具、基準寸法、視点、計算方法を記録する。
 4. 数値、単位、許容誤差、信頼度を記録する。得られない値は`unknown`にする。
-5. 同じ条件で反復測定し、外れ値を削除せず理由とともに残す。
+5. 同じ条件で反復測定し、反復回数とばらつきを記録する。外れ値は削除せず理由とともに残す。
 6. 状態判定を行い、`provisional`から`verified`への昇格はレビューで承認する。
 7. 形状データから新しいcollision profile versionを生成し、旧版との差分を記録する。
 8. パーツマスターの`activeCollisionProfile`更新は、テストとレビューを伴う別変更として行う。
+
+スロープとバンクを将来公開3D表示から採寸する場合は、通常の画面操作だけを用い、上面・側面・正面・背面・斜視などの複数視点と、入口・中央・出口・中間の複数断面で同じ部位を確認する。既知寸法による縮尺校正、視点、計算方法、反復回数、ばらつきを記録し、公開表示から得た値は原則`provisional`とする。
 
 ## 12. 初期対象の準備状態
 
@@ -420,3 +611,4 @@ collision profileを差し替える処理は将来の実装対象であり、本
 | 3レーン ストレート | 長さ540mm verified | 一部定義済み | unknown | unknown | unknown | unknown | unknown | 未作成 |
 | 3レーン 45度コーナー | 出口角度差45度 provisional | unknown | unknown | unknown | unknown | unknown | unknown | 未作成 |
 | 3レーン スロープ | 高低差115mm verified | XY unknown、Z一部定義済み | unknown | unknown | unknown | unknown | unknown | 未作成 |
+| 3レーン バンク | unknown（数値は`null`） | unknown | unknown | unknown | unknown | unknown | unknown | 未作成 |

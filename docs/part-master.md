@@ -2,7 +2,7 @@
 
 本書はパーツごとの採用値と準備状態を管理する。計測方法、記録形式、座標・外形・3Dプロファイル、正常接触除外範囲、collision profileの版管理は [`measurement-protocol.md`](measurement-protocol.md) に従う。
 
-初期対象は3レーンのストレート、45度コーナー、スロープとする。支柱、橋脚、補強材、固定具、テープ、会場床は対象外とする。
+初期対象は3レーンのストレート、45度コーナー、スロープ、バンクとする。支柱、橋脚、補強材、固定具、テープ、会場床は対象外とする。
 
 ## 状態の定義
 
@@ -22,6 +22,7 @@
 | 値・単位 | 物理寸法はmm、角度はdegree。unknownは`null` |
 | 値の種類 | 公称値、実測値、画面観察値、導出値、座標定義 |
 | 測定元 | 種別、資料・Issue・公開ページの参照、観察条件 |
+| 観察・計算条件 | 基準寸法、複数視点、計算方法、反復回数、ばらつき |
 | 測定日 | `YYYY-MM-DD`。不明または未測定は`null` |
 | 測定者 | 追跡可能な担当者ID。不明または未測定は`null` |
 | 許容誤差 | 値、単位、状態。未確認は数値を入れず`unknown` |
@@ -96,6 +97,40 @@
 | 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
 
+### バンク
+
+バンクは入口、中央、出口と複数の中間断面を持つ。位置は`sMm`または`thetaDeg`で記録し、走行面、横断勾配、下面、内外側壁、通過可能空間を同じstationへ関連付ける。以下は未計測状態のテンプレートであり、数値を推測して埋めてはならない。
+
+| 項目 | 値 | 状態 | 測定元・根拠 | 測定日 | 測定者 | 許容誤差 | 信頼度 |
+|---|---:|---|---|---|---|---|---|
+| 全長 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 中心角 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 中心線半径 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 内側半径 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 外側半径 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 全幅 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 入口ローカル座標・角度 | `null` | unknown | 物理基準点と接線方向が未計測 | unknown | unknown | unknown | none |
+| 出口ローカル座標・角度 | `null` | unknown | 物理基準点と接線方向が未計測 | unknown | unknown | unknown | none |
+| 入口・出口高さ差 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 入口・中央・出口station | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 中間station | `null` | unknown | 断面数と位置が未決定 | unknown | unknown | unknown | none |
+| `sMm` / `thetaDeg` | `null` | unknown | 長手方向パラメータが未計測 | unknown | unknown | unknown | none |
+| 走行面高さ | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 横断勾配 | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 下面プロファイル | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 内側壁上端・下端 | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 外側壁上端・下端 | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 通過可能な有効高さ | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 通過可能な有効幅 | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 通過可能空間エンベロープ | `null` | unknown | station別に未計測 | unknown | unknown | unknown | none |
+| 正常接触除外範囲 | `null` | unknown | コネクタ別に未計測 | unknown | unknown | unknown | none |
+| 方向反転variant | `null` | unknown | 同一物理形状としての再利用可否が未確認 | unknown | unknown | unknown | none |
+| 左右向きvariant | `null` | unknown | 鏡像同形か未確認 | unknown | unknown | unknown | none |
+| activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
+
+記入データは計測プロトコル8.2章の形式を使用する。コネクタは6章、正常接触除外範囲は9章、方向反転と左右向きは10.1章に従う。
+
 ## 形状データとcollision profile
 
 形状データは計測プロトコルに従い、次を分離して記録する。
@@ -127,6 +162,26 @@ normalContactExclusions:
 activeCollisionProfile: null
 ```
 
+バンクも同様に、未計測のstation、通過可能空間、variantへ架空値を入れない。
+
+```yaml
+partId: three-lane-bank
+bankDimensions:
+  totalLengthMm: { status: unknown, value: null, unit: mm, confidence: none }
+  centerAngleDeg: { status: unknown, value: null, unit: degree, confidence: none }
+  centerlineRadiusMm: { status: unknown, value: null, unit: mm, confidence: none }
+  innerRadiusMm: { status: unknown, value: null, unit: mm, confidence: none }
+  outerRadiusMm: { status: unknown, value: null, unit: mm, confidence: none }
+bankProfile:
+  status: unknown
+  stations: null
+connectors: null
+normalContactExclusions: null
+passableSpaceEnvelope3d: null
+profileVariants: null
+activeCollisionProfile: null
+```
+
 外部の公開画面を将来参考にする場合も、人による通常の観察から得た数値だけを記録する。NOIRサイトのコード、画像、3Dモデル、メッシュ、テクスチャ、ロゴをコピー・保存せず、開発者ツール等による抽出、保護回避、自動巡回、大量アクセスを行わない。
 
 ## 未決事項
@@ -134,9 +189,11 @@ activeCollisionProfile: null
 - 3レーン全パーツの正式一覧
 - 3レーン幅、壁高、底面厚
 - スロープの水平長と曲線形状
-- 初期対象3パーツの測定日、測定者、物理公差
+- バンクの全長、中心角、中心線半径、内外半径、横断勾配
+- 初期対象4パーツの測定日、測定者、物理公差
 - 入口・出口コネクタの物理基準点
 - 正常接触除外範囲
 - 初回collision profileのversionと採用レビュー
-- レーンチェンジャー、バンク、ウェーブの精密形状
+- スロープ上り／下りとバンク方向反転・左右向きの再利用可否
+- レーンチェンジャー、ウェーブの精密形状
 - 接触注意と干渉エラーの許容差
