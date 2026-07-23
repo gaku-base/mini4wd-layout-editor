@@ -1,0 +1,126 @@
+{
+  "version": "1.3.0",
+  "pixelsPerCm": 20,
+  "rule": "Images are normalized to geometry coordinates. Connection faces must sit on the registered geometry edges.",
+  "parts": {
+    "straight": {
+      "worldBoxCm": [
+        54,
+        36
+      ],
+      "originCm": [
+        27,
+        18
+      ]
+    },
+    "corner45": {
+      "worldBoxCm": [
+        53.71168824543142,
+        49.34415587728429
+      ],
+      "originCm": [
+        22.28370080037117,
+        22.98228629520206
+      ],
+      "geometryBoundsCm": [
+        -20.883700800371173,
+        -21.58228629520206,
+        30.02798744506025,
+        24.96186958208223
+      ],
+      "entryCm": [
+        -20.883700800371173,
+        -3.58228629520206
+      ],
+      "exitCm": [
+        17.300065383702393,
+        12.233947520724378
+      ],
+      "centerlineRadiusCm": 54.0,
+      "innerRadiusCm": 36.0,
+      "outerRadiusCm": 72.0,
+      "angleDeg": 45,
+      "source": "mathematically generated exact annular sector"
+    },
+    "lane-change": {
+      "worldBoxCm": [
+        162,
+        36
+      ],
+      "originCm": [
+        81,
+        18
+      ]
+    },
+    "wave": {
+      "worldBoxCm": [
+        54,
+        42
+      ],
+      "originCm": [
+        27,
+        21
+      ]
+    },
+    "start": {
+      "worldBoxCm": [
+        54,
+        36
+      ],
+      "originCm": [
+        27,
+        18
+      ]
+    },
+    "slope": {
+      "worldBoxCm": [
+        54,
+        36
+      ],
+      "originCm": [
+        27,
+        18
+      ]
+    },
+    "bank20": {
+      "worldBoxCm": [
+        28,
+        36
+      ],
+      "originCm": [
+        14,
+        18
+      ]
+    },
+    "lc-jump": {
+      "worldBoxCm": [
+        54,
+        36
+      ],
+      "originCm": [
+        27,
+        18
+      ],
+      "connectorsCm": [
+        [
+          -27,
+          0
+        ],
+        [
+          27,
+          0
+        ]
+      ]
+    },
+    "burning-lc": {
+      "worldBoxCm": [
+        180,
+        144
+      ],
+      "originCm": [
+        93,
+        72
+      ]
+    }
+  }
+}

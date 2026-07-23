@@ -13,7 +13,7 @@
         <div class="brand-mark" aria-hidden="true">M4</div>
         <div>
           <h1>COURSE LAYOUT</h1>
-          <p>2D Course Layout Release Candidate <span class="version">v1.0 RC1</span></p>
+          <p>2D Mouse Flow Prototype <span class="version">v0.8.4</span></p>
         </div>
       </div>
       <div class="top-actions">
@@ -195,6 +195,133 @@
   <script src="part-catalog.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
+  <script>
+    window.__COURSE_ENABLE_DEBUG__ = true;
+    window.__COURSE_QA_CONSOLE__ = [];
+    for (const level of ['warn', 'error']) {
+      const original = console[level].bind(console);
+      console[level] = (...args) => {
+        window.__COURSE_QA_CONSOLE__.push({ level, message: args.map(String).join(' ') });
+        original(...args);
+      };
+    }
+    window.addEventListener('error', event => {
+      window.__COURSE_QA_CONSOLE__.push({ level: 'error', message: event.message });
+    });
+    window.addEventListener('unhandledrejection', event => {
+      window.__COURSE_QA_CONSOLE__.push({ level: 'error', message: String(event.reason) });
+    });
+    window.addEventListener('load', () => {
+      const output = document.createElement('output');
+      output.id = 'qaConsoleStatus';
+      output.setAttribute('role', 'status');
+      output.setAttribute('aria-label', 'QA console status');
+      output.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;padding:4px 8px;background:#101820;color:#9ef0d0;font:12px monospace;border:1px solid #355;';
+      const refresh = () => {
+        output.textContent = `console warning/error: ${window.__COURSE_QA_CONSOLE__.length}`;
+      };
+      document.body.appendChild(output);
+      refresh();
+      setInterval(refresh, 250);
+    });
+  </script>
   <script src="app.js"></script>
+
+<script>
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    const d = window.__mini4wdCourseDebug;
+    if (!d) return;
+    const scenario = new URLSearchParams(location.search).get('qa') || 'closure';
+    const base = {
+      app: 'mini4wd-course-layout-mouse-flow',
+      version: '1.0.0-RC1',
+      startPhase: 'position',
+      selectedType: 'straight',
+      rotation: 0,
+      activeConnection: null
+    };
+    if (scenario === 'start') {
+      d.loadState({
+        ...base,
+        field: { widthCm: 360, heightCm: 220, gridCm: 10 },
+        start: { x: 180, y: 110, rotation: 0 },
+        parts: [
+          { id: 'straight-left', type: 'straight', x: 126, y: 110, rotation: 0, colorKey: 'default', zIndex: 1 },
+          { id: 'straight-right', type: 'straight', x: 234, y: 110, rotation: 0, colorKey: 'default', zIndex: 2 }
+        ]
+      });
+    } else if (scenario === 'colors') {
+      const colors = ['default', 'red', 'blue', 'orange', 'green', 'white'];
+      d.loadState({
+        ...base,
+        field: { widthCm: 380, heightCm: 140, gridCm: 10 },
+        start: null,
+        parts: colors.map((colorKey, index) => ({
+          id: `color-${colorKey}`,
+          type: 'straight',
+          x: 55 + index * 54,
+          y: 70,
+          rotation: 0,
+          colorKey,
+          zIndex: index + 1
+        }))
+      });
+    } else {
+      const def = window.M4WD_PART_CATALOG.PARTS.corner45;
+      const angle = Math.PI / 4;
+      const inner = def.geometry.innerRadius;
+      const outer = def.geometry.outerRadius;
+      const radialCentroid = (4 * Math.sin(angle / 2) / (3 * angle)) *
+        ((outer ** 3 - inner ** 3) / (outer ** 2 - inner ** 2));
+      const bisector = -3 * Math.PI / 8;
+      const localCenter = {
+        x: -radialCentroid * Math.cos(bisector),
+        y: -radialCentroid * Math.sin(bisector)
+      };
+      const center = { x: 90, y: 90 };
+      const rotate = (point, degrees) => {
+        const radians = degrees * Math.PI / 180;
+        return {
+          x: point.x * Math.cos(radians) - point.y * Math.sin(radians),
+          y: point.x * Math.sin(radians) + point.y * Math.cos(radians)
+        };
+      };
+      d.loadState({
+        ...base,
+        field: { widthCm: 180, heightCm: 180, gridCm: 10 },
+        start: null,
+        parts: Array.from({ length: 8 }, (_, index) => {
+          const rotation = index * 45;
+          const offset = rotate(localCenter, rotation);
+          return {
+            id: `corner-${index + 1}`,
+            type: 'corner45',
+            x: center.x - offset.x,
+            y: center.y - offset.y,
+            rotation,
+            colorKey: 'default',
+            zIndex: index + 1
+          };
+        })
+      });
+    }
+    document.getElementById('setupDialog')?.close();
+    document.querySelector('[data-mode="move"]')?.click();
+    const qaStatus = document.createElement('output');
+    qaStatus.id = 'qaScenarioStatus';
+    qaStatus.setAttribute('role', 'status');
+    qaStatus.setAttribute('aria-label', 'QA scenario status');
+    document.body.appendChild(qaStatus);
+    const refreshScenarioStatus = () => {
+      const runtime = d.getRuntimeState();
+      const state = d.getState();
+      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, seams=${runtime.seamCount}`;
+    };
+    refreshScenarioStatus();
+    setInterval(refreshScenarioStatus, 250);
+  }, 800);
+});
+</script>
 </body>
 </html>

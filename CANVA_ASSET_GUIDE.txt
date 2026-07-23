@@ -1,0 +1,10 @@
+CANVA画像差し替えガイド
+========================
+
+1. assets/parts/README.txtに記載したサイズで透明PNGを作成
+2. 指定ファイル名でassets/parts/へ保存
+3. run_local.batを起動し直す
+4. 画像読込に成功すると右下ステータスのASSET件数が増える
+
+重要：寸法・接続・回転中心・干渉判定はpart-catalog.jsで管理します。
+画像差し替え時にapp.jsやpart-catalog.jsを変更する必要はありません。
