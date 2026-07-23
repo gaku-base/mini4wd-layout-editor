@@ -35,7 +35,7 @@ export const EMPTY_COURSE_LAYOUT: CourseLayout = {
   connections: [],
 }
 
-function layoutPartById(layout: CourseLayout, partId: string): LayoutPart {
+export function getLayoutPart(layout: CourseLayout, partId: string): LayoutPart {
   const part = layout.parts.find((candidate) => candidate.id === partId)
 
   if (part === undefined) {
@@ -45,7 +45,7 @@ function layoutPartById(layout: CourseLayout, partId: string): LayoutPart {
   return part
 }
 
-function connectorKindForReference(
+export function getLayoutConnectorKind(
   part: LayoutPart,
   reference: ConnectorReference,
 ) {
@@ -66,8 +66,8 @@ export function getLayoutConnectorPose(
   layout: CourseLayout,
   reference: ConnectorReference,
 ): ConnectorPose {
-  const part = layoutPartById(layout, reference.partId)
-  const connectorKind = connectorKindForReference(part, reference)
+  const part = getLayoutPart(layout, reference.partId)
+  const connectorKind = getLayoutConnectorKind(part, reference)
   const worldConnector = getWorldConnector(part, connectorKind)
 
   if (worldConnector.definition.id !== reference.connectorId) {
@@ -139,8 +139,8 @@ function attachPart(
     throw new Error('A connector is already connected')
   }
 
-  const targetPart = layoutPartById(layout, request.snapTarget.partId)
-  const targetKind = connectorKindForReference(targetPart, request.snapTarget)
+  const targetPart = getLayoutPart(layout, request.snapTarget.partId)
+  const targetKind = getLayoutConnectorKind(targetPart, request.snapTarget)
   const targetPose = getLayoutConnectorPose(layout, request.snapTarget)
   const connectingKind = targetKind === 'entrance' ? 'exit' : 'entrance'
   const placed = placeRegisteredPartConnectorAtTarget(

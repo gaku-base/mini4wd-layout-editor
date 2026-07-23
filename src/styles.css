@@ -17,7 +17,7 @@ body {
 }
 
 main {
-  width: min(38rem, calc(100% - 3rem));
+  width: min(70rem, calc(100% - 3rem));
   padding: 3rem;
   border: 1px solid #d3dcde;
   border-radius: 1.25rem;
@@ -95,4 +95,69 @@ svg {
 
 .editor-status--unavailable {
   color: #b91c1c;
+}
+
+.editor-layout {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.editor-workspace {
+  min-width: 0;
+  flex: 1;
+}
+
+.editor-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.editor-heading h2 {
+  margin: 0 0 0.75rem;
+}
+
+.editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.editor-toolbar button {
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #b8c5c9;
+  border-radius: 0.4rem;
+  background: #fff;
+}
+
+.editor-toolbar button[aria-pressed="true"] {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.editor-toolbar button:disabled {
+  opacity: 0.45;
+}
+
+.course-canvas {
+  max-width: 100%;
+  height: auto;
+  background: #f9fefe;
+  border: 1px solid #e2e8e8;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.course-canvas[data-editor-mode="move"] {
+  cursor: move;
+}
+
+.editor-help {
+  margin: 0.55rem 0 0;
+  color: #52666c;
+  font-size: 0.8rem;
 }

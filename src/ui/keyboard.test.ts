@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { paletteIndexFromKeyboardEvent } from './keyboard'
+import {
+  editorShortcutFromKeyboardEvent,
+  paletteIndexFromKeyboardEvent,
+} from './keyboard'
 
 function keyboardEvent(
   code: string,
@@ -36,6 +39,71 @@ describe('palette keyboard shortcuts', () => {
       { tagName: 'div', isContentEditable: true },
     ]) {
       expect(paletteIndexFromKeyboardEvent(keyboardEvent('Digit1', '1', target))).toBeNull()
+    }
+  })
+})
+
+describe('editing keyboard shortcuts', () => {
+  it('maps Q, W, R, Undo, and both Redo forms', () => {
+    expect(editorShortcutFromKeyboardEvent(keyboardEvent('KeyQ', 'q'))).toBe(
+      'move-mode',
+    )
+    expect(editorShortcutFromKeyboardEvent(keyboardEvent('KeyW', 'w'))).toBe(
+      'delete-selection',
+    )
+    expect(editorShortcutFromKeyboardEvent(keyboardEvent('KeyR', 'r'))).toBe(
+      'remove-last-placement',
+    )
+    expect(
+      editorShortcutFromKeyboardEvent({
+        ...keyboardEvent('KeyZ', 'z'),
+        ctrlKey: true,
+      }),
+    ).toBe('undo')
+    expect(
+      editorShortcutFromKeyboardEvent({
+        ...keyboardEvent('KeyY', 'y'),
+        ctrlKey: true,
+      }),
+    ).toBe('redo')
+    expect(
+      editorShortcutFromKeyboardEvent({
+        ...keyboardEvent('KeyZ', 'z'),
+        ctrlKey: true,
+        shiftKey: true,
+      }),
+    ).toBe('redo')
+  })
+
+  it('keeps plain Z/X rotation separate from Undo/Redo', () => {
+    expect(editorShortcutFromKeyboardEvent(keyboardEvent('KeyZ', 'z'))).toBe(
+      'rotate-left',
+    )
+    expect(editorShortcutFromKeyboardEvent(keyboardEvent('KeyX', 'x'))).toBe(
+      'rotate-right',
+    )
+  })
+
+  it('disables Q/W/R/Undo/Redo while editing an input target', () => {
+    const events = [
+      keyboardEvent('KeyQ', 'q', { tagName: 'input' }),
+      keyboardEvent('KeyW', 'w', { tagName: 'textarea' }),
+      keyboardEvent('KeyR', 'r', { tagName: 'select' }),
+      {
+        ...keyboardEvent('KeyZ', 'z', {
+          tagName: 'div',
+          isContentEditable: true,
+        }),
+        ctrlKey: true,
+      },
+      {
+        ...keyboardEvent('KeyY', 'y', { tagName: 'input' }),
+        ctrlKey: true,
+      },
+    ]
+
+    for (const event of events) {
+      expect(editorShortcutFromKeyboardEvent(event)).toBeNull()
     }
   })
 })
