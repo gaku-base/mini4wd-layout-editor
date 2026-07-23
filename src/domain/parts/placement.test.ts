@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { point3D, rotation45 } from '../geometry'
 import {
   connectPart,
+  CORNER_45,
   getWorldConnector,
   isKnownDimension,
   placePartAtConnector,
   resolveConnectorPose,
+  resolveConnectedExitHeading,
   SLOPE,
   STRAIGHT,
   type ConnectorPose,
@@ -107,5 +109,16 @@ describe('part placement and connectors', () => {
     expect(Math.abs(exit.position.x - expectedAxis)).toBeLessThan(1e-9)
     expect(Math.abs(exit.position.y - expectedAxis)).toBeLessThan(1e-9)
     expect(exit.position.z).toBe(0)
+  })
+
+  it('closes the provisional Corner 45° heading after eight connected parts', () => {
+    // Only the provisional 45° direction is tested; unknown Corner coordinates stay unresolved.
+    let heading = rotation45(0)
+
+    for (let index = 0; index < 8; index += 1) {
+      heading = resolveConnectedExitHeading(CORNER_45, heading)
+    }
+
+    expect(heading).toBe(0)
   })
 })

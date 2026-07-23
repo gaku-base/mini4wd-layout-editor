@@ -13,4 +13,13 @@ describe('45-degree rotation', () => {
   it('rejects angles outside the 45-degree grid', () => {
     expect(() => rotation45(10)).toThrow(RangeError)
   })
+
+  it.each([
+    [360, 0],
+    [405, 45],
+    [-45, 315],
+    [-360, 0],
+  ])('normalizes %i degrees to %i degrees', (input, expected) => {
+    expect(rotation45(input)).toBe(expected)
+  })
 })

@@ -64,6 +64,21 @@
 | 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
 
+### Start（Straight派生variant）
+
+Startは独立した物理寸法を持つパーツとして定義せず、検証済みStraight定義を参照する派生variantとする。この仕様は2026-07-23のユーザー確定事項である。
+
+| 項目 | 採用内容 | 状態 | 測定元・根拠 | 備考 |
+|---|---|---|---|---|
+| part kind | `straight` | verified | ユーザー確定仕様 | Straight系統として扱う |
+| variant | `start` | verified | ユーザー確定仕様 | 通常Straightと識別する |
+| geometry・寸法 | `STRAIGHT.dimensions`を参照 | verified | ユーザー確定仕様、検証済みStraight定義 | 数値を重複保持しない |
+| 回転中心・入口／出口姿勢 | `STRAIGHT.connectors`を参照 | verified | ユーザー確定仕様、検証済みStraight定義 | 座標を重複保持しない |
+| collision metadata | `STRAIGHT.collisionGeometry`を参照 | unknown | Straight側の既存状態を継承 | 新しいcollision profileは作成しない |
+| 2D表示 | STARTライン・ラベルを追加 | coordinate-definition | ユーザー確定仕様 | 物理外形ではなくUI上の識別記号 |
+
+レイアウト内のStartは1個までとし、空レイアウトへだけ自由配置できる。配置後は両端を空きコネクタとして公開し、Straightを両方向へ接続できる。通常Straightは空きコネクタへの接続でのみ配置し、吸着失敗時に自由配置しない。
+
 ### 45度コーナー
 
 | 項目 | 値 | 状態 | 測定元・根拠 | 測定日 | 測定者 | 許容誤差 | 信頼度 |

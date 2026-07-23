@@ -113,3 +113,15 @@
 - 接続計算と高さ継承のテスト
 
 完成UI、精密3D衝突モデル、在庫、会場、PWAはこの段階では実装しない。
+
+### 6.1 Start／Straight編集ベースライン
+
+- StartはStraightの派生variantとし、検証済みStraightのgeometry、寸法、回転中心、入口・出口コネクタ姿勢を参照する。
+- Start定義とUIへStraightの物理数値を複製しない。
+- Startは`kind: straight`、`variant: start`として通常Straightと区別する。
+- 2D表示には物理寸法ではないSTARTライン・ラベルを加える。
+- Startはレイアウト内1個までとし、空レイアウトへだけ任意位置・45度単位で自由配置できる。
+- Start配置後は両端を空きコネクタとし、各端からStraightを接続できる。
+- 使用済みコネクタへの重複接続を拒否する。
+- Straightを含むStart以外のパーツは、空きコネクタへ接続できた場合だけ配置する。
+- domain未登録または配置geometry未確定のパーツは、パレット表示を維持しつつ配置不可とする。

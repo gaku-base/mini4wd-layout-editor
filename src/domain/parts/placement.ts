@@ -56,17 +56,25 @@ export function placePartAtConnector(
   definition: PartDefinition,
   target: ConnectorPose,
 ): PlacedPart {
-  const entrance = connectorByKind(definition, 'entrance')
-  const rotation = subtractRotation45(target.heading, entrance.headingOffset)
-  const entranceOffset = requireKnownOffset(entrance.offset)
-  const rotatedEntrance = rotateXY(entranceOffset.x, entranceOffset.y, rotation)
+  return placePartConnectorAtTarget(definition, 'entrance', target)
+}
+
+export function placePartConnectorAtTarget(
+  definition: PartDefinition,
+  connectorKind: ConnectorKind,
+  target: ConnectorPose,
+): PlacedPart {
+  const connector = connectorByKind(definition, connectorKind)
+  const rotation = subtractRotation45(target.heading, connector.headingOffset)
+  const connectorOffset = requireKnownOffset(connector.offset)
+  const rotatedConnector = rotateXY(connectorOffset.x, connectorOffset.y, rotation)
 
   return {
     definition,
     origin: point3D(
-      target.position.x - rotatedEntrance.x,
-      target.position.y - rotatedEntrance.y,
-      target.position.z - entranceOffset.z,
+      target.position.x - rotatedConnector.x,
+      target.position.y - rotatedConnector.y,
+      target.position.z - connectorOffset.z,
     ),
     rotation,
   }
@@ -134,6 +142,17 @@ export function resolveConnectorPose(connector: WorldConnector): ConnectorPose |
     position: { x: x.value, y: y.value, z: z.value },
     heading: connector.heading,
   }
+}
+
+export function resolveConnectedExitHeading(
+  definition: PartDefinition,
+  entranceHeading: ConnectorPose['heading'],
+): ConnectorPose['heading'] {
+  const entrance = connectorByKind(definition, 'entrance')
+  const exit = connectorByKind(definition, 'exit')
+  const placementRotation = subtractRotation45(entranceHeading, entrance.headingOffset)
+
+  return addRotation45(placementRotation, exit.headingOffset)
 }
 
 export function connectPart(

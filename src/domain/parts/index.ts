@@ -1,4 +1,7 @@
+export * from './catalog'
 export * from './connectors'
+export * from './connections'
 export * from './definitions'
 export * from './dimensions'
+export * from './layout'
 export * from './placement'
