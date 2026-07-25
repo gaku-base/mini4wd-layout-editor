@@ -1,0 +1,18 @@
+{
+  "version": "1.1.0-RC2",
+  "feature": "field-overflow-autofit",
+  "complete": true,
+  "failed": 0,
+  "checks": [
+    "out-of-bounds placement remains represented",
+    "out-of-bounds count and warning UI",
+    "automatic creation-area fit",
+    "field origin persistence",
+    "part coordinates unchanged by auto fit",
+    "auto-fit idempotence",
+    "undo and redo",
+    "reload persistence",
+    "PNG export warning dialog",
+    "all existing root unit tests"
+  ]
+}

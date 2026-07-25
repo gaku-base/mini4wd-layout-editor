@@ -13,7 +13,7 @@
         <div class="brand-mark" aria-hidden="true">M4</div>
         <div>
           <h1>COURSE LAYOUT</h1>
-          <p>2D Course Layout Release Candidate <span class="version">v1.0 RC1</span></p>
+          <p>2D Course Layout Release Candidate <span class="version">v1.1 RC2</span></p>
         </div>
       </div>
       <div class="top-actions">
@@ -78,6 +78,7 @@
             <button id="fitViewBtn" class="toolbar-button" type="button">全体表示</button>
             <button id="manualFitBtn" class="toolbar-button accent" type="button"><kbd>F</kbd> 全体を手動移動</button>
             <button id="topLeftFitBtn" class="toolbar-button" type="button"><kbd>Shift+F</kbd> 左上へ自動整列</button>
+            <button id="autoFitFieldBtn" class="toolbar-button field-fit" type="button">作成範囲を自動フィット</button>
           </div>
         </div>
 
@@ -99,6 +100,7 @@
           <div><span class="status-label">SELECT</span><strong id="statusSelected">0</strong></div>
           <div><span class="status-label">COUNT</span><strong id="statusCount">0</strong></div>
           <div><span class="status-label">ASSET</span><strong id="statusAssets">0/9</strong></div>
+          <div class="overflow-status"><span class="status-label">OUT</span><strong id="statusOverflow">0</strong></div>
           <div class="zoom-status"><span class="status-label">ZOOM</span><strong id="statusZoom">100%</strong></div>
         </footer>
       </main>
@@ -113,10 +115,12 @@
             <div><dt>横幅</dt><dd id="fieldWidthText">6.00 m</dd></div>
             <div><dt>奥行</dt><dd id="fieldHeightText">4.00 m</dd></div>
             <div><dt>グリッド</dt><dd id="gridText">10 cm</dd></div>
+            <div><dt>範囲原点</dt><dd id="fieldOriginText">0.00 / 0.00 m</dd></div>
             <div><dt>スタート</dt><dd id="startText">未設定</dd></div>
             <div><dt>次の接続点</dt><dd id="connectionText">未設定</dd></div>
             <div><dt>20度バンク状態</dt><dd id="bankStateText">通常</dd></div>
           </dl>
+          <div id="fieldOverflowNotice" class="field-overflow-notice"><strong id="fieldOverflowText">すべて作成範囲内</strong><span>範囲外でも配置・移動できます。オレンジ枠を確認し、必要な時に自動フィットしてください。</span></div>
         </section>
 
         <section class="panel selection-panel">
@@ -192,11 +196,24 @@
     </form>
   </dialog>
 
+  <dialog id="exportRangeDialog" class="export-range-dialog">
+    <form method="dialog">
+      <h2>作成範囲外のパーツがあります</h2>
+      <p id="exportRangeText">作成範囲外のパーツがあります。</p>
+      <div class="export-range-actions">
+        <button id="exportRangeKeepBtn" class="button ghost" type="button">このまま出力</button>
+        <button id="exportRangeFitBtn" class="button primary" type="button">自動フィットして出力</button>
+        <button id="exportRangeCancelBtn" class="button ghost" type="button">キャンセル</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="part-catalog.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
   <script src="lane-change-visual.js"></script>
   <script src="burning-changer-visual.js"></script>
+  <script src="field-boundary.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
