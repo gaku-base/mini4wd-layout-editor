@@ -6,13 +6,13 @@ Canvaで作成したパーツ画像の差し替え先
 
 straight.png       54 × 36 px
 corner45.png       52 × 52 px
-lane-change.png    162 × 36 px
+lane-change.png    1296 × 288 px（8倍書出し、表示寸法162 × 36）
 wave.png           54 × 42 px
 start.png          54 × 36 px
 slope.png          54 × 36 px
 bank20.png         28 × 36 px
 lc-jump.png        54 × 36 px
-burning-lc.png     180 × 144 px
+burning-lc.png     1440 × 1152 px（8倍書出し、表示寸法180 × 144）
 
 基本ルール
 ----------
@@ -22,6 +22,14 @@ burning-lc.png     180 × 144 px
 ・回転や接続位置は画像ではなくpart-catalog.jsのgeometryで管理
 ・透明余白を追加しない
 ・画像の向きは一覧プレビューと同じ（接続方向は左→右）
+
+lane-changeは正式ベクター描画を優先します。正本はlane-change-visual.js、
+編集用テンプレートはassets/templates/lane-change.svg、lane-change.pngは
+同じ描画を高解像度で同期した参照・フォールバック画像です。
+
+burning-lcも正式ベクター描画を優先します。正本はburning-changer-visual.js、
+編集用テンプレートはassets/templates/burning-lc.svg、burning-lc.pngは
+同じ描画を高解像度で同期した参照・フォールバック画像です。
 
 corner45.pngのみ、画像内の回転基準は左上から
 X=20.8837 px / Y=21.5823 pxです。

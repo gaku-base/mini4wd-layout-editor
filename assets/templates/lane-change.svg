@@ -1,6 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="162" height="36" viewBox="0 0 162 36">
-<rect x="0.5" y="0.5" width="161" height="35" fill="#efeae5" stroke="#8e8a87"/>
-<path d="M0 12H52 C70 12 90 24 110 24 H162 M0 24H52 C70 24 90 12 110 12 H162" stroke="#ada9a5" fill="none"/>
-<path d="M39 30 C65 30 97 6 123 6" stroke="#c0bcb8" stroke-width="12" fill="none"/>
-<path d="M39 24 C65 24 97 0 123 0 M39 36 C65 36 97 12 123 12" stroke="#8e8a87" fill="none"/>
+  <defs>
+    <linearGradient id="bridge" x1="36" y1="30" x2="126" y2="6" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#c6c2bd"/>
+      <stop offset="0.48" stop-color="#f8f6f2"/>
+      <stop offset="1" stop-color="#d4d0ca"/>
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="161" height="35" fill="#efede9" stroke="#858480"/>
+  <path d="M0 12 H36 C66 12 96 24 126 24 H162 M0 24 H36 C66 24 96 12 126 12 H162"
+        fill="none" stroke="#8d8c89" stroke-width="0.8"/>
+  <path d="M72 0.8 L86.4 1.8 L90.84 10.56 L84.6 35.2 L73.8 34.2 L70.2 25.2 Z"
+        fill="#c9c7c4" stroke="#858480" stroke-width="0.9" stroke-linejoin="round"/>
+  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#858480"
+        stroke-width="13.6" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="url(#bridge)"
+        stroke-width="12" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#fff" stroke-opacity="0.34"
+        stroke-width="0.5"/>
+  <path d="M36 24 V36 M126 0 V12"
+        fill="none" stroke="#8d8c89" stroke-width="0.52"/>
 </svg>

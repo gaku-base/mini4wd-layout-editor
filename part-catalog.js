@@ -31,8 +31,15 @@
     lanechange: {
       key: '3', name: 'レーンチェンジ', short: 'LC', renderKind: 'lanechange', lanechange: true,
       w: 162, h: 36,
-      geometry: { width: 162, height: 36, bounds: { minX: -81, maxX: 81, minY: -18, maxY: 18 } },
-      visual: { file: 'assets/parts/lane-change.png', canvasWidth: 162, canvasHeight: 36, originX: 81, originY: 18 },
+      geometry: {
+        width: 162, height: 36,
+        connectors: [{ x: -81, y: 0, heading: 180 }, { x: 81, y: 0, heading: 0 }],
+        bounds: { minX: -81, maxX: 81, minY: -18, maxY: 18 }
+      },
+      visual: {
+        file: 'assets/parts/lane-change.png', canvasWidth: 162, canvasHeight: 36,
+        originX: 81, originY: 18, profile: 'rc1-formal-v1'
+      },
       ...palette
     },
     wave: {
@@ -83,7 +90,10 @@
         connectors: [{ x: -93, y: -54, heading: 180 }, { x: -93, y: 54, heading: 180 }],
         bounds: { minX: -93, maxX: 87, minY: -72, maxY: 72 }
       },
-      visual: { file: 'assets/parts/burning-lc.png', canvasWidth: 180, canvasHeight: 144, originX: 93, originY: 72 },
+      visual: {
+        file: 'assets/parts/burning-lc.png', canvasWidth: 180, canvasHeight: 144,
+        originX: 93, originY: 72, profile: 'rc1-formal-v1'
+      },
       ...palette
     }
   };

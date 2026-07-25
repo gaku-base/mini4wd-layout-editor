@@ -108,3 +108,19 @@
 - readinessはprofile statusと分離し、`structurally-valid`、`height-chain-ready`、`collision-ready`、`not-ready`を用途別に返す。不足時はstation IDと項目を列挙する。
 - collision-readyの対象側壁はパーツの意味に応じて呼び出し側が指定し、全対象stationの走行面、下面、対象側壁、有効高さ・有効幅を必須とする。
 - `unknown` profileはactive不可とし、`provisional` profileも指定用途のreadinessを満たす場合だけ用途指定APIでactiveにする。partial provisional profileをcollision-readyとして選択しない。
+
+### 静的RC1版 lane-change正式表示（B案、2026-07-24）
+
+- lane-changeの正式表示は、`lane-change-visual.js`の純粋な視覚モデルを正本とし、パレット、キャンバス、PNG出力で同じCanvas描画を使用する。
+- RC1系の外形、3レーン境界、中央支持部、橋状のレーン切替部を独自ベクターで表現し、通常Straightの水平レーン線との二重描画は行わない。
+- 静的RC1版で従来使用していた幅162cm、接続点`(-81, 0, 180°)`／`(81, 0, 0°)`、回転中心、配置ロジックは変更しない。今回の判断で新しい実寸・衝突・高さ情報は確定しない。
+- Straight等との接続面には共通の`part-seams.js`を適用し、白抜けや物理的な隙間ではなく、接続済み境界へ通常幅0.52の線を1本だけ重ねる。
+- 編集用SVGと高解像度PNGは正式視覚モデルへ同期する。画像は接続計算の正本にせず、geometryとコネクタは`part-catalog.js`で管理する。
+
+### 静的RC1版 Burning Changer正式表示（2026-07-25）
+
+- Mini4WD Online Track Editorの通常表示と既存RC1参照画像から、U字3レーン本体、内側1レーンの上層経路、組立単位の境界という形状要素だけを参考にし、コード・画像・素材はコピーせず独自ベクターで再構成する。
+- 正式表示の正本は`burning-changer-visual.js`とし、パレット、配置前ゴースト、キャンバス、色変更、PNG出力で同じCanvas描画を使用する。
+- 既存の180×144cm表示枠、回転中心、接続点`(-93, -54, 180°)`／`(-93, 54, 180°)`を維持する。今回の判断で実寸、Z高さ、collision profileは変更・確定しない。
+- U字本体に7本、上層経路に4本の内部組立継ぎ目を通常幅0.52で常時表示する。外部パーツとの接続面は`part-seams.js`により1接続1本を追加し、白い隙間や二重線を作らない。
+- 選択とhit-testは外接矩形ではなくU字本体と上層経路の形状を使用し、中央の空白を選択対象に含めない。PNG出力では選択強調を除外する。

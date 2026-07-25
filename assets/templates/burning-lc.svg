@@ -1,6 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="180" height="144" viewBox="0 0 180 144">
-<path d="M0 18H108 A54 54 0 0 1 108 126 H0" stroke="#efeae5" stroke-width="36" fill="none"/>
-<path d="M0 0H108 A72 72 0 0 1 108 144 H0 M0 36H108 A36 36 0 0 1 108 108 H0" stroke="#8e8a87" fill="none"/>
-<path d="M0 12H108 A60 60 0 0 1 108 132 H0 M0 24H108 A48 48 0 0 1 108 120 H0" stroke="#ada9a5" fill="none"/>
-<path d="M20 18 C78 18 70 126 28 126" stroke="#c0bcb8" stroke-width="9" fill="none"/><path d="M20 13.5 C78 13.5 70 121.5 28 121.5 M20 22.5 C78 22.5 70 130.5 28 130.5" stroke="#8e8a87" fill="none"/>
+  <defs>
+    <linearGradient id="overpass" x1="37.8" y1="30" x2="37.8" y2="114" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#bcb9b5"/>
+      <stop offset="0.5" stop-color="#d9d6d1"/>
+      <stop offset="1" stop-color="#f9f7f3"/>
+    </linearGradient>
+  </defs>
+  <path d="M0 18 H108 A54 54 0 0 1 108 126 H0"
+        fill="none" stroke="#efede9" stroke-width="36" stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M0 0 H108 A72 72 0 0 1 108 144 H0 M0 36 H108 A36 36 0 0 1 108 108 H0"
+        fill="none" stroke="#858480" stroke-width="1.05"/>
+  <path d="M0 12 H108 A60 60 0 0 1 108 132 H0 M0 24 H108 A48 48 0 0 1 108 120 H0"
+        fill="none" stroke="#8d8c89" stroke-width="0.8"/>
+  <path d="M54 0 V36 M108 0 V36 M133.456 46.544 L158.912 21.088 M144 72 H180
+           M133.456 97.456 L158.912 122.912 M108 108 V144 M54 108 V144"
+        fill="none" stroke="#74797d" stroke-width="0.52"/>
+  <path d="M0 30 H37.8 C96 30 96 114 37.8 114 H0"
+        fill="none" stroke="#202426" stroke-opacity="0.24" stroke-width="15.8"
+        stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M0 30 H37.8 C96 30 96 114 37.8 114 H0"
+        fill="none" stroke="#858480" stroke-width="13.6"
+        stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M0 30 H37.8 C96 30 96 114 37.8 114 H0"
+        fill="none" stroke="url(#overpass)" stroke-width="12"
+        stroke-linecap="butt" stroke-linejoin="round"/>
+  <path d="M0 30 H37.8 C96 30 96 114 37.8 114 H0"
+        fill="none" stroke="#fff" stroke-opacity="0.28" stroke-width="0.45"/>
+  <path d="M37.8 24 V36 M80.999 47.316 L70.587 53.283
+           M80.999 96.684 L70.587 90.717 M37.8 120 V108"
+        fill="none" stroke="#74797d" stroke-width="0.52"/>
 </svg>
