@@ -104,6 +104,16 @@ Phase 2の干渉エンジンへ進む前に、Issue #6として実施する。
 - 通過可能高さ・有効幅の判定
 - 赤色表示用の干渉範囲情報
 
+### Phase 2.0：broad phaseと安全な診断
+
+- sampled collision profileの既知断面点を、45度回転とXYZ平行移動で世界座標へ変換
+- collision-ready profileの走行面、下面、対象側壁を包含する保守的AABBを生成
+- 全一意ペアをpart instance ID順で安定評価し、XYまたはZで離れたペアを`clear`とする
+- AABB重複は`candidate`として後続narrow phaseへ渡し、`collision`へ確定しない
+- profileまたは配置情報が不足するペアは`indeterminate`とし、不足stationと不足項目を返す
+- 正式接続と両端の既知除外volumeがある場合だけ`excluded-normal-contact`契約を返す
+- 複雑な除外volume、簡略衝突形状、メッシュの厳密交差、赤色描画は後続Phase 2で実装
+
 ## Phase 3：高速2D配置エディター
 
 - 数字キー選択
