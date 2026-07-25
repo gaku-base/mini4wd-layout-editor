@@ -485,8 +485,13 @@
     const restored = layoutStore.restore();
     if (restored.status === 'restored') {
       applySerialized(restored.layout, true, { persist: false });
-      toast('保存済みレイアウトを復元しました');
+      toast(restored.versionStatus === 'supportedLegacy'
+        ? '旧RC1レイアウトを復元しました。次の保存からRC2形式になります'
+        : '保存済みレイアウトを復元しました');
       return true;
+    }
+    if (restored.status === 'unsupported-version') {
+      toast(`新しい保存形式（${restored.version}）を保持しています。この版では上書きしません`);
     }
     return false;
   }

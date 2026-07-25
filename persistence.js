@@ -7,7 +7,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  // RC1 and RC2 intentionally share this key so a saved RC1 layout can be
+  // migrated in place only after a successful RC2 save.
   const STORAGE_KEY = 'mini4wd-course-layout-mouse-flow-v1.0.0-RC1';
+  const CURRENT_VERSION = '1.1.0-RC2';
+  const SUPPORTED_LEGACY_VERSIONS = Object.freeze(['1.0.0-RC1']);
   const PERSISTED_FIELDS = [
     'app', 'version', 'field', 'parts', 'start', 'startPhase',
     'selectedType', 'rotation', 'activeConnection'
@@ -29,6 +33,53 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function parseVersion(value) {
+    if (typeof value !== 'string') return null;
+    const match = /^(\d+)\.(\d+)\.(\d+)(?:-([A-Za-z]+)(\d+))?$/.exec(value);
+    if (!match) return null;
+    return {
+      major: Number(match[1]),
+      minor: Number(match[2]),
+      patch: Number(match[3]),
+      label: match[4] || '',
+      revision: Number(match[5] || 0)
+    };
+  }
+
+  function compareVersions(left, right) {
+    const leftVersion = parseVersion(left);
+    const rightVersion = parseVersion(right);
+    if (!leftVersion || !rightVersion) return null;
+    for (const field of ['major', 'minor', 'patch']) {
+      if (leftVersion[field] !== rightVersion[field]) {
+        return leftVersion[field] < rightVersion[field] ? -1 : 1;
+      }
+    }
+    if (leftVersion.label !== rightVersion.label) {
+      if (!leftVersion.label) return 1;
+      if (!rightVersion.label) return -1;
+      return leftVersion.label < rightVersion.label ? -1 : 1;
+    }
+    if (leftVersion.revision === rightVersion.revision) return 0;
+    return leftVersion.revision < rightVersion.revision ? -1 : 1;
+  }
+
+  function versionOptions(options) {
+    return {
+      current: options.version || CURRENT_VERSION,
+      supportedLegacy: options.supportedLegacyVersions || SUPPORTED_LEGACY_VERSIONS
+    };
+  }
+
+  function classifyLayoutVersion(version, options = {}) {
+    const versions = versionOptions(options);
+    if (version === versions.current) return 'current';
+    if (versions.supportedLegacy.includes(version)) return 'supportedLegacy';
+    const comparison = compareVersions(version, versions.current);
+    if (comparison === null) return 'corrupt';
+    return comparison > 0 ? 'unsupportedFuture' : 'unsupportedVersion';
+  }
+
   function toPersistentLayout(layout) {
     if (!isRecord(layout)) throw new Error('レイアウトデータが不正です');
     const persistent = {};
@@ -38,13 +89,17 @@
     return persistent;
   }
 
-  function validateLayout(layout, options) {
+  function validateLayoutStructure(layout, options, versionStatus) {
     if (!isRecord(layout)) return false;
-    if (layout.app !== options.app || layout.version !== options.version) return false;
+    if (layout.app !== options.app || typeof layout.version !== 'string') return false;
     if (!isRecord(layout.field)) return false;
     if (!isFiniteNumber(layout.field.widthCm) || layout.field.widthCm <= 0) return false;
     if (!isFiniteNumber(layout.field.heightCm) || layout.field.heightCm <= 0) return false;
     if (!isFiniteNumber(layout.field.gridCm) || layout.field.gridCm <= 0) return false;
+    const hasOriginX = Object.prototype.hasOwnProperty.call(layout.field, 'originX');
+    const hasOriginY = Object.prototype.hasOwnProperty.call(layout.field, 'originY');
+    if (versionStatus === 'current' && (!hasOriginX || !hasOriginY)) return false;
+    if ((hasOriginX && !isFiniteNumber(layout.field.originX)) || (hasOriginY && !isFiniteNumber(layout.field.originY))) return false;
     if (!Array.isArray(layout.parts) || !isRotation(layout.rotation)) return false;
 
     const knownTypes = new Set(options.partTypes || []);
@@ -72,8 +127,34 @@
     return true;
   }
 
+  function validateLayout(layout, options) {
+    const versionStatus = classifyLayoutVersion(layout?.version, options);
+    if (versionStatus !== 'current' && versionStatus !== 'supportedLegacy') return false;
+    return validateLayoutStructure(layout, options, versionStatus);
+  }
+
+  function migrateSupportedLegacyLayout(layout, versionStatus) {
+    const migrated = cloneJson(layout);
+    if (versionStatus === 'supportedLegacy') {
+      migrated.field = {
+        ...migrated.field,
+        originX: isFiniteNumber(migrated.field.originX) ? migrated.field.originX : 0,
+        originY: isFiniteNumber(migrated.field.originY) ? migrated.field.originY : 0
+      };
+    }
+    return migrated;
+  }
+
+  function hasUnsupportedVersionEnvelope(layout, options) {
+    if (!isRecord(layout) || layout.app !== options.app || !isRecord(layout.field) || !Array.isArray(layout.parts)) return false;
+    return isFiniteNumber(layout.field.widthCm) && layout.field.widthCm > 0
+      && isFiniteNumber(layout.field.heightCm) && layout.field.heightCm > 0
+      && isFiniteNumber(layout.field.gridCm) && layout.field.gridCm > 0;
+  }
+
   function createLayoutStore(storage, options) {
     let ready = false;
+    let writeBlocked = false;
 
     function restore() {
       let raw;
@@ -91,9 +172,22 @@
 
       try {
         const layout = JSON.parse(raw);
-        if (!validateLayout(layout, options)) throw new Error('保存レイアウトの形式が不正です');
+        const versionStatus = classifyLayoutVersion(layout?.version, options);
+        if (versionStatus === 'unsupportedFuture' || versionStatus === 'unsupportedVersion') {
+          if (!hasUnsupportedVersionEnvelope(layout, options)) throw new Error('Unsupported layout has an invalid envelope.');
+          ready = true;
+          writeBlocked = true;
+          return { status: 'unsupported-version', versionStatus, version: layout.version };
+        }
+        if (versionStatus === 'corrupt' || !validateLayoutStructure(layout, options, versionStatus)) {
+          throw new Error('保存レイアウトの形式が不正です');
+        }
         ready = true;
-        return { status: 'restored', layout };
+        return {
+          status: 'restored',
+          versionStatus,
+          layout: migrateSupportedLegacyLayout(layout, versionStatus)
+        };
       } catch (error) {
         try { storage.removeItem(STORAGE_KEY); } catch (_) {}
         ready = true;
@@ -103,9 +197,13 @@
 
     function save(layout) {
       if (!ready) return { status: 'not-ready' };
+      if (writeBlocked) return { status: 'blocked-unsupported-version' };
       try {
         const persistent = toPersistentLayout(layout);
-        if (!validateLayout(persistent, options)) throw new Error('保存するレイアウトの形式が不正です');
+        const versionStatus = classifyLayoutVersion(persistent.version, options);
+        if (versionStatus !== 'current' || !validateLayoutStructure(persistent, options, versionStatus)) {
+          throw new Error('保存するレイアウトの形式が不正です');
+        }
         const serialized = JSON.stringify(persistent);
         storage.setItem(STORAGE_KEY, serialized);
         return { status: 'saved', serialized };
@@ -118,15 +216,21 @@
       key: STORAGE_KEY,
       restore,
       save,
-      isReady: () => ready
+      isReady: () => ready,
+      isWriteBlocked: () => writeBlocked
     };
   }
 
   return {
     STORAGE_KEY,
+    CURRENT_VERSION,
+    SUPPORTED_LEGACY_VERSIONS,
     PERSISTED_FIELDS,
+    classifyLayoutVersion,
     createLayoutStore,
+    migrateSupportedLegacyLayout,
     toPersistentLayout,
-    validateLayout
+    validateLayout,
+    validateLayoutStructure
   };
 });

@@ -97,14 +97,14 @@ test('当たり判定はU字本体と上層経路を含み中央の空白を除�
 test('保存・復元でBurning Changerの種類・位置・回転・色が一致する', () => {
   const options = {
     app: 'mini4wd-course-layout-mouse-flow',
-    version: '1.0.0-RC1',
+    version: persistence.CURRENT_VERSION,
     partTypes: ['straight', 'burning'],
     colorKeys: ['default', 'red', 'blue', 'orange', 'green', 'white']
   };
   const layout = {
     app: options.app,
     version: options.version,
-    field: { widthCm: 700, heightCm: 440, gridCm: 10 },
+    field: { originX: 0, originY: 0, widthCm: 700, heightCm: 440, gridCm: 10 },
     parts: [{ id: 'burning-1', type: 'burning', x: 310, y: 220, rotation: 45, routeIndex: 1, colorKey: 'green', zIndex: 1 }],
     start: null,
     startPhase: 'position',
