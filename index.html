@@ -101,6 +101,7 @@
           <div><span class="status-label">COUNT</span><strong id="statusCount">0</strong></div>
           <div><span class="status-label">ASSET</span><strong id="statusAssets">0/9</strong></div>
           <div class="overflow-status"><span class="status-label">OUT</span><strong id="statusOverflow">0</strong></div>
+          <div class="warning-status"><span class="status-label">WARN</span><strong id="statusWarnings">0</strong></div>
           <div class="zoom-status"><span class="status-label">ZOOM</span><strong id="statusZoom">100%</strong></div>
         </footer>
       </main>
@@ -130,6 +131,18 @@
           <button id="colorSelectionBtn" class="button full-button" type="button">選択パーツの色を変更</button>
         </section>
 
+        <section class="panel snap-panel">
+          <div class="panel-heading"><h2>配置・吸着</h2><button id="snapToggleBtn" class="text-button active" type="button" aria-pressed="true">吸着 ON</button></div>
+          <label class="control-label" for="placementHeightSelect">配置高さ</label>
+          <select id="placementHeightSelect" class="full-control">
+            <option value="auto">自動</option><option value="0">0段（0mm）</option><option value="115">1段（115mm）</option>
+            <option value="230">2段（230mm）</option><option value="345">3段（345mm）</option><option value="460">4段（460mm）</option><option value="custom">任意mm</option>
+          </select>
+          <input id="placementHeightCustom" class="full-control" type="number" step="1" value="0" aria-label="任意の配置高さ（mm）" hidden />
+          <div id="snapCandidatePanel" class="snap-candidate-panel" hidden></div>
+          <div id="layoutWarningSummary" class="layout-warning-summary">警告なし</div>
+        </section>
+
         <section class="panel">
           <div class="panel-heading"><h2>部品集計</h2></div>
           <div id="partsSummary" class="summary-list empty-summary">まだ部品がありません</div>
@@ -150,6 +163,8 @@
             <div><kbd>Ctrl+Z / Y</kbd><span>アンドゥ / リドゥ（各20工程）</span></div>
             <div><kbd>Space+ドラッグ</kbd><span>画面移動</span></div>
             <div><kbd>ホイール</kbd><span>配置ゴーストを45°回転</span></div>
+            <div><kbd>Alt</kbd><span>押している間は吸着OFF</span></div>
+            <div><kbd>[ / ]</kbd><span>吸着候補を切替</span></div>
             <div><kbd>Ctrl＋ホイール</kbd><span>画面の拡大・縮小</span></div>
           </div>
         </section>
@@ -209,6 +224,7 @@
   </dialog>
 
   <script src="part-catalog.js"></script>
+  <script src="layout-graph.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
   <script src="lane-change-visual.js"></script>

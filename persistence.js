@@ -14,7 +14,7 @@
   const SUPPORTED_LEGACY_VERSIONS = Object.freeze(['1.0.0-RC1']);
   const PERSISTED_FIELDS = [
     'app', 'version', 'field', 'parts', 'start', 'startPhase',
-    'selectedType', 'rotation', 'activeConnection'
+    'selectedType', 'rotation', 'activeConnection', 'connections'
   ];
 
   function isRecord(value) {
@@ -109,12 +109,18 @@
       if (!isRecord(part) || typeof part.id !== 'string' || !part.id || ids.has(part.id)) return false;
       if (!knownTypes.has(part.type) || !isFiniteNumber(part.x) || !isFiniteNumber(part.y)) return false;
       if (!isRotation(part.rotation) || !knownColors.has(part.colorKey || 'default')) return false;
+      if (Object.prototype.hasOwnProperty.call(part, 'zMm') && !isFiniteNumber(part.zMm)) return false;
+      if (Object.prototype.hasOwnProperty.call(part, 'zOrder') && !isFiniteNumber(part.zOrder)) return false;
+      if (Object.prototype.hasOwnProperty.call(part, 'pitchDeg') && !isFiniteNumber(part.pitchDeg)) return false;
+      if (Object.prototype.hasOwnProperty.call(part, 'bankAngleDeg') && !isFiniteNumber(part.bankAngleDeg)) return false;
       ids.add(part.id);
     }
 
     if (layout.start !== null) {
       if (!isRecord(layout.start)) return false;
       if (!isFiniteNumber(layout.start.x) || !isFiniteNumber(layout.start.y) || !isRotation(layout.start.rotation)) return false;
+      if (Object.prototype.hasOwnProperty.call(layout.start, 'zMm') && !isFiniteNumber(layout.start.zMm)) return false;
+      if (Object.prototype.hasOwnProperty.call(layout.start, 'zOrder') && !isFiniteNumber(layout.start.zOrder)) return false;
     }
 
     if (typeof layout.selectedType !== 'string' || (!knownTypes.has(layout.selectedType) && layout.selectedType !== 'start')) return false;
@@ -123,6 +129,28 @@
       if (!isRecord(connection)) return false;
       if (!isFiniteNumber(connection.x) || !isFiniteNumber(connection.y) || !isRotation(connection.heading)) return false;
       if (typeof connection.sourceId !== 'string' || !connection.sourceId) return false;
+    }
+    if (Object.prototype.hasOwnProperty.call(layout, 'connections')) {
+      if (!Array.isArray(layout.connections)) return false;
+      const edgeKeys = new Set();
+      const knownPartIds = new Set([...ids, ...(layout.start ? ['start'] : [])]);
+      const partTypesById = new Map(layout.parts.map(part => [part.id, part.type]));
+      if (layout.start) partTypesById.set('start', 'start');
+      for (const edge of layout.connections) {
+        if (!isRecord(edge)) return false;
+        const values = [edge.partAId, edge.connectorAId, edge.partBId, edge.connectorBId];
+        if (values.some(value => typeof value !== 'string' || !value)) return false;
+        if (!knownPartIds.has(edge.partAId) || !knownPartIds.has(edge.partBId) || edge.partAId === edge.partBId) return false;
+        const allowedA = options.connectorIdsByType?.[partTypesById.get(edge.partAId)];
+        const allowedB = options.connectorIdsByType?.[partTypesById.get(edge.partBId)];
+        if (Array.isArray(allowedA) && !allowedA.includes(edge.connectorAId)) return false;
+        if (Array.isArray(allowedB) && !allowedB.includes(edge.connectorBId)) return false;
+        const left = `${edge.partAId}:${edge.connectorAId}`;
+        const right = `${edge.partBId}:${edge.connectorBId}`;
+        const key = left < right ? `${left}|${right}` : `${right}|${left}`;
+        if (edgeKeys.has(key)) return false;
+        edgeKeys.add(key);
+      }
     }
     return true;
   }

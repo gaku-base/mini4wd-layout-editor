@@ -270,3 +270,35 @@ test('11. existing RC2 data still restores without a write', () => {
   assert.equal(storage.setCount, 0);
   assert.equal(storage.getItem(STORAGE_KEY), raw);
 });
+
+test('12. RC2 additive height, zOrder, and multiple connection edges round-trip', () => {
+  const layout = layoutFixture();
+  layout.start = { ...layout.start, zMm: 230, zOrder: 0 };
+  layout.parts = layout.parts.map((part, index) => ({
+    ...part,
+    zMm: index === 2 ? 345 : 230,
+    pitchDeg: 0,
+    bankAngleDeg: index === 1 ? 20 : 0,
+    zOrder: index + 1
+  }));
+  layout.connections = [
+    { partAId: 'start', connectorAId: 'b', partBId: 'straight-1', connectorBId: 'a', createdOrder: 1 },
+    { partAId: 'straight-1', connectorAId: 'b', partBId: 'straight-2', connectorBId: 'a', createdOrder: 2 },
+    { partAId: 'straight-1', connectorAId: 'b', partBId: 'corner-1', connectorBId: 'a', createdOrder: 3 }
+  ];
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, options);
+  store.restore();
+  assert.equal(store.save(layout).status, 'saved');
+  assert.deepEqual(createLayoutStore(storage, options).restore().layout, layout);
+});
+
+test('13. unknown connector references are rejected when catalog connector IDs are supplied', () => {
+  const layout = layoutFixture();
+  layout.connections = [{ partAId: 'start', connectorAId: 'missing', partBId: 'straight-1', connectorBId: 'a' }];
+  const strictOptions = { ...options, connectorIdsByType: { start: ['a', 'b'], straight: ['a', 'b'], corner45: ['a', 'b'] } };
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, strictOptions);
+  store.restore();
+  assert.equal(store.save(layout).status, 'failed');
+});

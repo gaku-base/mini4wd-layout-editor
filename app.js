@@ -14,13 +14,14 @@
   if (!BURNING_CHANGER_VISUAL) throw new Error('burning-changer-visual.jsが読み込まれていません');
   const FIELD_BOUNDARY = window.M4WD_FIELD_BOUNDARY;
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
+  const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
+  if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
   const PART_MENU_ORDER = CATALOG.MENU_ORDER;
   const START_DEF = PARTS.start;
   const HISTORY_LIMIT = 20;
-  const GROUP_MOVE_SNAP_RADIUS_CM = 28;
   // 描画設定を1か所に集約し、将来の「継ぎ目表示」切替に備える。
   const RENDER_FEATURES = Object.freeze({ partSeams: true });
   const partAssetCache = new Map();
@@ -55,6 +56,14 @@
     hoveredPartId: null,
     rotation: 0,
     activeConnection: null,
+    connections: [],
+    snapEnabled: true,
+    altSnapDisabled: false,
+    snapCandidateIndex: 0,
+    snapCandidateConfirmed: false,
+    placementHeightMode: 'auto',
+    placementHeightMm: 0,
+    lastPlacementHeightMm: 0,
     cursor: { x: 300, y: 200 },
     view: { scale: 1, offsetX: 40, offsetY: 40 },
     showGrid: true,
@@ -63,7 +72,7 @@
       lastX: 0, lastY: 0, draggingParts: false, dragStart: null,
       dragBase: null, dragSnapshotTaken: false,
       marquee: false, marqueeStart: null, marqueeEnd: null, marqueeAdd: false,
-      groupSnap: null
+      groupSnap: null, pendingPlacement: false
     },
     layoutMove: { active: false, anchor: null, base: null, previousMode: 'place', pointer: null },
     history: [],
@@ -71,6 +80,7 @@
     setupStarted: false,
     dirty: false,
     bankWarnings: [],
+    layoutWarnings: [],
     assetsReady: 0
   };
 
@@ -89,7 +99,8 @@
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
-      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn'
+      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','placementHeightSelect',
+      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -105,7 +116,8 @@
       app: 'mini4wd-course-layout-mouse-flow',
       version: VERSION,
       partTypes: Object.keys(PARTS).filter(type => type !== 'start'),
-      colorKeys: COLORS.map(color => color.key)
+      colorKeys: COLORS.map(color => color.key),
+      connectorIdsByType: Object.fromEntries(Object.entries(PARTS).map(([type, definition]) => [type, LAYOUT_GRAPH.connectorsForDefinition(definition).map(connector => connector.id)]))
     });
     const restored = restoreLocal();
     bindEvents();
@@ -193,7 +205,7 @@
 
   function partDisplayName(part) {
     if (!part) return '';
-    if (part.type === 'bank20') {
+    if (PARTS[part.type]?.bank20) {
       if (part.bankRole === 'entry') return '20度バンク入口';
       if (part.bankRole === 'exit') return '20度バンク出口';
     }
@@ -284,6 +296,21 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.snapToggleBtn?.addEventListener('click', () => {
+      state.snapEnabled = !state.snapEnabled;
+      state.snapCandidateIndex = 0;
+      updateUI(); render();
+    });
+    els.placementHeightSelect?.addEventListener('change', () => {
+      state.placementHeightMode = els.placementHeightSelect.value;
+      els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
+      if (state.placementHeightMode !== 'auto' && state.placementHeightMode !== 'custom') state.placementHeightMm = Number(state.placementHeightMode);
+      updateUI(); render();
+    });
+    els.placementHeightCustom?.addEventListener('input', () => {
+      state.placementHeightMm = Number(els.placementHeightCustom.value) || 0;
+      updateUI(); render();
+    });
 
     const canvas = els.courseCanvas;
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -333,6 +360,7 @@
     if (reset) {
       state.parts = [];
       state.start = null;
+      state.connections = [];
       state.startPhase = 'position';
       state.activeConnection = null;
       state.selectedIds = [];
@@ -425,7 +453,8 @@
       startPhase: state.startPhase,
       selectedType: state.selectedType,
       rotation: state.rotation,
-      activeConnection: state.activeConnection ? { ...state.activeConnection } : null
+      activeConnection: state.activeConnection ? { ...state.activeConnection } : null,
+      connections: LAYOUT_GRAPH.dedupeEdges(state.connections)
     };
   }
 
@@ -440,12 +469,18 @@
       rotation: normalizeRotation(Number(p.rotation) || 0),
       routeIndex: Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0,
       colorKey: COLORS.some(c => c.key === p.colorKey) ? p.colorKey : 'default',
-      zIndex: Number.isFinite(Number(p.zIndex)) ? Number(p.zIndex) : index + 1
+      zMm: Number.isFinite(Number(p.zMm)) ? Number(p.zMm) : 0,
+      pitchDeg: Number.isFinite(Number(p.pitchDeg ?? p.pitch)) ? Number(p.pitchDeg ?? p.pitch) : 0,
+      bankAngleDeg: Number.isFinite(Number(p.bankAngleDeg ?? p.bankAngle)) ? Number(p.bankAngleDeg ?? p.bankAngle) : 0,
+      zOrder: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1,
+      zIndex: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1
     }));
 
     const loadedRotation = normalizeRotation(Number(data.start?.rotation) || 0);
     if (data.start) {
-      const loadedStart = { x: Number(data.start.x) || 0, y: Number(data.start.y) || 0, rotation: loadedRotation };
+      const loadedStart = { id: 'start', type: 'start', x: Number(data.start.x) || 0, y: Number(data.start.y) || 0, rotation: loadedRotation,
+        zMm: Number(data.start.zMm) || 0, pitchDeg: Number(data.start.pitchDeg) || 0,
+        bankAngleDeg: Number(data.start.bankAngleDeg) || 0, zOrder: Number.isFinite(Number(data.start.zOrder ?? data.start.zIndex)) ? Number(data.start.zOrder ?? data.start.zIndex) : 0 };
       const isLegacyStartPoint = !data.version || /^0\.[012](?:\.|$)/.test(String(data.version));
       if (isLegacyStartPoint) {
         const back = rotatePoint({ x: -START_DEF.w / 2, y: 0 }, loadedRotation);
@@ -457,6 +492,11 @@
       state.start = null;
     }
 
+    const loadedEdges = Array.isArray(data.connections) ? data.connections
+      : Array.isArray(data.connectionEdges) ? data.connectionEdges
+        : data.connection && typeof data.connection === 'object' ? [data.connection] : [];
+    state.connections = LAYOUT_GRAPH.dedupeEdges(loadedEdges);
+
     state.startPhase = 'position';
     state.selectedType = state.start ? (PARTS[data.selectedType] && data.selectedType !== 'start' ? data.selectedType : 'straight') : 'start';
     state.rotation = normalizeRotation(Number(data.rotation) || 0);
@@ -464,7 +504,9 @@
     state.mode = state.start ? 'place' : 'start';
     state.layoutMove = { active: false, anchor: null, base: null, previousMode: 'place', pointer: null };
     resetPointerInteraction();
+    if (!state.connections.length) state.connections = inferLegacyConnections();
     recalculateBankStates();
+    recalculateLayoutWarnings();
     rebuildActiveConnectionFromTail();
     state.cursor = state.activeConnection
       ? { x: state.activeConnection.x, y: state.activeConnection.y }
@@ -509,7 +551,11 @@
     if (!file) return;
     try {
       const text = await file.text();
-      applySerialized(JSON.parse(text), true);
+      const parsed = JSON.parse(text);
+      const validationOptions = { app: 'mini4wd-course-layout-mouse-flow', version: VERSION, partTypes: Object.keys(PARTS).filter(type => type !== 'start'), colorKeys: COLORS.map(color => color.key), connectorIdsByType: Object.fromEntries(Object.entries(PARTS).map(([type, definition]) => [type, LAYOUT_GRAPH.connectorsForDefinition(definition).map(connector => connector.id)])) };
+      const versionStatus = PERSISTENCE.classifyLayoutVersion(parsed?.version, validationOptions);
+      if (!PERSISTENCE.validateLayout(parsed, validationOptions)) throw new Error('未対応または不正な保存形式です');
+      applySerialized(PERSISTENCE.migrateSupportedLegacyLayout(parsed, versionStatus), true);
       toast('レイアウトを読み込みました');
     } catch (err) {
       console.error(err);
@@ -567,7 +613,7 @@
   }
 
   function layerValue(part, fallbackIndex = 0) {
-    const value = Number(part?.zIndex);
+    const value = Number(part?.zOrder ?? part?.zIndex);
     return Number.isFinite(value) ? value : fallbackIndex + 1;
   }
 
@@ -587,7 +633,7 @@
     const moving = partsByLayer().filter(part => wanted.has(part.id));
     if (!moving.length) return;
     let z = nextZIndex();
-    moving.forEach(part => { part.zIndex = z++; });
+    moving.forEach(part => { part.zOrder = z; part.zIndex = z++; });
   }
 
   function drawTrackJointPatch(c, point, heading, part, options = {}) {
@@ -654,37 +700,23 @@
         hovered: options.selected && state.hoveredPartId === part.id
       });
       drawCornerJointsForPart(c, part, earlier);
+      drawOwnedConnectionSeams(c, part, options);
       earlier.push(part);
     }
-    drawConnectedPartSeams(c, options);
     if (!options.exportMode) drawOutOfBoundsWarnings(c);
+    if (!options.exportMode) drawLayoutWarnings(c);
   }
 
-  function drawConnectedPartSeams(c, options = {}) {
-    const seams = PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect);
+  function drawOwnedConnectionSeams(c, owner, options = {}) {
+    const connectors = getAllEndpoints().map(endpoint => ({ ...endpoint, partId: endpoint.sourceId, directionDeg: endpoint.heading }));
+    const seams = LAYOUT_GRAPH.seamsByOwner(allLayoutParts(), state.connections, connectors).get(owner.id) || [];
     for (const seam of seams) {
-      const selected = !!options.selected && seam.endpoints.some(endpoint => (
-        endpoint.sourceId !== 'start' && isSelected(endpoint.sourceId)
-      ));
-      const style = PART_SEAMS.resolveStyle({
-        enabled: RENDER_FEATURES.partSeams,
-        selected,
-        exportMode: !!options.exportMode
-      });
+      const style = PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams, selected: !!options.selected && isSelected(owner.id), exportMode: !!options.exportMode });
       if (!style) continue;
-
       const halfWidth = TRACK_WIDTH_CM / 2 - style.edgeInset;
-      c.save();
-      c.translate(seam.point.x, seam.point.y);
-      c.rotate(seam.heading * Math.PI / 180);
-      c.strokeStyle = style.color;
-      c.lineWidth = style.lineWidth;
-      c.lineCap = 'butt';
-      c.beginPath();
-      c.moveTo(0, -halfWidth);
-      c.lineTo(0, halfWidth);
-      c.stroke();
-      c.restore();
+      c.save(); c.translate(seam.point.x, seam.point.y); c.rotate(seam.heading * Math.PI / 180);
+      c.strokeStyle = style.color; c.lineWidth = style.lineWidth; c.lineCap = 'butt';
+      c.beginPath(); c.moveTo(0, -halfWidth); c.lineTo(0, halfWidth); c.stroke(); c.restore();
     }
   }
 
@@ -1410,7 +1442,7 @@
   }
 
   function placeStartLane() {
-    const candidate = { x: state.cursor.x, y: state.cursor.y, rotation: state.rotation };
+    const candidate = { id: 'start', type: 'start', x: state.cursor.x, y: state.cursor.y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
     const outside = !startInsideField(candidate);
     snapshot();
     state.start = candidate;
@@ -1428,32 +1460,12 @@
   function localEndpoints(type) {
     const def = PARTS[type];
     if (!def) return [];
-    if (def.geometry?.connectors?.length) {
-      return def.geometry.connectors.map((connector, index) => ({
-        x: connector.x,
-        y: connector.y,
-        heading: connector.heading,
-        label: index === 0 ? 'A' : 'B'
-      }));
-    }
-    if (def.corner45) {
-      const g = corner45Geometry(def);
-      return [
-        { x: g.entry.x, y: g.entry.y, heading: 180, label: 'A' },
-        { x: g.exit.x, y: g.exit.y, heading: 45, label: 'B' }
-      ];
-    }
-    if (def.burning) {
-      const g = burningGeometry(def);
-      return [
-        { x: g.leftX, y: -g.separation / 2, heading: 180, label: 'A' },
-        { x: g.leftX, y: g.separation / 2, heading: 180, label: 'B' }
-      ];
-    }
-    return [
-      { x: -def.w / 2, y: 0, heading: 180, label: 'A' },
-      { x: def.w / 2, y: 0, heading: 0, label: 'B' }
-    ];
+    return LAYOUT_GRAPH.connectorsForDefinition(def).map(connector => ({
+      ...connector,
+      x: connector.localX,
+      y: connector.localY,
+      heading: connector.directionDeg
+    }));
   }
 
   function rotatePoint(point, rotation) {
@@ -1465,17 +1477,16 @@
   }
 
   function startEndpoints(start) {
-    const local = [
-      { x: -START_DEF.w / 2, y: 0, heading: 180, label: '後端' },
-      { x: START_DEF.w / 2, y: 0, heading: 0, label: '前端' }
-    ];
+    const local = localEndpoints('start');
     return local.map((ep, endpointIndex) => {
       const offset = rotatePoint(ep, start.rotation);
       return {
         x: start.x + offset.x,
         y: start.y + offset.y,
         heading: normalizeRotation(ep.heading + start.rotation),
-        sourceId: 'start', sourceType: 'start', endpointIndex, label: ep.label,
+        zMm: (Number(start.zMm) || 0) + (Number(ep.localZMm) || 0), pitchDeg: Number(ep.pitchDeg) || 0,
+        bankAngleDeg: Number(ep.bankAngleDeg) || 0, shape: ep.shape, laneCount: ep.laneCount,
+        connectorId: ep.id, sourceId: 'start', partId: 'start', sourceType: 'start', endpointIndex, label: ep.label,
         connectionState: endpointState()
       };
     });
@@ -1490,7 +1501,9 @@
         x: part.x + offset.x,
         y: part.y + offset.y,
         heading: normalizeRotation(ep.heading + part.rotation),
-        sourceId: part.id,
+        zMm: (Number(part.zMm) || 0) + (Number(ep.localZMm) || 0), pitchDeg: (Number(part.pitchDeg) || 0) + (Number(ep.pitchDeg) || 0),
+        bankAngleDeg: (Number(part.bankAngleDeg) || 0) + (Number(ep.bankAngleDeg) || 0), shape: ep.shape, laneCount: ep.laneCount,
+        connectorId: ep.id, sourceId: part.id, partId: part.id,
         sourceType: part.type,
         endpointIndex,
         label: ep.label,
@@ -1514,65 +1527,93 @@
     return endpoints;
   }
 
+  function allLayoutParts() {
+    return [...(state.start ? [{ ...state.start, id: 'start', type: 'start' }] : []), ...state.parts];
+  }
+
+  function inferLegacyConnections() {
+    const endpoints = getAllEndpoints();
+    const edges = [];
+    for (let i = 0; i < endpoints.length; i += 1) {
+      for (let j = i + 1; j < endpoints.length; j += 1) {
+        const a = endpoints[i]; const b = endpoints[j];
+        if (a.sourceId === b.sourceId) continue;
+        if (Math.hypot(a.x - b.x, a.y - b.y) > 1.75) continue;
+        if (angularDistance(a.heading, normalizeRotation(b.heading + 180)) > .1) continue;
+        edges.push({ partAId: a.sourceId, connectorAId: a.connectorId, partBId: b.sourceId, connectorBId: b.connectorId, createdOrder: edges.length + 1 });
+      }
+    }
+    return LAYOUT_GRAPH.dedupeEdges(edges);
+  }
+
+  function selectedFreeHeightMm() {
+    if (state.placementHeightMode === 'auto') return Number(state.lastPlacementHeightMm) || 0;
+    if (state.placementHeightMode === 'custom') return Number(state.placementHeightMm) || 0;
+    return Number(state.placementHeightMode) || 0;
+  }
+
+  function recalculateLayoutWarnings() {
+    const parts = allLayoutParts();
+    const connectors = getAllEndpoints().map(endpoint => ({ ...endpoint, partId: endpoint.sourceId, directionDeg: endpoint.heading }));
+    const duplicate = LAYOUT_GRAPH.duplicateConnectorWarnings(state.connections, connectors);
+    const edgeWarnings = LAYOUT_GRAPH.validateEdges(parts, PARTS, state.connections);
+    const interference = LAYOUT_GRAPH.interferenceWarnings(parts, PARTS, part => part.id === 'start' ? startBounds(part) : partBounds(part), { edges: state.connections });
+    const negative = parts.filter(part => Number(part.zMm) < 0).map(part => ({ type: 'negative-height', partIds: [part.id] }));
+    state.layoutWarnings = [...duplicate, ...edgeWarnings, ...interference, ...negative];
+    return state.layoutWarnings;
+  }
+
   function endpointsConnect(a, b) {
     if (!a || !b || a.sourceId === b.sourceId) return false;
     const close = Math.hypot(a.x - b.x, a.y - b.y) <= 1.75;
     const faceToFace = angularDistance(a.heading, normalizeRotation(b.heading + 180)) <= .1;
-    return close && faceToFace;
-  }
-
-  function unpairedEndpoints(endpoints) {
-    const paired = new Set();
-    for (let i = 0; i < endpoints.length; i++) {
-      if (paired.has(i)) continue;
-      let best = -1;
-      let bestDistance = Infinity;
-      for (let j = i + 1; j < endpoints.length; j++) {
-        if (paired.has(j) || !endpointsConnect(endpoints[i], endpoints[j])) continue;
-        const distance = Math.hypot(endpoints[i].x - endpoints[j].x, endpoints[i].y - endpoints[j].y);
-        if (distance < bestDistance) { best = j; bestDistance = distance; }
-      }
-      if (best >= 0) {
-        paired.add(i);
-        paired.add(best);
-      }
-    }
-    return endpoints.filter((_, index) => !paired.has(index));
+    const sameHeight = Math.abs((Number(a.zMm) || 0) - (Number(b.zMm) || 0)) <= LAYOUT_GRAPH.Z_EPSILON_MM;
+    return close && faceToFace && sameHeight;
   }
 
   function getOpenConnections() {
-    return unpairedEndpoints(getAllEndpoints());
+    return getAllEndpoints();
   }
 
   function groupMoveSnapProposal(movingParts, movingIds) {
+    if (!state.snapEnabled || state.altSnapDisabled) return null;
     const movingSet = new Set(movingIds);
-    const movingOpen = unpairedEndpoints(movingParts.flatMap(part => partEndpoints(part)));
+    const movingOpen = movingParts.flatMap(part => partEndpoints(part));
     const stationaryEndpoints = [];
     if (state.start) stationaryEndpoints.push(...startEndpoints(state.start));
     state.parts.forEach(part => {
       if (!movingSet.has(part.id)) stationaryEndpoints.push(...partEndpoints(part));
     });
-    const stationaryOpen = unpairedEndpoints(stationaryEndpoints);
+    const stationaryOpen = stationaryEndpoints;
 
     let best = null;
     for (const movingEndpoint of movingOpen) {
       for (const stationaryEndpoint of stationaryOpen) {
-        const compatible = angularDistance(
-          movingEndpoint.heading,
-          normalizeRotation(stationaryEndpoint.heading + 180)
-        ) <= .1;
-        if (!compatible) continue;
+        const movingPart = movingParts.find(part => part.id === movingEndpoint.sourceId);
+        const inheritsBank = movingPart && LAYOUT_GRAPH.connectorsInheritBank(PARTS[movingPart.type]);
+        const compatible = LAYOUT_GRAPH.connectorCompatible(
+          { ...movingEndpoint, partId: movingEndpoint.sourceId, directionDeg: movingEndpoint.heading, bankAngleDeg: inheritsBank ? (stationaryEndpoint.bankAngleDeg || 0) : (movingEndpoint.bankAngleDeg || 0) },
+          { ...stationaryEndpoint, partId: stationaryEndpoint.sourceId, directionDeg: stationaryEndpoint.heading, bankAngleDeg: stationaryEndpoint.bankAngleDeg || 0 }
+        );
+        if (!compatible || Math.abs((movingEndpoint.zMm || 0) - (stationaryEndpoint.zMm || 0)) > LAYOUT_GRAPH.Z_EPSILON_MM) continue;
         const distance = Math.hypot(
           movingEndpoint.x - stationaryEndpoint.x,
           movingEndpoint.y - stationaryEndpoint.y
         );
         if (!best || distance < best.distance) {
-          best = { movingEndpoint, stationaryEndpoint, distance };
+          best = {
+            movingEndpoint,
+            stationaryEndpoint,
+            distance,
+            bankAdjustmentDeg: movingPart
+              ? LAYOUT_GRAPH.bankAdjustmentForDefinition(PARTS[movingPart.type], movingEndpoint, stationaryEndpoint)
+              : 0
+          };
         }
       }
     }
 
-    if (!best || best.distance > GROUP_MOVE_SNAP_RADIUS_CM) return null;
+    if (!best || best.distance * state.view.scale > LAYOUT_GRAPH.SNAP_RADIUS_PX) return null;
     return {
       ...best,
       correctionX: best.stationaryEndpoint.x - best.movingEndpoint.x,
@@ -1588,7 +1629,8 @@
     let bankRole = null;
     let partBankAngle = incoming.bankAngle;
     let sectionId = incoming.bankSectionId;
-    if (type === 'bank20') {
+    const transitionConnectors = localEndpoints(type).filter(endpoint => endpoint.bankTransitionToDeg != null);
+    if (transitionConnectors.length) {
       if (incoming.bankAngle === 20) {
         bankRole = 'exit';
         endpointStates[otherIndex] = endpointState({ bankAngle: 0, elevationMm: incoming.elevationMm });
@@ -1604,7 +1646,7 @@
   }
 
   function freePlacement(type, x, y) {
-    const proposal = { type, id: 'ghost', x, y, rotation: state.rotation, routeIndex: 0 };
+    const proposal = { type, id: 'ghost', x, y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex: 0 };
     proposal.endpoints = partEndpoints(proposal);
     proposal.entry = proposal.endpoints[0];
     proposal.exit = proposal.endpoints[1];
@@ -1615,60 +1657,39 @@
     const def = PARTS[state.selectedType];
     if (!def || state.selectedType === 'start') return null;
     const free = freePlacement(state.selectedType, state.cursor.x, state.cursor.y);
-    const opens = getOpenConnections();
-    if (!opens.length) {
-      free.snapped = false;
-      free.valid = false;
-      free.reason = '接続可能な端点がありません';
-      return free;
-    }
-
-    const candidates = [];
-    opens.forEach(anchor => {
-      free.endpoints.forEach((ghostEndpoint, attachedIndex) => {
-        const compatible = angularDistance(ghostEndpoint.heading, normalizeRotation(anchor.heading + 180)) <= .1;
-        if (!compatible) return;
-        const distance = Math.hypot(ghostEndpoint.x - anchor.x, ghostEndpoint.y - anchor.y);
-        const x = free.x + anchor.x - ghostEndpoint.x;
-        const y = free.y + anchor.y - ghostEndpoint.y;
-        const bank = connectionStateForPlacement(state.selectedType, anchor.connectionState, attachedIndex);
-        const candidatePart = { ...free, x, y, routeIndex: attachedIndex, ...bank };
-        const endpoints = partEndpoints(candidatePart);
-        const otherIndex = attachedIndex === 0 ? 1 : 0;
-        candidates.push({
-          ...candidatePart,
-          endpoints,
-          entry: { ...anchor },
-          exit: { ...endpoints[otherIndex] },
-          anchor: { ...anchor },
-          attachedIndex,
-          otherIndex,
-          endpointDistance: distance,
-          centerDistance: Math.hypot(x - state.cursor.x, y - state.cursor.y)
-        });
-      });
+    const targets = getAllEndpoints().map(endpoint => ({
+      ...endpoint, partId: endpoint.sourceId, directionDeg: endpoint.heading,
+      bankAngleDeg: Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0
+    }));
+    const placement = LAYOUT_GRAPH.choosePlacement(free, PARTS, targets, {
+      scale: state.view.scale,
+      radiusPx: LAYOUT_GRAPH.SNAP_RADIUS_PX,
+      snapEnabled: state.snapEnabled,
+      altKey: state.altSnapDisabled,
+      freeHeightMm: selectedFreeHeightMm(),
+      candidateIndex: state.snapCandidateIndex,
+      edges: state.connections
     });
-
-    candidates.sort((a,b) => a.endpointDistance - b.endpointDistance || a.centerDistance - b.centerDistance);
-    const best = candidates[0];
-    if (!best) {
-      free.snapped = false;
-      free.valid = false;
-      free.reason = '現在の向きでは接続できません';
-      return free;
+    if (placement.kind === 'free') {
+      return { ...free, ...placement.part, snapped: false, valid: true, outOfBounds: !isPartInsideField(placement.part), candidates: [] };
     }
-    const snapRadius = Math.max(32, Math.min(90, Math.hypot(def.w, def.h) * .58));
-    if (best.endpointDistance <= snapRadius) {
-      best.snapped = true;
-      best.valid = true;
-      best.outOfBounds = !isPartInsideField(best);
-      return best;
-    }
-    free.snapped = false;
-    free.valid = false;
-    free.target = best;
-    free.reason = '接続点へ近づけてください';
-    return free;
+    const chosen = placement.selected;
+    state.snapCandidateIndex = Math.min(state.snapCandidateIndex, placement.candidates.length - 1);
+    const attachedIndex = chosen.localConnectorIndex;
+    const otherIndex = attachedIndex === 0 ? 1 : 0;
+    const bank = connectionStateForPlacement(state.selectedType, chosen.target.connectionState, attachedIndex);
+    const candidate = { ...free, ...chosen.pose, ...bank, routeIndex: attachedIndex };
+    const endpoints = partEndpoints(candidate);
+    return {
+      ...candidate,
+      endpoints,
+      entry: { ...chosen.target }, exit: { ...endpoints[otherIndex] }, anchor: { ...chosen.target },
+      attachedIndex, otherIndex, endpointDistance: chosen.distanceWorld, distancePx: chosen.distancePx,
+      snapped: true, valid: !placement.requiresHeightChoice || state.snapCandidateConfirmed,
+      requiresHeightChoice: placement.requiresHeightChoice, candidates: placement.candidates,
+      used: chosen.used, outOfBounds: !isPartInsideField(candidate),
+      edge: { partAId: chosen.target.partId, connectorAId: chosen.target.connectorId, partBId: 'pending', connectorBId: chosen.localConnector.id }
+    };
   }
 
 
@@ -1707,6 +1728,17 @@
 
   function drawOutOfBoundsWarnings(c) {
     outOfBoundsItems().forEach(item => drawOutOfBoundsMarker(c, item.bounds));
+  }
+
+  function drawLayoutWarnings(c) {
+    const warnedIds = new Set(state.layoutWarnings.flatMap(warning => warning.partIds || (warning.connector?.partId ? [warning.connector.partId] : [])));
+    warnedIds.forEach(id => {
+      const part = id === 'start' ? state.start : state.parts.find(item => item.id === id);
+      if (!part) return;
+      const bounds = id === 'start' ? startBounds(part) : partBounds(part);
+      c.save(); c.strokeStyle = '#bd3268'; c.lineWidth = 2 / state.view.scale; c.setLineDash([7 / state.view.scale, 5 / state.view.scale]);
+      c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h); c.restore();
+    });
   }
 
   function normalizeConnection(connection) {
@@ -1870,6 +1902,7 @@
   function onPointerDown(e) {
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
+    if (e.altKey) state.altSnapDisabled = true;
     const rect = els.courseCanvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -1901,14 +1934,14 @@
     state.cursor = snappedWorld;
 
     if (state.mode === 'start') {
-      placeStartLane();
+      state.pointer.pendingPlacement = true;
       updateUI();
       render();
       return;
     }
 
     if (state.mode === 'place') {
-      placePartAtCursor();
+      state.pointer.pendingPlacement = true;
       updateUI();
       render();
       return;
@@ -1924,7 +1957,12 @@
           if (!isSelected(hit.id)) setSelection([hit.id]);
           state.pointer.draggingParts = true;
           state.pointer.dragStart = { ...snappedWorld };
-          state.pointer.dragBase = selectedParts().map(p => ({ id: p.id, x: p.x, y: p.y }));
+          state.pointer.dragBase = selectedParts().map(p => ({
+            id: p.id, x: p.x, y: p.y,
+            zMm: Number(p.zMm) || 0,
+            pitchDeg: Number(p.pitchDeg) || 0,
+            bankAngleDeg: Number(p.bankAngleDeg) || 0
+          }));
           state.pointer.dragSnapshotTaken = false;
           els.courseCanvas.classList.add('is-moving');
         }
@@ -1955,6 +1993,7 @@
   }
 
   function onPointerMove(e) {
+    if (state.altSnapDisabled !== !!e.altKey) state.altSnapDisabled = !!e.altKey;
     const rect = els.courseCanvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -1986,7 +2025,9 @@
       return;
     }
 
-    state.cursor = { x: snap(world.x), y: snap(world.y) };
+    const nextCursor = { x: snap(world.x), y: snap(world.y) };
+    if (nextCursor.x !== state.cursor.x || nextCursor.y !== state.cursor.y) state.snapCandidateConfirmed = false;
+    state.cursor = nextCursor;
 
     const canHover = ['move','delete','color'].includes(state.mode) && !state.pointer.draggingParts && !state.pointer.marquee;
     const hovered = canHover ? hitTest(world.x, world.y) : null;
@@ -2000,16 +2041,29 @@
       if ((dx || dy) && !state.pointer.dragSnapshotTaken) {
         snapshot();
         state.pointer.dragSnapshotTaken = true;
+        const movingSet = new Set(state.pointer.dragBase.map(base => base.id));
+        state.connections = state.connections.filter(edge => {
+          const aMoving = movingSet.has(edge.partAId); const bMoving = movingSet.has(edge.partBId);
+          return aMoving === bMoving;
+        });
       }
       if (state.pointer.dragSnapshotTaken) {
         const movingIds = state.pointer.dragBase.map(base => base.id);
         const proposedParts = state.pointer.dragBase.map(base => {
           const original = state.parts.find(part => part.id === base.id);
-          return original ? { ...original, x: base.x + dx, y: base.y + dy } : null;
+          return original ? {
+            ...original,
+            x: base.x + dx,
+            y: base.y + dy,
+            zMm: base.zMm,
+            pitchDeg: base.pitchDeg,
+            bankAngleDeg: base.bankAngleDeg
+          } : null;
         }).filter(Boolean);
         const snapInfo = groupMoveSnapProposal(proposedParts, movingIds);
         const correctionX = snapInfo?.correctionX || 0;
         const correctionY = snapInfo?.correctionY || 0;
+        const bankAdjustmentDeg = snapInfo?.bankAdjustmentDeg || 0;
         state.pointer.groupSnap = snapInfo;
 
         state.pointer.dragBase.forEach(base => {
@@ -2017,18 +2071,31 @@
           if (!p) return;
           p.x = base.x + dx + correctionX;
           p.y = base.y + dy + correctionY;
+          p.zMm = base.zMm;
+          p.pitchDeg = base.pitchDeg;
+          p.bankAngleDeg = base.bankAngleDeg + bankAdjustmentDeg;
         });
         recalculateBankStates();
+        recalculateLayoutWarnings();
         rebuildActiveConnectionFromTail();
       }
     }
 
     if (state.pointer.marquee && state.pointer.down) state.pointer.marqueeEnd = { ...world };
+    if (state.mode === 'place') {
+      const liveProposal = getPlacementProposal();
+      updateSnapCandidatePanel(liveProposal);
+      updatePlacementInstruction(liveProposal);
+    }
     updateStatusOnly();
     render();
   }
 
   function onPointerUp(e) {
+    if (state.pointer.pendingPlacement) {
+      if (state.mode === 'start') placeStartLane();
+      else if (state.mode === 'place') placePartAtCursor();
+    }
     const movedIds = state.pointer.dragSnapshotTaken && state.pointer.dragBase
       ? state.pointer.dragBase.map(item => item.id)
       : [];
@@ -2044,7 +2111,17 @@
 
     if (movedIds.length) {
       const snappedAsGroup = !!state.pointer.groupSnap;
+      if (state.pointer.groupSnap) {
+        const snapInfo = state.pointer.groupSnap;
+        state.connections = LAYOUT_GRAPH.addEdge(state.connections, {
+          partAId: snapInfo.movingEndpoint.sourceId, connectorAId: snapInfo.movingEndpoint.connectorId,
+          partBId: snapInfo.stationaryEndpoint.sourceId, connectorBId: snapInfo.stationaryEndpoint.connectorId,
+          createdOrder: state.connections.length + 1
+        });
+        recalculateBankStates();
+      }
       promotePartsToFront(movedIds);
+      recalculateLayoutWarnings();
       toast(snappedAsGroup
         ? `${movedIds.length}個のパーツを接続して最前面へ移動しました`
         : `${movedIds.length}個のパーツを最前面へ移動しました`);
@@ -2061,6 +2138,7 @@
     state.pointer.marqueeStart = null;
     state.pointer.marqueeEnd = null;
     state.pointer.marqueeAdd = false;
+    state.pointer.pendingPlacement = false;
     const hoverAfter = ['move','delete','color'].includes(state.mode) ? hitTest(state.pointer.x, state.pointer.y) : null;
     state.hoveredPartId = hoverAfter?.id || null;
     els.courseCanvas.classList.toggle('is-hovering-part', !!state.hoveredPartId);
@@ -2090,6 +2168,11 @@
   function onWheel(e) {
     e.preventDefault();
     if (((state.mode === 'start' && !state.start) || state.mode === 'place') && !e.ctrlKey && !e.metaKey) {
+      const proposal = state.mode === 'place' ? getPlacementProposal() : null;
+      if (proposal?.candidates?.length > 1) {
+        cycleSnapCandidate(e.deltaY < 0 ? -1 : 1);
+        return;
+      }
       rotateCurrent(e.deltaY < 0 ? -45 : 45);
       return;
     }
@@ -2106,7 +2189,13 @@
   }
 
   function onKeyDown(e) {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement || e.target?.isContentEditable) return;
+
+    if (e.key === 'Alt') {
+      state.altSnapDisabled = true;
+      updateUI(); render();
+      return;
+    }
 
     if (state.layoutMove.active) {
       const moveKey = e.key.toLowerCase();
@@ -2131,6 +2220,10 @@
       e.preventDefault();
     }
     const key = e.key.toLowerCase();
+
+    if ((key === '[' || key === ']') && state.mode === 'place') {
+      e.preventDefault(); cycleSnapCandidate(key === '[' ? -1 : 1); return;
+    }
 
     if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); return; }
     if ((e.ctrlKey || e.metaKey) && key === 'y') { e.preventDefault(); redo(); return; }
@@ -2185,18 +2278,28 @@
 
   function onKeyUp(e) {
     if (e.code === 'Space') state.pointer.spaceDown = false;
+    if (e.key === 'Alt') { state.altSnapDisabled = false; updateUI(); render(); }
+  }
+
+  function cycleSnapCandidate(delta) {
+    const proposal = getPlacementProposal();
+    const count = proposal?.candidates?.length || 0;
+    if (!count) return;
+    state.snapCandidateIndex = (state.snapCandidateIndex + delta + count) % count;
+    state.snapCandidateConfirmed = true;
+    updateUI(); render();
   }
 
   function placePartAtCursor() {
     if (!state.start) return toast('先にスタートレーンを配置してください');
     const proposal = getPlacementProposal();
     if (!proposal) return toast('配置位置を計算できませんでした');
-    if (!proposal.snapped) return toast(proposal.reason || 'ゴーストを接続点へ近づけてください');
+    if (proposal.requiresHeightChoice && !proposal.valid) return toast('同じ位置に高さ違いの候補があります。右側で高さを選択してください');
     snapshot();
     const id = makeId();
     let bankSectionId = proposal.bankSectionId;
     let endpointStates = proposal.endpointStates?.map(endpointState);
-    if (proposal.type === 'bank20' && proposal.bankRole === 'entry') {
+    if (PARTS[proposal.type]?.bank20 && proposal.bankRole === 'entry') {
       bankSectionId = `bank-${id}`;
       endpointStates = endpointStates.map(value => value.bankAngle === 20 ? endpointState({ ...value, bankSectionId }) : value);
     }
@@ -2206,22 +2309,35 @@
       x: proposal.x,
       y: proposal.y,
       rotation: proposal.rotation,
-      routeIndex: proposal.attachedIndex,
+      routeIndex: Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0,
       colorKey: 'default',
       endpointStates,
       bankRole: proposal.bankRole || null,
+      zMm: Number(proposal.zMm) || 0,
+      pitchDeg: Number(proposal.pitchDeg) || 0,
+      bankAngleDeg: Number(proposal.bankAngleDeg ?? proposal.bankAngle) || 0,
       bankAngle: proposal.bankAngle || 0,
       bankSectionId: bankSectionId || null,
+      zOrder: nextZIndex(),
       zIndex: nextZIndex()
     };
     state.parts.push(part);
+    if (proposal.snapped && proposal.edge) {
+      state.connections = LAYOUT_GRAPH.addEdge(state.connections, { ...proposal.edge, partBId: id, createdOrder: state.connections.length + 1 });
+    }
     const ends = partEndpoints(part);
-    const newOpen = ends[proposal.otherIndex];
+    const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
     state.rotation = normalizeRotation(newOpen.heading);
     state.selectedIds = [];
+    state.lastPlacementHeightMm = part.zMm;
+    state.snapCandidateIndex = 0;
+    state.snapCandidateConfirmed = false;
     recalculateBankStates();
-    toast(`${partDisplayName(part)}を${proposal.anchor?.sourceId === 'start' ? (proposal.anchor.endpointIndex === 0 ? 'スタート後方' : 'スタート前方') : '接続点'}へ配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`);
+    recalculateLayoutWarnings();
+    toast(proposal.snapped
+      ? `${partDisplayName(part)}を${proposal.used ? '使用済み' : ''}接続点へ配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`
+      : `${partDisplayName(part)}を自由配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`);
     persistLocal();
   }
 
@@ -2289,7 +2405,7 @@
     }
 
     state.parts.forEach(part => {
-      if (part.type === 'bank20' && !part.bankRole) state.bankWarnings.push('接続されていない20度バンクアプローチがあります');
+      if (PARTS[part.type]?.bank20 && !part.bankRole) state.bankWarnings.push('接続されていない20度バンクアプローチがあります');
     });
   }
 
@@ -2298,8 +2414,10 @@
     if (!state.parts.length) return toast('スタート位置まで戻っています');
     snapshot();
     const removed = state.parts.pop();
+    state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, [removed.id]);
     state.selectedIds = state.selectedIds.filter(id => id !== removed.id);
     recalculateBankStates();
+    recalculateLayoutWarnings();
     rebuildActiveConnectionFromTail();
     if (state.activeConnection) state.rotation = state.activeConnection.heading;
     state.mode = 'place';
@@ -2313,8 +2431,10 @@
     snapshot();
     const count = unique.length;
     state.parts = state.parts.filter(p => !unique.includes(p.id));
+    state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, unique);
     state.selectedIds = state.selectedIds.filter(id => !unique.includes(id));
     recalculateBankStates();
+    recalculateLayoutWarnings();
     rebuildActiveConnectionFromTail();
     if (state.activeConnection) state.rotation = state.activeConnection.heading;
     toast(`${count}個のパーツを削除しました`);
@@ -2355,7 +2475,9 @@
     if (!parts.length) return toast('回転するパーツを選択してください');
     snapshot();
     parts.forEach(p => { p.rotation = normalizeRotation(p.rotation + delta); });
+    state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, parts.map(part => part.id));
     recalculateBankStates();
+    recalculateLayoutWarnings();
     rebuildActiveConnectionFromTail();
     toast(`${parts.length}個のパーツを${delta < 0 ? '左' : '右'}へ回転しました`);
     persistLocal(); updateUI(); render();
@@ -2390,6 +2512,7 @@
     state.pointer.marqueeStart = null;
     state.pointer.marqueeEnd = null;
     state.pointer.marqueeAdd = false;
+    state.pointer.pendingPlacement = false;
     state.hoveredPartId = null;
     els.courseCanvas?.classList.remove('is-panning', 'is-moving', 'is-hovering-part');
   }
@@ -2404,6 +2527,7 @@
       historyState: JSON.stringify(serializeState()),
       parts: state.parts.map(p => ({ ...p })),
       start: state.start ? { ...state.start } : null,
+      connections: state.connections.map(edge => ({ ...edge })),
       activeConnection: state.activeConnection ? { ...state.activeConnection } : null,
       cursor: { ...state.cursor },
       selectedIds: [...state.selectedIds]
@@ -2450,6 +2574,7 @@
     if (base) {
       state.parts = base.parts.map(p => ({ ...p }));
       state.start = base.start ? { ...base.start } : null;
+      state.connections = (base.connections || []).map(edge => ({ ...edge }));
       state.activeConnection = base.activeConnection ? { ...base.activeConnection } : null;
       state.cursor = { ...base.cursor };
       state.selectedIds = [...base.selectedIds];
@@ -2742,7 +2867,7 @@
     els.modeBadge.textContent = modeLabel;
     els.statusMode.textContent = modeLabel;
     const selectedProposal = state.mode === 'place' ? getPlacementProposal() : null;
-    const dynamicPartName = state.selectedType === 'bank20' && selectedProposal?.bankRole
+    const dynamicPartName = PARTS[state.selectedType]?.bank20 && selectedProposal?.bankRole
       ? (selectedProposal.bankRole === 'entry' ? '20度バンク入口' : '20度バンク出口')
       : PARTS[state.selectedType].name;
     els.statusPart.textContent = state.mode === 'start' ? START_DEF.name : dynamicPartName;
@@ -2753,7 +2878,7 @@
     els.statusZoom.textContent = `${Math.round(state.view.scale * 100)}%`;
     if (els.statusAssets) els.statusAssets.textContent = `${state.assetsReady}/${partAssetCache.size || PART_MENU_ORDER.length}`;
     const openConnections = getOpenConnections();
-    els.statusConnection.textContent = state.start ? `${openConnections.length}か所` : '未設定';
+    els.statusConnection.textContent = state.start ? `${openConnections.length}口 / ${state.connections.length}接続` : '未設定';
     els.fieldWidthText.textContent = `${(state.field.widthCm / 100).toFixed(2)} m`;
     els.fieldHeightText.textContent = `${(state.field.heightCm / 100).toFixed(2)} m`;
     els.gridText.textContent = `${state.field.gridCm} cm`;
@@ -2763,11 +2888,34 @@
     if (els.fieldOverflowNotice) els.fieldOverflowNotice.classList.toggle('has-overflow', !!outside.length);
     if (els.statusOverflow) els.statusOverflow.textContent = String(outside.length);
     els.startText.textContent = state.start ? `${(state.start.x / 100).toFixed(2)} / ${(state.start.y / 100).toFixed(2)}m・${state.start.rotation}°` : '未設定';
-    els.connectionText.textContent = state.start ? `${openConnections.length}か所（ゴーストに近い端へ吸着）` : '未設定';
+    els.connectionText.textContent = state.start ? `${openConnections.length}口（使用済みも追加吸着可）` : '未設定';
     if (els.bankStateText) {
       const proposalBank = proposal?.anchor?.connectionState?.bankAngle || 0;
       els.bankStateText.textContent = state.bankWarnings.length ? `警告 ${state.bankWarnings.length}件` : (proposalBank === 20 ? '20度区間' : '通常');
     }
+
+    recalculateLayoutWarnings();
+    if (els.statusWarnings) els.statusWarnings.textContent = String(state.layoutWarnings.length);
+    if (els.layoutWarningSummary) {
+      const counts = state.layoutWarnings.reduce((result, warning) => { result[warning.type] = (result[warning.type] || 0) + 1; return result; }, {});
+      const labels = { interference: '干渉の可能性', 'duplicate-connector': '接続口重複', 'height-mismatch': '高さが閉合していません', 'disconnected-edge': '接続ずれ', 'negative-height': '負の高さ', 'missing-connector': '不正接続' };
+      els.layoutWarningSummary.classList.toggle('has-warning', !!state.layoutWarnings.length);
+      els.layoutWarningSummary.textContent = state.layoutWarnings.length
+        ? Object.entries(counts).map(([type, count]) => `${labels[type] || type} ${count}件`).join(' / ')
+        : '警告なし';
+    }
+    if (els.snapToggleBtn) {
+      const enabled = state.snapEnabled && !state.altSnapDisabled;
+      els.snapToggleBtn.textContent = state.altSnapDisabled ? '吸着 一時OFF' : `吸着 ${state.snapEnabled ? 'ON' : 'OFF'}`;
+      els.snapToggleBtn.classList.toggle('active', enabled);
+      els.snapToggleBtn.setAttribute('aria-pressed', String(state.snapEnabled));
+    }
+    if (els.placementHeightSelect) els.placementHeightSelect.value = state.placementHeightMode;
+    if (els.placementHeightCustom) {
+      els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
+      if (document.activeElement !== els.placementHeightCustom) els.placementHeightCustom.value = String(state.placementHeightMm);
+    }
+    updateSnapCandidatePanel(proposal);
 
     const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color'].includes(state.mode);
     els.instruction.classList.toggle('hidden', !showInstruction);
@@ -2776,7 +2924,7 @@
     } else if (state.mode === 'start') {
       els.instruction.innerHTML = '<strong>スタートレーンを配置</strong><span>マウスで位置移動・Z/Xまたはホイールで回転 → クリックで配置</span>';
     } else if (state.mode === 'place') {
-      els.instruction.innerHTML = '<strong>前後どちら側にも配置できます</strong><span>ゴーストに最も近い空き接続点へ吸着・Z/X/ホイールで重心回転・クリックで配置</span>';
+      updatePlacementInstruction(proposal);
     } else if (state.mode === 'move') {
       els.instruction.innerHTML = '<strong>Q：パーツ移動</strong><span>クリックしてドラッグ・Shift+クリック／範囲ドラッグで複数選択・Escで配置へ</span>';
     } else if (state.mode === 'delete') {
@@ -2800,7 +2948,9 @@
       }, {});
       els.selectionInfo.className = 'selection-info';
       const selectedOutside = selectedParts().filter(part => !isPartInsideField(part)).length;
-      els.selectionInfo.innerHTML = `<strong>${state.selectedIds.length}個選択</strong><br>${Object.entries(names).map(([name, n]) => `${name} ${n}`).join(' / ')}${selectedOutside ? `<br><span class="selection-overflow">作成範囲外 ${selectedOutside}個</span>` : ''}`;
+      const firstSelected = selectedParts()[0];
+      const endpointHeights = firstSelected ? partEndpoints(firstSelected).map(endpoint => `${endpoint.label}:${endpoint.zMm}mm`).join(' / ') : '';
+      els.selectionInfo.innerHTML = `<strong>${state.selectedIds.length}個選択</strong><br>${Object.entries(names).map(([name, n]) => `${name} ${n}`).join(' / ')}${firstSelected ? `<br>基準高さ ${firstSelected.zMm || 0}mm（${((firstSelected.zMm || 0) / 115).toFixed(2)}段）<br>${endpointHeights}<br>pitch ${firstSelected.pitchDeg || 0}° / bank ${firstSelected.bankAngleDeg || 0}° / zOrder ${firstSelected.zOrder ?? firstSelected.zIndex}` : ''}${selectedOutside ? `<br><span class="selection-overflow">作成範囲外 ${selectedOutside}個</span>` : ''}`;
     } else {
       els.selectionInfo.className = 'selection-info empty-summary';
       els.selectionInfo.textContent = '選択なし';
@@ -2817,6 +2967,26 @@
 
   function updateStatusOnly() {
     els.statusCursor.textContent = `${(state.cursor.x / 100).toFixed(2)}m / ${(state.cursor.y / 100).toFixed(2)}m`;
+  }
+
+  function updateSnapCandidatePanel(proposal) {
+    if (!els.snapCandidatePanel) return;
+    const candidates = proposal?.candidates || [];
+    els.snapCandidatePanel.hidden = candidates.length < 2;
+    els.snapCandidatePanel.innerHTML = candidates.length < 2 ? '' : candidates.map((candidate, index) => {
+      const level = candidate.target.zMm / LAYOUT_GRAPH.LEVEL_HEIGHT_MM;
+      const name = candidate.target.partId === 'start' ? START_DEF.name : partDisplayName(state.parts.find(part => part.id === candidate.target.partId));
+      return `<button class="snap-candidate-button${index === state.snapCandidateIndex ? ' active' : ''}" type="button" data-snap-candidate="${index}">${Number.isInteger(level) ? `${level}段` : `${level.toFixed(2)}段`}（${candidate.target.zMm}mm） ${name}／${candidate.target.label || candidate.target.connectorId}${candidate.used ? '・使用済み' : '・空き'}</button>`;
+    }).join('');
+    els.snapCandidatePanel.querySelectorAll('[data-snap-candidate]').forEach(button => button.addEventListener('click', () => {
+      state.snapCandidateIndex = Number(button.dataset.snapCandidate) || 0;
+      state.snapCandidateConfirmed = true;
+      updateUI(); render();
+    }));
+  }
+
+  function updatePlacementInstruction(proposal) {
+    els.instruction.innerHTML = `<strong>${proposal?.snapped ? (proposal.used ? '使用済み接続口へ追加吸着' : '接続口へ吸着') : '自由配置'}</strong><span>24px以内で吸着・離れた場所は自由配置・Altで一時OFF・Z/Xで45°回転${proposal ? `・高さ ${proposal.zMm || 0}mm` : ''}</span>`;
   }
 
   function updateSummary() {
@@ -2858,6 +3028,12 @@
         cursor: { ...state.cursor },
         assetsReady: state.assetsReady,
         bankWarnings: [...state.bankWarnings],
+        layoutWarnings: JSON.parse(JSON.stringify(state.layoutWarnings)),
+        connections: JSON.parse(JSON.stringify(state.connections)),
+        snapEnabled: state.snapEnabled,
+        altSnapDisabled: state.altSnapDisabled,
+        placementHeightMode: state.placementHeightMode,
+        placementHeightMm: state.placementHeightMm,
         seamCount: PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect).length,
         layers: partsByLayer().map(part => ({ id: part.id, type: part.type, zIndex: part.zIndex }))
       }),
@@ -2875,6 +3051,11 @@
       getOpenConnections: () => JSON.parse(JSON.stringify(getOpenConnections())),
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
+      setSnapEnabled: value => { state.snapEnabled = !!value; updateUI(); render(); },
+      setAltSnapDisabled: value => { state.altSnapDisabled = !!value; updateUI(); render(); },
+      setPlacementHeight: value => { state.placementHeightMode = 'custom'; state.placementHeightMm = Number(value) || 0; updateUI(); render(); },
+      selectSnapCandidate: index => { state.snapCandidateIndex = Math.max(0, Number(index) || 0); state.snapCandidateConfirmed = true; updateUI(); render(); },
+      getLayoutWarnings: () => JSON.parse(JSON.stringify(recalculateLayoutWarnings())),
       setRotation: value => { state.rotation = normalizeRotation(Number(value)); updateUI(); render(); },
       setSelectedIds: ids => {
         const available = new Set(state.parts.map(part => part.id));

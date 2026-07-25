@@ -101,6 +101,7 @@
           <div><span class="status-label">COUNT</span><strong id="statusCount">0</strong></div>
           <div><span class="status-label">ASSET</span><strong id="statusAssets">0/9</strong></div>
           <div class="overflow-status"><span class="status-label">OUT</span><strong id="statusOverflow">0</strong></div>
+          <div class="warning-status"><span class="status-label">WARN</span><strong id="statusWarnings">0</strong></div>
           <div class="zoom-status"><span class="status-label">ZOOM</span><strong id="statusZoom">100%</strong></div>
         </footer>
       </main>
@@ -128,6 +129,18 @@
           <div id="selectionInfo" class="selection-info empty-summary">選択なし</div>
           <button id="deleteSelectionBtn" class="button danger-button full-button" type="button">選択パーツを削除</button>
           <button id="colorSelectionBtn" class="button full-button" type="button">選択パーツの色を変更</button>
+        </section>
+
+        <section class="panel snap-panel">
+          <div class="panel-heading"><h2>配置・吸着</h2><button id="snapToggleBtn" class="text-button active" type="button" aria-pressed="true">吸着 ON</button></div>
+          <label class="control-label" for="placementHeightSelect">配置高さ</label>
+          <select id="placementHeightSelect" class="full-control">
+            <option value="auto">自動</option><option value="0">0段（0mm）</option><option value="115">1段（115mm）</option>
+            <option value="230">2段（230mm）</option><option value="345">3段（345mm）</option><option value="460">4段（460mm）</option><option value="custom">任意mm</option>
+          </select>
+          <input id="placementHeightCustom" class="full-control" type="number" step="1" value="0" aria-label="任意の配置高さ（mm）" hidden />
+          <div id="snapCandidatePanel" class="snap-candidate-panel" hidden></div>
+          <div id="layoutWarningSummary" class="layout-warning-summary">警告なし</div>
         </section>
 
         <section class="panel">
@@ -209,6 +222,7 @@
   </dialog>
 
   <script src="part-catalog.js"></script>
+  <script src="layout-graph.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
   <script src="lane-change-visual.js"></script>
@@ -260,7 +274,58 @@ window.addEventListener('load', () => {
       rotation: 0,
       activeConnection: null
     };
-    if (scenario === 'start') {
+    const makeConnectedChain = (types, start, options = {}) => {
+      const graph = window.M4WD_LAYOUT_GRAPH;
+      const catalog = window.M4WD_PART_CATALOG.PARTS;
+      const parts = [];
+      const connections = [];
+      const allParts = () => [{ ...start, id: 'start', type: 'start' }, ...parts];
+      let targetPartId = 'start';
+      let targetConnectorId = options.startConnectorId || 'b';
+      types.forEach((type, index) => {
+        const target = graph.allWorldConnectors(allParts(), catalog).find(connector => connector.partId === targetPartId && connector.connectorId === targetConnectorId);
+        const localConnectors = graph.connectorsForDefinition(catalog[type]);
+        const localIndex = options.localConnectorIndexes?.[index] ?? 0;
+        const id = `${type}-${index + 1}`;
+        const solved = graph.solveSnapPose({ id, type, x: 0, y: 0, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: index + 1 }, localConnectors[localIndex], target);
+        parts.push({ ...solved, colorKey: options.colors?.[index] || 'default', routeIndex: localIndex, zIndex: index + 1 });
+        connections.push({ partAId: targetPartId, connectorAId: targetConnectorId, partBId: id, connectorBId: localConnectors[localIndex].id, createdOrder: index + 1 });
+        targetPartId = id;
+        targetConnectorId = localConnectors[localIndex === 0 ? 1 : 0].id;
+      });
+      return { parts, connections };
+    };
+    if (scenario === 'integration-bank') {
+      const start = { id: 'start', type: 'start', x: 70, y: 260, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
+      const chain = makeConnectedChain(['straight','corner45','corner45','corner45','corner45','straight'], start);
+      d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 700, heightCm: 520, gridCm: 10 }, start, parts: chain.parts, connections: chain.connections });
+    } else if (scenario === 'integration-height' || scenario === 'integration-height-mismatch') {
+      const start = { id: 'start', type: 'start', x: 70, y: 260, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
+      const chain = makeConnectedChain(
+        ['slope','slope','slope','slope','slope','slope'],
+        start,
+        { localConnectorIndexes: [0,0,0,1,1,1], colors: ['green','green','green','orange','orange','orange'] }
+      );
+      if (scenario === 'integration-height-mismatch') chain.parts.at(-1).zMm += 115;
+      d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 700, heightCm: 520, gridCm: 10 }, start, parts: chain.parts, connections: chain.connections });
+    } else if (scenario === 'integration-level-candidates') {
+      const start = { id: 'start', type: 'start', x: 70, y: 90, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
+      d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 620, heightCm: 440, gridCm: 10 }, start,
+        parts: [
+          { id:'ground-straight',type:'straight',x:300,y:250,zMm:0,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'red',routeIndex:0 },
+          { id:'upper-straight',type:'straight',x:300,y:250,zMm:230,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:2,zIndex:2,colorKey:'blue',routeIndex:0 }
+        ], connections: [] });
+    } else if (scenario === 'integration-layers') {
+      const start = { id: 'start', type: 'start', x: 70, y: 260, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
+      d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 560, heightCm: 420, gridCm: 10 }, start,
+        parts: [
+          { id:'corner-low',type:'corner45',x:260,y:210,zMm:0,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'red',routeIndex:0 },
+          { id:'straight-mid',type:'straight',x:260,y:210,zMm:0,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:2,zIndex:2,colorKey:'blue',routeIndex:0 },
+          { id:'corner-high',type:'corner45',x:260,y:210,zMm:0,rotation:90,pitchDeg:0,bankAngleDeg:0,zOrder:3,zIndex:3,colorKey:'green',routeIndex:0 },
+          { id:'lane-visual',type:'lanechange',x:150,y:330,zMm:230,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:4,zIndex:4,colorKey:'default',routeIndex:0 },
+          { id:'burning-visual',type:'burning',x:430,y:300,zMm:230,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:5,zIndex:5,colorKey:'orange',routeIndex:0 }
+        ], connections: [] });
+    } else if (scenario === 'start') {
       d.loadState({
         ...base,
         field: { widthCm: 360, heightCm: 220, gridCm: 10 },
@@ -369,10 +434,24 @@ window.addEventListener('load', () => {
     document.getElementById('setupDialog')?.close();
     document.querySelector('[data-mode="move"]')?.click();
     if (scenario === 'burning') d.setSelectedIds(['burning-connected']);
+    if (scenario === 'integration-layers') d.setSelectedIds(['corner-low']);
+    if (scenario === 'integration-bank') {
+      const selectCorners = document.createElement('button');
+      selectCorners.id = 'qaSelectCornerChain';
+      selectCorners.type = 'button';
+      selectCorners.textContent = 'QA Corner×4を選択';
+      selectCorners.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;padding:5px 8px;background:#fff;border:1px solid #777;';
+      selectCorners.addEventListener('click', () => {
+        d.setSelectedIds(['corner45-2','corner45-3','corner45-4','corner45-5']);
+        if (d.getRuntimeState().mode !== 'move') d.setMode('move');
+      });
+      document.body.appendChild(selectCorners);
+    }
     const qaStatus = document.createElement('output');
     qaStatus.id = 'qaScenarioStatus';
     qaStatus.setAttribute('role', 'status');
     qaStatus.setAttribute('aria-label', 'QA scenario status');
+    qaStatus.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;clip-path:inset(100%);white-space:nowrap;';
     document.body.appendChild(qaStatus);
     const refreshScenarioStatus = () => {
       const runtime = d.getRuntimeState();
@@ -383,7 +462,19 @@ window.addEventListener('load', () => {
       const detail = burningSingle
         ? `, single=${burningSingle.x.toFixed(1)},${burningSingle.y.toFixed(1)}`
         : '';
-      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, seams=${runtime.seamCount}${detail}`;
+      const edgeText = (runtime.connections || []).map(edge => `${edge.partAId}.${edge.connectorAId}-${edge.partBId}.${edge.connectorBId}`).join('|');
+      const heightText = state.parts.map(part => `${part.id}:${part.zMm || 0}/${part.zOrder ?? part.zIndex}`).join('|');
+      const catalog = window.M4WD_PART_CATALOG.PARTS;
+      const graph = window.M4WD_LAYOUT_GRAPH;
+      const allParts = [...(state.start ? [{ ...state.start, id: 'start', type: 'start' }] : []), ...state.parts];
+      const connectorHeightText = graph.allWorldConnectors(allParts, catalog)
+        .map(connector => `${connector.partId}.${connector.connectorId}:${connector.zMm}`).join('|');
+      const warningText = (runtime.layoutWarnings || []).map(warning => warning.type).sort().join('|');
+      const proposal = runtime.proposal;
+      const proposalText = proposal ? `${proposal.snapped ? 'snap' : 'free'}:${proposal.zMm || 0}:${proposal.used ? 'used' : 'open'}:${proposal.candidates?.length || 0}:${Number(proposal.distancePx || 0).toFixed(2)}px` : 'none';
+      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default' })));
+      const fieldDigest = JSON.stringify(state.field);
+      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
     };
     refreshScenarioStatus();
     setInterval(refreshScenarioStatus, 250);

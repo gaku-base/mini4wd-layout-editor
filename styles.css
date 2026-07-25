@@ -416,7 +416,17 @@ kbd {
 }
 
 .overflow-status strong { color: #f6b35b; }
+.warning-status strong { color: #ef77a0; }
 .selection-overflow { color: #d35c00; font-weight: 800; }
+
+.snap-panel { display: grid; gap: 9px; }
+.control-label { color: #596473; font-size: 11px; font-weight: 800; }
+.full-control { width: 100%; min-height: 34px; border: 1px solid #cbd3dc; border-radius: 8px; padding: 6px 8px; background: #fff; color: #1c2732; }
+.snap-candidate-panel { display: grid; gap: 5px; padding: 8px; border-radius: 9px; background: #edf9f4; border: 1px solid #8dcbb4; }
+.snap-candidate-button { text-align: left; border: 1px solid #b7c6cf; border-radius: 7px; background: #fff; padding: 6px 8px; font-size: 11px; cursor: pointer; }
+.snap-candidate-button.active { border-color: #1c9470; box-shadow: inset 3px 0 #1c9470; }
+.layout-warning-summary { padding: 8px; border-radius: 8px; background: #f4f7f9; color: #53606c; font-size: 11px; line-height: 1.5; }
+.layout-warning-summary.has-warning { background: #fff0f4; color: #8d2647; box-shadow: inset 3px 0 #c33b6c; }
 
 .export-range-dialog {
   width: min(560px, calc(100vw - 32px));
