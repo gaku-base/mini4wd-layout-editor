@@ -50,7 +50,17 @@
       "originCm": [
         81,
         18
-      ]
+      ],
+      "rasterPixels": [
+        1296,
+        288
+      ],
+      "connectorsCm": [
+        [-81, 0, 180],
+        [81, 0, 0]
+      ],
+      "profile": "rc1-formal-v1",
+      "source": "runtime vector exported from lane-change-visual.js"
     },
     "wave": {
       "worldBoxCm": [
@@ -120,7 +130,21 @@
       "originCm": [
         93,
         72
-      ]
+      ],
+      "rasterPixels": [
+        1440,
+        1152
+      ],
+      "connectorsCm": [
+        [-93, -54, 180],
+        [-93, 54, 180]
+      ],
+      "internalSeams": {
+        "base": 7,
+        "overpass": 4
+      },
+      "profile": "rc1-formal-v1",
+      "source": "runtime vector exported from burning-changer-visual.js"
     }
   }
 }

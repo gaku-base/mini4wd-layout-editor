@@ -195,6 +195,8 @@
   <script src="part-catalog.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
+  <script src="lane-change-visual.js"></script>
+  <script src="burning-changer-visual.js"></script>
   <script>
     window.__COURSE_ENABLE_DEBUG__ = true;
     window.__COURSE_QA_CONSOLE__ = [];
@@ -250,6 +252,47 @@ window.addEventListener('load', () => {
           { id: 'straight-left', type: 'straight', x: 126, y: 110, rotation: 0, colorKey: 'default', zIndex: 1 },
           { id: 'straight-right', type: 'straight', x: 234, y: 110, rotation: 0, colorKey: 'default', zIndex: 2 }
         ]
+      });
+    } else if (scenario === 'lanechange') {
+      d.loadState({
+        ...base,
+        field: { widthCm: 520, heightCm: 260, gridCm: 10 },
+        start: { x: 26, y: 130, rotation: 0 },
+        parts: [
+          { id: 'straight-before', type: 'straight', x: 80, y: 130, rotation: 0, colorKey: 'default', zIndex: 1 },
+          { id: 'lane-change', type: 'lanechange', x: 188, y: 130, rotation: 0, colorKey: 'default', zIndex: 2 },
+          { id: 'straight-after', type: 'straight', x: 296, y: 130, rotation: 0, colorKey: 'default', zIndex: 3 },
+          { id: 'lane-change-rotated', type: 'lanechange', x: 420, y: 130, rotation: 45, colorKey: 'blue', zIndex: 4 }
+        ]
+      });
+    } else if (scenario === 'burning') {
+      d.loadState({
+        ...base,
+        field: { widthCm: 760, heightCm: 460, gridCm: 10 },
+        start: { x: 86, y: 150, rotation: 0 },
+        parts: [
+          { id: 'straight-top', type: 'straight', x: 140, y: 150, rotation: 0, colorKey: 'default', zIndex: 1 },
+          { id: 'straight-bottom', type: 'straight', x: 140, y: 258, rotation: 0, colorKey: 'default', zIndex: 2 },
+          { id: 'burning-connected', type: 'burning', x: 260, y: 204, rotation: 0, colorKey: 'default', zIndex: 3 },
+          { id: 'burning-single', type: 'burning', x: 500, y: 100, rotation: 0, colorKey: 'orange', zIndex: 4 },
+          { id: 'burning-rotated', type: 'burning', x: 600, y: 330, rotation: 45, colorKey: 'blue', zIndex: 5 }
+        ]
+      });
+    } else if (scenario === 'burning-colors') {
+      const colors = ['default', 'red', 'blue', 'orange', 'green', 'white'];
+      d.loadState({
+        ...base,
+        field: { widthCm: 1000, heightCm: 700, gridCm: 10 },
+        start: { x: 60, y: 350, rotation: 0 },
+        parts: colors.map((colorKey, index) => ({
+          id: `burning-${colorKey}`,
+          type: 'burning',
+          x: 200 + (index % 3) * 300,
+          y: 200 + Math.floor(index / 3) * 300,
+          rotation: index === 2 ? 45 : 0,
+          colorKey,
+          zIndex: index + 1
+        }))
       });
     } else if (scenario === 'colors') {
       const colors = ['default', 'red', 'blue', 'orange', 'green', 'white'];
@@ -308,6 +351,7 @@ window.addEventListener('load', () => {
     }
     document.getElementById('setupDialog')?.close();
     document.querySelector('[data-mode="move"]')?.click();
+    if (scenario === 'burning') d.setSelectedIds(['burning-connected']);
     const qaStatus = document.createElement('output');
     qaStatus.id = 'qaScenarioStatus';
     qaStatus.setAttribute('role', 'status');
@@ -316,10 +360,43 @@ window.addEventListener('load', () => {
     const refreshScenarioStatus = () => {
       const runtime = d.getRuntimeState();
       const state = d.getState();
-      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, seams=${runtime.seamCount}`;
+      const burningSingle = scenario === 'burning'
+        ? state.parts.find(part => part.id === 'burning-single')
+        : null;
+      const detail = burningSingle
+        ? `, single=${burningSingle.x.toFixed(1)},${burningSingle.y.toFixed(1)}`
+        : '';
+      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, seams=${runtime.seamCount}${detail}`;
     };
     refreshScenarioStatus();
     setInterval(refreshScenarioStatus, 250);
+    if (scenario === 'lanechange') {
+      const link = document.createElement('a');
+      link.id = 'qaLaneChangePng';
+      link.download = 'lane-change.png';
+      link.href = d.renderPartDataUrl('lanechange', 'entry', 8);
+      link.textContent = 'QA lane-change PNG';
+      link.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;padding:5px 8px;background:#fff;border:1px solid #777;';
+      document.body.appendChild(link);
+    }
+    if (scenario === 'burning' || scenario === 'burning-colors') {
+      const partLink = document.createElement('a');
+      partLink.id = 'qaBurningPartPng';
+      partLink.download = 'burning-lc.png';
+      partLink.href = d.renderPartDataUrl('burning', 'entry', 8);
+      partLink.textContent = 'QA Burning Changer part PNG';
+      partLink.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;padding:5px 8px;background:#fff;border:1px solid #777;';
+      document.body.appendChild(partLink);
+      if (scenario === 'burning') {
+        const exportLink = document.createElement('a');
+        exportLink.id = 'qaBurningExportPng';
+        exportLink.download = 'burning-changer-export-test.png';
+        exportLink.href = d.renderExportDataUrl(2);
+        exportLink.textContent = 'QA Burning Changer layout PNG';
+        exportLink.style.cssText = 'position:fixed;left:230px;bottom:8px;z-index:9999;padding:5px 8px;background:#fff;border:1px solid #777;';
+        document.body.appendChild(exportLink);
+      }
+    }
   }, 800);
 });
 </script>

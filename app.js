@@ -8,6 +8,10 @@
   if (!PERSISTENCE) throw new Error('persistence.jsが読み込まれていません');
   const PART_SEAMS = window.M4WD_PART_SEAMS;
   if (!PART_SEAMS) throw new Error('part-seams.jsが読み込まれていません');
+  const LANE_CHANGE_VISUAL = window.M4WD_LANE_CHANGE_VISUAL;
+  if (!LANE_CHANGE_VISUAL) throw new Error('lane-change-visual.jsが読み込まれていません');
+  const BURNING_CHANGER_VISUAL = window.M4WD_BURNING_CHANGER_VISUAL;
+  if (!BURNING_CHANGER_VISUAL) throw new Error('burning-changer-visual.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
@@ -500,9 +504,12 @@
     }
   }
 
-  function exportPng() {
+  function createExportCanvas(requestedScale) {
     const padding = 30;
-    const exportScale = Math.min(2.2, Math.max(0.5, 1800 / Math.max(state.field.widthCm, state.field.heightCm)));
+    const automaticScale = Math.min(2.2, Math.max(0.5, 1800 / Math.max(state.field.widthCm, state.field.heightCm)));
+    const exportScale = Number.isFinite(requestedScale)
+      ? Math.min(4, Math.max(.5, requestedScale))
+      : automaticScale;
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil(state.field.widthCm * exportScale + padding * 2);
     canvas.height = Math.ceil(state.field.heightCm * exportScale + padding * 2 + 54);
@@ -520,6 +527,11 @@
     c.fillStyle = '#556171';
     c.font = '12px sans-serif';
     c.fillText(`${(state.field.widthCm/100).toFixed(2)}m × ${(state.field.heightCm/100).toFixed(2)}m  /  ${state.parts.length + (state.start ? 1 : 0)} parts`, padding, canvas.height - 15);
+    return canvas;
+  }
+
+  function exportPng() {
+    const canvas = createExportCanvas();
     canvas.toBlob(blob => {
       if (!blob) return;
       downloadBlob(blob, `mini4wd-layout-${dateStamp()}.png`);
@@ -786,8 +798,8 @@
       else if (def.burning) drawBurningGraphic(c, def);
       else drawStraightLike(c, def, exportMode, part);
     }
-    if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true);
-    if (opts.hovered) drawPartHoverEffect(c, part.type);
+    if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
+    if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
   }
 
@@ -811,11 +823,13 @@
     c.lineWidth = 1.05;
     c.strokeRect(vx, vy, def.w, def.h);
 
-    c.strokeStyle = def.lane;
-    c.lineWidth = .8;
-    for (let i = 1; i < 3; i++) {
-      const y = vy + (TRACK_WIDTH_CM / 3) * i;
-      c.beginPath(); c.moveTo(vx, y); c.lineTo(vx + def.w, y); c.stroke();
+    if (!def.lanechange) {
+      c.strokeStyle = def.lane;
+      c.lineWidth = .8;
+      for (let i = 1; i < 3; i++) {
+        const y = vy + (TRACK_WIDTH_CM / 3) * i;
+        c.beginPath(); c.moveTo(vx, y); c.lineTo(vx + def.w, y); c.stroke();
+      }
     }
 
     if (def.lanechange) drawLaneChangeGraphic(c, def);
@@ -826,44 +840,82 @@
 
 
   function drawLaneChangeGraphic(c, def) {
-    const laneW = TRACK_WIDTH_CM / 3;
-    const startX = -def.w / 2 + 42;
-    const endX = def.w / 2 - 42;
+    const geometry = LANE_CHANGE_VISUAL.createGeometry(def.w, def.geometry?.height || TRACK_WIDTH_CM);
     c.save();
     c.lineCap = 'butt';
     c.lineJoin = 'round';
 
-    // 下側レーンから上側レーンへ渡る橋状リボン。
-    c.strokeStyle = '#c0bcb8';
-    c.lineWidth = laneW;
-    c.beginPath();
-    c.moveTo(startX, laneW);
-    c.bezierCurveTo(-def.w * .12, laneW, def.w * .12, -laneW, endX, -laneW);
-    c.stroke();
-    c.strokeStyle = def.edge;
+    // 3レーン境界は通常Straightの水平線と重ねず、切替形状として一度だけ描く。
+    c.strokeStyle = def.lane;
     c.lineWidth = .8;
-    for (const offset of [-laneW / 2, laneW / 2]) {
+    for (const guide of geometry.guides) {
       c.beginPath();
-      c.moveTo(startX, laneW + offset);
-      c.bezierCurveTo(-def.w * .12, laneW + offset, def.w * .12, -laneW + offset, endX, -laneW + offset);
+      c.moveTo(guide.start.x, guide.start.y);
+      c.lineTo(guide.transitionStart.x, guide.transitionStart.y);
+      c.bezierCurveTo(
+        guide.control1.x, guide.control1.y,
+        guide.control2.x, guide.control2.y,
+        guide.transitionEnd.x, guide.transitionEnd.y
+      );
+      c.lineTo(guide.end.x, guide.end.y);
       c.stroke();
     }
 
-    // 残り2レーンの境界を緩やかに逃がす。
+    // RC1系の中央支持部。接続面まで延ばさず、外周内へ収める。
+    c.beginPath();
+    geometry.support.forEach((point, index) => {
+      if (index === 0) c.moveTo(point.x, point.y);
+      else c.lineTo(point.x, point.y);
+    });
+    c.closePath();
+    c.fillStyle = shadeColor(def.base, -.16);
+    c.fill();
+    c.strokeStyle = def.edge;
+    c.lineWidth = .9;
+    c.stroke();
+
+    const bridge = geometry.bridge;
+    const traceBridge = () => {
+      c.beginPath();
+      c.moveTo(bridge.start.x, bridge.start.y);
+      c.bezierCurveTo(
+        bridge.control1.x, bridge.control1.y,
+        bridge.control2.x, bridge.control2.y,
+        bridge.end.x, bridge.end.y
+      );
+    };
+
+    // 橋状レーンの縁と天面を分け、3レーン構造と切替方向を明瞭にする。
+    traceBridge();
+    c.strokeStyle = def.edge;
+    c.lineWidth = bridge.edgeWidth;
+    c.stroke();
+
+    const bridgeGradient = c.createLinearGradient(
+      bridge.start.x, bridge.start.y, bridge.end.x, bridge.end.y
+    );
+    bridgeGradient.addColorStop(0, shadeColor(def.base, -.18));
+    bridgeGradient.addColorStop(.48, shadeColor(def.base, .05));
+    bridgeGradient.addColorStop(1, shadeColor(def.base, -.12));
+    traceBridge();
+    c.strokeStyle = bridgeGradient;
+    c.lineWidth = bridge.width;
+    c.stroke();
+
+    traceBridge();
+    c.strokeStyle = 'rgba(255,255,255,.34)';
+    c.lineWidth = .5;
+    c.stroke();
+
+    // 天面両端は接続面ではなく、1枚内の構造線として細く示す。
     c.strokeStyle = def.lane;
-    c.lineWidth = .8;
-    c.beginPath();
-    c.moveTo(-def.w/2, -laneW/2);
-    c.lineTo(-def.w*.18, -laneW/2);
-    c.bezierCurveTo(-def.w*.05, -laneW/2, def.w*.05, laneW/2, def.w*.18, laneW/2);
-    c.lineTo(def.w/2, laneW/2);
-    c.stroke();
-    c.beginPath();
-    c.moveTo(-def.w/2, laneW/2);
-    c.lineTo(-def.w*.18, laneW/2);
-    c.bezierCurveTo(-def.w*.05, laneW/2, def.w*.05, -laneW/2, def.w*.18, -laneW/2);
-    c.lineTo(def.w/2, -laneW/2);
-    c.stroke();
+    c.lineWidth = .52;
+    for (const cap of bridge.caps) {
+      c.beginPath();
+      c.moveTo(cap.start.x, cap.start.y);
+      c.lineTo(cap.end.x, cap.end.y);
+      c.stroke();
+    }
     c.restore();
   }
 
@@ -940,49 +992,110 @@
     c.restore();
   }
 
+  function traceBurningBridgePath(c, bridge) {
+    c.beginPath();
+    c.moveTo(bridge.start.x, bridge.start.y);
+    c.lineTo(bridge.approachStart.x, bridge.approachStart.y);
+    c.bezierCurveTo(
+      bridge.curve.control1.x, bridge.curve.control1.y,
+      bridge.curve.control2.x, bridge.curve.control2.y,
+      bridge.curve.end.x, bridge.curve.end.y
+    );
+    c.lineTo(bridge.end.x, bridge.end.y);
+  }
 
+  function drawBurningBridgeGraphic(c, def, bridge, seamStyle) {
+    traceBurningBridgePath(c, bridge);
+    c.strokeStyle = 'rgba(32,36,38,.24)';
+    c.lineWidth = bridge.edgeWidth + 2.2;
+    c.stroke();
+    traceBurningBridgePath(c, bridge);
+    c.strokeStyle = def.edge;
+    c.lineWidth = bridge.edgeWidth;
+    c.stroke();
+
+    const bridgeGradient = c.createLinearGradient(
+      bridge.approachStart.x, bridge.approachStart.y,
+      bridge.approachEnd.x, bridge.approachEnd.y
+    );
+    bridgeGradient.addColorStop(0, shadeColor(def.base, -.20));
+    bridgeGradient.addColorStop(.5, shadeColor(def.base, -.08));
+    bridgeGradient.addColorStop(1, shadeColor(def.base, .04));
+    traceBurningBridgePath(c, bridge);
+    c.strokeStyle = bridgeGradient;
+    c.lineWidth = bridge.width;
+    c.stroke();
+
+    traceBurningBridgePath(c, bridge);
+    c.strokeStyle = 'rgba(255,255,255,.28)';
+    c.lineWidth = .45;
+    c.stroke();
+
+    if (seamStyle) {
+      c.strokeStyle = seamStyle.color;
+      c.lineWidth = seamStyle.lineWidth;
+      for (const seam of bridge.seams) {
+        c.beginPath();
+        c.moveTo(seam.start.x, seam.start.y);
+        c.lineTo(seam.end.x, seam.end.y);
+        c.stroke();
+      }
+    }
+  }
 
   function drawBurningGraphic(c, def) {
     const g = burningGeometry(def);
     c.save();
     c.lineCap = 'butt';
     c.lineJoin = 'round';
-    // U字の本体を太いストロークで作る。
+
+    // 3レーンのU字本体。接続面から半円部まで同じ中心線で連続させる。
     c.strokeStyle = def.base;
-    c.lineWidth = TRACK_WIDTH_CM;
+    c.lineWidth = g.trackWidth;
     c.beginPath();
-    c.moveTo(g.leftX, -g.separation / 2);
-    c.lineTo(g.arcCenterX, -g.separation / 2);
-    c.arc(g.arcCenterX, 0, g.separation / 2, -Math.PI / 2, Math.PI / 2, false);
-    c.lineTo(g.leftX, g.separation / 2);
+    c.moveTo(g.leftX, g.topY);
+    c.lineTo(g.arcCenterX, g.topY);
+    c.arc(g.arcCenterX, 0, g.centerlineRadius, -Math.PI / 2, Math.PI / 2, false);
+    c.lineTo(g.leftX, g.bottomY);
     c.stroke();
+
     c.strokeStyle = def.edge;
     c.lineWidth = 1.05;
-    for (const offset of [-TRACK_WIDTH_CM / 2, TRACK_WIDTH_CM / 2]) {
+    for (const radius of [g.innerRadius, g.outerRadius]) {
+      const isOuter = radius === g.outerRadius;
       c.beginPath();
-      c.moveTo(g.leftX, -g.separation / 2 + offset);
-      c.lineTo(g.arcCenterX, -g.separation / 2 + offset);
-      c.arc(g.arcCenterX, 0, g.separation / 2 - offset, -Math.PI / 2, Math.PI / 2, false);
-      c.lineTo(g.leftX, g.separation / 2 - offset);
+      c.moveTo(g.leftX, isOuter ? -g.outerRadius : -g.innerRadius);
+      c.lineTo(g.arcCenterX, isOuter ? -g.outerRadius : -g.innerRadius);
+      c.arc(g.arcCenterX, 0, radius, -Math.PI / 2, Math.PI / 2, false);
+      c.lineTo(g.leftX, isOuter ? g.outerRadius : g.innerRadius);
       c.stroke();
     }
+
     c.strokeStyle = def.lane;
     c.lineWidth = .8;
-    for (const laneOffset of [-TRACK_WIDTH_CM / 6, TRACK_WIDTH_CM / 6]) {
+    for (const laneOffset of g.laneOffsets) {
       c.beginPath();
-      c.moveTo(g.leftX, -g.separation / 2 + laneOffset);
-      c.lineTo(g.arcCenterX, -g.separation / 2 + laneOffset);
-      c.arc(g.arcCenterX, 0, g.separation / 2 - laneOffset, -Math.PI / 2, Math.PI / 2, false);
-      c.lineTo(g.leftX, g.separation / 2 - laneOffset);
+      c.moveTo(g.leftX, g.topY + laneOffset);
+      c.lineTo(g.arcCenterX, g.topY + laneOffset);
+      c.arc(g.arcCenterX, 0, g.centerlineRadius - laneOffset, -Math.PI / 2, Math.PI / 2, false);
+      c.lineTo(g.leftX, g.bottomY - laneOffset);
       c.stroke();
     }
-    // 内側の交差ガイド。
-    c.strokeStyle = def.base;
-    c.lineWidth = TRACK_WIDTH_CM / 3 * .72;
-    c.beginPath(); c.moveTo(g.leftX + 18, -g.separation / 2); c.bezierCurveTo(g.arcCenterX - 14, -g.separation/2, g.arcCenterX - 30, g.separation/2, g.leftX + 28, g.separation/2); c.stroke();
-    c.strokeStyle = def.lane;
-    c.lineWidth = .8;
-    c.beginPath(); c.moveTo(g.leftX + 18, -g.separation / 2); c.bezierCurveTo(g.arcCenterX - 14, -g.separation/2, g.arcCenterX - 30, g.separation/2, g.leftX + 28, g.separation/2); c.stroke();
+
+    const seamStyle = PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams });
+    if (seamStyle) {
+      c.strokeStyle = seamStyle.color;
+      c.lineWidth = seamStyle.lineWidth;
+      for (const seam of g.baseSeams) {
+        c.beginPath();
+        c.moveTo(seam.start.x, seam.start.y);
+        c.lineTo(seam.end.x, seam.end.y);
+        c.stroke();
+      }
+    }
+
+    // 下層レーンを先に描いた後、輪郭と陰影を持つ1レーン幅の上層経路を重ねる。
+    drawBurningBridgeGraphic(c, def, g.bridge, seamStyle);
     c.restore();
   }
 
@@ -1049,6 +1162,20 @@
       c.closePath();
       return true;
     }
+    if (def.burning) {
+      const g = burningGeometry(def);
+      c.beginPath();
+      c.moveTo(g.leftX, -g.outerRadius);
+      c.lineTo(g.arcCenterX, -g.outerRadius);
+      c.arc(g.arcCenterX, 0, g.outerRadius, -Math.PI / 2, Math.PI / 2, false);
+      c.lineTo(g.leftX, g.outerRadius);
+      c.lineTo(g.leftX, g.innerRadius);
+      c.lineTo(g.arcCenterX, g.innerRadius);
+      c.arc(g.arcCenterX, 0, g.innerRadius, Math.PI / 2, -Math.PI / 2, true);
+      c.lineTo(g.leftX, -g.innerRadius);
+      c.closePath();
+      return true;
+    }
     const b = localPartBounds(type);
     c.beginPath();
     c.rect(b.minX, b.minY, b.w, b.h);
@@ -1056,7 +1183,7 @@
     return true;
   }
 
-  function drawPartSelectionEffect(c, type, stroke, fill, dashed = false) {
+  function drawPartSelectionEffect(c, type, stroke, fill, dashed = false, resolvedDef = PARTS[type]) {
     c.save();
     if (!tracePartShapePath(c, type)) { c.restore(); return; }
     c.fillStyle = fill;
@@ -1065,6 +1192,20 @@
     if (dashed) c.setLineDash([6 / Math.max(state.view.scale, .15), 4 / Math.max(state.view.scale, .15)]);
     c.fill();
     c.stroke();
+    if (PARTS[type]?.burning) {
+      const bridge = burningGeometry(PARTS[type]).bridge;
+      c.setLineDash([]);
+      traceBurningBridgePath(c, bridge);
+      c.strokeStyle = stroke;
+      c.lineWidth = bridge.edgeWidth + 5 / Math.max(state.view.scale, .15);
+      c.stroke();
+      drawBurningBridgeGraphic(
+        c,
+        resolvedDef,
+        bridge,
+        PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams })
+      );
+    }
     c.restore();
   }
 
@@ -1074,12 +1215,12 @@
     return { stroke: '#55d7ff', fill: 'rgba(85,215,255,.18)' };
   }
 
-  function drawPartHoverEffect(c, type) {
+  function drawPartHoverEffect(c, type, resolvedDef = PARTS[type]) {
     const style = hoverStyleForMode();
     c.save();
     c.shadowColor = style.stroke;
     c.shadowBlur = 12 / Math.max(state.view.scale, .15);
-    drawPartSelectionEffect(c, type, style.stroke, style.fill, false);
+    drawPartSelectionEffect(c, type, style.stroke, style.fill, false, resolvedDef);
     c.restore();
   }
 
@@ -1160,12 +1301,7 @@
   }
 
   function burningGeometry(def) {
-    const g = def.geometry || {};
-    return {
-      separation: (g.endpointY || 54) * 2,
-      leftX: Number.isFinite(g.endpointX) ? g.endpointX : -def.w / 2,
-      arcCenterX: Number.isFinite(g.arcCenterX) ? g.arcCenterX : 18
-    };
+    return BURNING_CHANGER_VISUAL.createGeometry(def.geometry || {});
   }
 
 
@@ -2360,6 +2496,14 @@
   function pointInPartShape(x, y, part) {
     const local = toLocal(x, y, part);
     if (part.type === 'corner45') return pointInCorner45Local(local.x, local.y, 0.8 / Math.max(state.view.scale, .25));
+    if (part.type === 'burning') {
+      const geometry = burningGeometry(PARTS.burning);
+      return BURNING_CHANGER_VISUAL.containsPoint(
+        local,
+        geometry,
+        0.8 / Math.max(state.view.scale, .25)
+      );
+    }
     const b = localPartBounds(part.type);
     return local.x >= b.minX && local.x <= b.maxX && local.y >= b.minY && local.y <= b.maxY;
   }
@@ -2636,13 +2780,22 @@
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
       setRotation: value => { state.rotation = normalizeRotation(Number(value)); updateUI(); render(); },
-      renderPartDataUrl: (type, bankRole = 'entry') => {
+      setSelectedIds: ids => {
+        const available = new Set(state.parts.map(part => part.id));
+        state.selectedIds = Array.isArray(ids) ? ids.filter(id => available.has(id)) : [];
+        updateUI();
+        render();
+      },
+      renderExportDataUrl: scale => createExportCanvas(Number(scale)).toDataURL('image/png'),
+      renderPartDataUrl: (type, bankRole = 'entry', scale = 1) => {
         const def = PARTS[type];
         if (!def?.visual) return null;
+        const renderScale = Math.max(1, Math.min(8, Math.round(Number(scale) || 1)));
         const canvas = document.createElement('canvas');
-        canvas.width = def.visual.canvasWidth;
-        canvas.height = def.visual.canvasHeight;
+        canvas.width = Math.round(def.visual.canvasWidth * renderScale);
+        canvas.height = Math.round(def.visual.canvasHeight * renderScale);
         const c = canvas.getContext('2d');
+        c.scale(renderScale, renderScale);
         c.translate(def.visual.originX, def.visual.originY);
         if (type === 'start') drawStartLane(c, { x:0, y:0, rotation:0 }, true, true);
         else drawPart(c, { id:'qa', type, x:0, y:0, rotation:0, colorKey:'default', bankRole }, { exportMode:true });
