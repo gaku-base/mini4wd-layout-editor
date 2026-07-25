@@ -3,9 +3,12 @@
 const { chromium } = require('playwright');
 const assert = require('assert');
 
+let browser;
+
 (async () => {
-  const browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(7000);
   const errors = [];
   page.on('pageerror', error => errors.push(String(error)));
   page.on('console', message => {
@@ -14,6 +17,7 @@ const assert = require('assert');
 
   await page.goto('http://127.0.0.1:4173/test-index.html', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => !!window.__mini4wdCourseDebug);
+  await page.evaluate(() => document.getElementById('setupDialog')?.close());
 
   const fixture = {
     app: 'mini4wd-course-layout-mouse-flow',
@@ -93,8 +97,9 @@ const assert = require('assert');
 
   assert.deepStrictEqual(errors, []);
   console.log('PASS browser field overflow/autofit QA');
-  await browser.close();
 })().catch(error => {
   console.error(error.stack || error);
   process.exitCode = 1;
+}).finally(async () => {
+  if (browser) await browser.close().catch(() => {});
 });
