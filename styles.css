@@ -385,3 +385,49 @@ kbd {
 #courseCanvas.mode-move.is-hovering-part { cursor: grab; }
 #courseCanvas.mode-delete.is-hovering-part { cursor: pointer; }
 #courseCanvas.mode-color.is-hovering-part { cursor: pointer; }
+
+
+/* v1.1 RC2: creation-area overflow and auto fit */
+.toolbar-button.field-fit {
+  border-color: #f39a38;
+  background: linear-gradient(180deg, #fff4e6, #ffe5c5);
+  color: #7f3900;
+  font-weight: 800;
+}
+
+.field-overflow-notice {
+  margin-top: 12px;
+  padding: 10px 11px;
+  border: 1px solid #9fcdbb;
+  border-radius: 10px;
+  background: #edf9f4;
+  color: #245c49;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.field-overflow-notice.has-overflow {
+  border-color: #ef9a43;
+  background: #fff2e4;
+  color: #8d3b00;
+  box-shadow: inset 4px 0 0 #f07818;
+}
+
+.overflow-status strong { color: #f6b35b; }
+.selection-overflow { color: #d35c00; font-weight: 800; }
+
+.export-range-dialog {
+  width: min(560px, calc(100vw - 32px));
+  border: 0;
+  border-radius: 16px;
+  padding: 0;
+  box-shadow: 0 24px 70px rgba(0,0,0,.42);
+}
+
+.export-range-dialog::backdrop { background: rgba(8,16,24,.68); }
+.export-range-dialog form { padding: 24px; }
+.export-range-dialog h2 { margin: 0 0 10px; font-size: 21px; }
+.export-range-dialog p { margin: 0; color: #596473; line-height: 1.7; }
+.export-range-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 22px; }

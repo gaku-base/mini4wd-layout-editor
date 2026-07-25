@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.0.0-RC1';
+  const VERSION = '1.1.0-RC2';
   const CATALOG = window.M4WD_PART_CATALOG;
   if (!CATALOG) throw new Error('part-catalog.jsが読み込まれていません');
   const PERSISTENCE = window.M4WD_LAYOUT_PERSISTENCE;
@@ -12,6 +12,8 @@
   if (!LANE_CHANGE_VISUAL) throw new Error('lane-change-visual.jsが読み込まれていません');
   const BURNING_CHANGER_VISUAL = window.M4WD_BURNING_CHANGER_VISUAL;
   if (!BURNING_CHANGER_VISUAL) throw new Error('burning-changer-visual.jsが読み込まれていません');
+  const FIELD_BOUNDARY = window.M4WD_FIELD_BOUNDARY;
+  if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
@@ -43,7 +45,7 @@
 
   const els = {};
   const state = {
-    field: { widthCm: 600, heightCm: 400, gridCm: 10 },
+    field: { originX: 0, originY: 0, widthCm: 600, heightCm: 400, gridCm: 10 },
     parts: [],
     start: null,
     startPhase: 'position',
@@ -84,8 +86,10 @@
       'newBtn','saveBtn','loadInput','exportBtn','cancelSetupBtn','instruction','toast','partsList','partsSummary',
       'modeBadge','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
-      'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','editFieldBtn',
-      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText'
+      'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
+      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
+      'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
+      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -273,6 +277,10 @@
     els.fitViewBtn.addEventListener('click', fitView);
     els.manualFitBtn.addEventListener('click', beginManualLayoutMove);
     els.topLeftFitBtn.addEventListener('click', autoAlignLayoutTopLeft);
+    els.autoFitFieldBtn.addEventListener('click', () => autoFitFieldToLayout());
+    els.exportRangeKeepBtn?.addEventListener('click', () => { els.exportRangeDialog.close(); performPngExport(); });
+    els.exportRangeFitBtn?.addEventListener('click', () => { els.exportRangeDialog.close(); if (autoFitFieldToLayout({ silent: true })) performPngExport(); });
+    els.exportRangeCancelBtn?.addEventListener('click', () => els.exportRangeDialog.close());
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
@@ -315,7 +323,13 @@
 
     const reset = els.setupDialog.dataset.reset === 'true';
     if (!reset) snapshot();
-    state.field = { widthCm: widthM * 100, heightCm: heightM * 100, gridCm };
+    state.field = {
+      originX: reset ? 0 : Number(state.field.originX) || 0,
+      originY: reset ? 0 : Number(state.field.originY) || 0,
+      widthCm: widthM * 100,
+      heightCm: heightM * 100,
+      gridCm
+    };
     if (reset) {
       state.parts = [];
       state.start = null;
@@ -329,8 +343,6 @@
       state.history = [];
       state.future = [];
       resetPointerInteraction();
-    } else {
-      clampAllToField();
     }
     state.setupStarted = true;
     els.setupDialog.close();
@@ -419,11 +431,7 @@
 
   function applySerialized(data, resetHistory = true, options = {}) {
     if (!data || !data.field || !Array.isArray(data.parts)) throw new Error('不正なレイアウトデータです');
-    state.field = {
-      widthCm: Number(data.field.widthCm) || 600,
-      heightCm: Number(data.field.heightCm) || 400,
-      gridCm: Number(data.field.gridCm) || 10
-    };
+    state.field = FIELD_BOUNDARY.normalizeField(data.field);
     state.parts = data.parts.map((p, index) => ({
       id: String(p.id || makeId()),
       type: PARTS[p.type] && p.type !== 'start' ? p.type : ({ half: 'straight', curve: 'corner45' }[p.type] || 'straight'),
@@ -460,7 +468,7 @@
     rebuildActiveConnectionFromTail();
     state.cursor = state.activeConnection
       ? { x: state.activeConnection.x, y: state.activeConnection.y }
-      : { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
+      : { x: snap(state.field.originX + state.field.widthCm / 2), y: snap(state.field.originY + state.field.heightCm / 2) };
     state.setupStarted = true;
     if (resetHistory) { state.history = []; state.future = []; }
     fitView();
@@ -519,6 +527,7 @@
     c.save();
     c.translate(padding, padding + 34);
     c.scale(exportScale, exportScale);
+    c.translate(-state.field.originX, -state.field.originY);
     drawExport(c);
     c.restore();
     c.fillStyle = '#111821';
@@ -530,13 +539,26 @@
     return canvas;
   }
 
-  function exportPng() {
+  function performPngExport() {
     const canvas = createExportCanvas();
     canvas.toBlob(blob => {
       if (!blob) return;
       downloadBlob(blob, `mini4wd-layout-${dateStamp()}.png`);
       toast('PNGを書き出しました');
     }, 'image/png');
+  }
+
+  function exportPng() {
+    const outside = outOfBoundsItems();
+    if (!outside.length) return performPngExport();
+    if (!els.exportRangeDialog?.showModal) {
+      if (window.confirm(`作成範囲外に${outside.length}パーツあります。作成範囲を自動フィットして出力しますか？`)) {
+        if (autoFitFieldToLayout({ silent: true })) performPngExport();
+      }
+      return;
+    }
+    els.exportRangeText.textContent = `作成範囲外に${outside.length}パーツあります。このまま出力すると範囲外部分はPNGに含まれません。`;
+    els.exportRangeDialog.showModal();
   }
 
   function layerValue(part, fallbackIndex = 0) {
@@ -630,6 +652,7 @@
       earlier.push(part);
     }
     drawConnectedPartSeams(c, options);
+    if (!options.exportMode) drawOutOfBoundsWarnings(c);
   }
 
   function drawConnectedPartSeams(c, options = {}) {
@@ -661,11 +684,12 @@
   }
 
   function drawExport(c) {
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
     c.fillStyle = '#ffffff';
-    c.fillRect(0, 0, state.field.widthCm, state.field.heightCm);
+    c.fillRect(frame.minX, frame.minY, frame.w, frame.h);
     c.strokeStyle = '#2b3440';
     c.lineWidth = 1.2;
-    c.strokeRect(0, 0, state.field.widthCm, state.field.heightCm);
+    c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
     if (state.start) drawStartLane(c, state.start, true);
     drawPartsInLayerOrder(c, { exportMode: true });
   }
@@ -699,8 +723,8 @@
     const sx = (rect.width - margin * 2) / state.field.widthCm;
     const sy = (rect.height - margin * 2) / state.field.heightCm;
     state.view.scale = clamp(Math.min(sx, sy), 0.12, 5);
-    state.view.offsetX = (rect.width - state.field.widthCm * state.view.scale) / 2;
-    state.view.offsetY = (rect.height - state.field.heightCm * state.view.scale) / 2;
+    state.view.offsetX = (rect.width - state.field.widthCm * state.view.scale) / 2 - state.field.originX * state.view.scale;
+    state.view.offsetY = (rect.height - state.field.heightCm * state.view.scale) / 2 - state.field.originY * state.view.scale;
     updateUI();
     render();
   }
@@ -736,42 +760,44 @@
   }
 
   function drawField(c) {
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
     c.save();
     c.shadowColor = 'rgba(0,0,0,.5)';
     c.shadowBlur = 24 / state.view.scale;
     c.fillStyle = '#f7f6f2';
-    c.fillRect(0, 0, state.field.widthCm, state.field.heightCm);
+    c.fillRect(frame.minX, frame.minY, frame.w, frame.h);
     c.shadowBlur = 0;
     if (state.showGrid) drawGrid(c);
     c.strokeStyle = '#6e716d';
     c.lineWidth = 1.6 / state.view.scale;
     c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
-    c.strokeRect(0, 0, state.field.widthCm, state.field.heightCm);
+    c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
     c.setLineDash([]);
     const m = 100;
     c.strokeStyle = '#555953';
     c.lineWidth = 2 / state.view.scale;
     c.beginPath();
-    c.moveTo(10, state.field.heightCm - 18);
-    c.lineTo(10 + m, state.field.heightCm - 18);
+    c.moveTo(frame.minX + 10, frame.maxY - 18);
+    c.lineTo(frame.minX + 10 + m, frame.maxY - 18);
     c.stroke();
     c.fillStyle = '#555953';
     c.font = `${11 / state.view.scale}px sans-serif`;
-    c.fillText('1m', 10 + m / 2 - 7 / state.view.scale, state.field.heightCm - 24);
+    c.fillText('1m', frame.minX + 10 + m / 2 - 7 / state.view.scale, frame.maxY - 24);
     c.restore();
   }
 
   function drawGrid(c) {
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
     const step = state.field.gridCm;
     const majorEvery = Math.max(1, Math.round(100 / step));
     c.lineWidth = 1 / state.view.scale;
-    for (let x = 0, i = 0; x <= state.field.widthCm + .001; x += step, i++) {
+    for (let x = frame.minX, i = 0; x <= frame.maxX + .001; x += step, i++) {
       c.strokeStyle = i % majorEvery === 0 ? '#ccc9c0' : '#e9e6df';
-      c.beginPath(); c.moveTo(x, 0); c.lineTo(x, state.field.heightCm); c.stroke();
+      c.beginPath(); c.moveTo(x, frame.minY); c.lineTo(x, frame.maxY); c.stroke();
     }
-    for (let y = 0, i = 0; y <= state.field.heightCm + .001; y += step, i++) {
+    for (let y = frame.minY, i = 0; y <= frame.maxY + .001; y += step, i++) {
       c.strokeStyle = i % majorEvery === 0 ? '#ccc9c0' : '#e9e6df';
-      c.beginPath(); c.moveTo(0, y); c.lineTo(state.field.widthCm, y); c.stroke();
+      c.beginPath(); c.moveTo(frame.minX, y); c.lineTo(frame.maxX, y); c.stroke();
     }
   }
 
@@ -1375,13 +1401,12 @@
 
 
   function startInsideField(start) {
-    const bounds = startBounds(start);
-    return bounds.minX >= -.01 && bounds.minY >= -.01 && bounds.maxX <= state.field.widthCm + .01 && bounds.maxY <= state.field.heightCm + .01;
+    return FIELD_BOUNDARY.containsBounds(state.field, startBounds(start));
   }
 
   function placeStartLane() {
     const candidate = { x: state.cursor.x, y: state.cursor.y, rotation: state.rotation };
-    if (!startInsideField(candidate)) return toast('スタートレーンが作成範囲からはみ出します');
+    const outside = !startInsideField(candidate);
     snapshot();
     state.start = candidate;
     state.startPhase = 'position';
@@ -1390,7 +1415,7 @@
     const ends = startEndpoints(state.start);
     setActiveConnection({ ...ends[1], sourceId: 'start', endpointIndex: 1 });
     state.rotation = state.start.rotation;
-    toast('スタートの前後どちら側からでも配置できます');
+    toast(outside ? 'スタートを作成範囲外へ配置しました（オレンジ枠で表示）' : 'スタートの前後どちら側からでも配置できます');
     persistLocal();
   }
 
@@ -1630,7 +1655,8 @@
     const snapRadius = Math.max(32, Math.min(90, Math.hypot(def.w, def.h) * .58));
     if (best.endpointDistance <= snapRadius) {
       best.snapped = true;
-      best.valid = isPartInsideField(best);
+      best.valid = true;
+      best.outOfBounds = !isPartInsideField(best);
       return best;
     }
     free.snapped = false;
@@ -1642,8 +1668,40 @@
 
 
   function isPartInsideField(part) {
-    const bounds = partBounds(part);
-    return bounds.minX >= -.01 && bounds.minY >= -.01 && bounds.maxX <= state.field.widthCm + .01 && bounds.maxY <= state.field.heightCm + .01;
+    return FIELD_BOUNDARY.containsBounds(state.field, partBounds(part));
+  }
+
+  function isStartInsideField(start = state.start) {
+    return !!start && FIELD_BOUNDARY.containsBounds(state.field, startBounds(start));
+  }
+
+  function outOfBoundsItems() {
+    const items = [];
+    if (state.start && !isStartInsideField(state.start)) items.push({ id: 'start', type: 'start', bounds: startBounds(state.start) });
+    state.parts.forEach(part => {
+      if (!isPartInsideField(part)) items.push({ id: part.id, type: part.type, bounds: partBounds(part) });
+    });
+    return items;
+  }
+
+  function drawOutOfBoundsMarker(c, bounds) {
+    c.save();
+    c.fillStyle = 'rgba(244,142,33,.12)';
+    c.strokeStyle = '#f07818';
+    c.lineWidth = 3 / state.view.scale;
+    c.setLineDash([9 / state.view.scale, 5 / state.view.scale]);
+    c.fillRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
+    c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
+    c.setLineDash([]);
+    c.fillStyle = '#9a3e00';
+    c.font = `700 ${12 / state.view.scale}px sans-serif`;
+    c.textBaseline = 'bottom';
+    c.fillText('作成範囲外', bounds.minX, bounds.minY - 5 / state.view.scale);
+    c.restore();
+  }
+
+  function drawOutOfBoundsWarnings(c) {
+    outOfBoundsItems().forEach(item => drawOutOfBoundsMarker(c, item.bounds));
   }
 
   function normalizeConnection(connection) {
@@ -1689,7 +1747,7 @@
 
   function drawConnectionGuide(c, proposal) {
     if (!proposal) return;
-    const color = proposal.valid ? '#249b74' : '#de4b5b';
+    const color = proposal.outOfBounds ? '#f07818' : (proposal.valid ? '#249b74' : '#de4b5b');
     c.save();
     c.strokeStyle = color;
     c.lineWidth = 1.3 / state.view.scale;
@@ -1743,20 +1801,20 @@
     }
     if (state.mode === 'start') {
       const candidate = { x: state.cursor.x, y: state.cursor.y, rotation: state.rotation };
-      const valid = startInsideField(candidate);
+      const outside = !startInsideField(candidate);
       c.save();
-      c.globalAlpha = valid ? .76 : .34;
+      c.globalAlpha = .76;
       drawStartLane(c, candidate, false, true);
       c.restore();
       const bounds = startBounds(candidate);
       c.save();
-      c.strokeStyle = valid ? '#249b74' : '#de4b5b';
+      c.strokeStyle = outside ? '#f07818' : '#249b74';
       c.lineWidth = 2 / state.view.scale;
       c.setLineDash([6 / state.view.scale, 4 / state.view.scale]);
       c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
       c.setLineDash([]);
       c.restore();
-      drawPointerCrosshair(c, state.cursor.x, state.cursor.y, valid ? '#249b74' : '#de4b5b');
+      drawPointerCrosshair(c, state.cursor.x, state.cursor.y, outside ? '#f07818' : '#249b74');
       return;
     }
 
@@ -1766,16 +1824,16 @@
       const proposal = getPlacementProposal();
       if (proposal) {
         c.save();
-        c.globalAlpha = proposal.valid ? .72 : .34;
+        c.globalAlpha = proposal.snapped ? .72 : .34;
         drawPart(c, {
           id: 'ghost', type: proposal.type, x: proposal.x, y: proposal.y,
           rotation: proposal.rotation, routeIndex: proposal.routeIndex, colorKey: 'default'
         });
         c.restore();
         drawConnectionGuide(c, proposal);
-        if (proposal.anchor) drawConnectionPoint(c, proposal.anchor, proposal.valid ? '#1f9c71' : '#de4b5b');
+        if (proposal.anchor) drawConnectionPoint(c, proposal.anchor, proposal.outOfBounds ? '#f07818' : (proposal.valid ? '#1f9c71' : '#de4b5b'));
       }
-      drawPointerCrosshair(c, state.cursor.x, state.cursor.y, proposal?.valid ? '#249b74' : '#de4b5b');
+      drawPointerCrosshair(c, state.cursor.x, state.cursor.y, proposal?.outOfBounds ? '#f07818' : (proposal?.valid ? '#249b74' : '#de4b5b'));
     }
   }
 
@@ -2129,7 +2187,6 @@
     const proposal = getPlacementProposal();
     if (!proposal) return toast('配置位置を計算できませんでした');
     if (!proposal.snapped) return toast(proposal.reason || 'ゴーストを接続点へ近づけてください');
-    if (!proposal.valid) return toast('この位置では作成範囲からはみ出します');
     snapshot();
     const id = makeId();
     let bankSectionId = proposal.bankSectionId;
@@ -2159,7 +2216,7 @@
     state.rotation = normalizeRotation(newOpen.heading);
     state.selectedIds = [];
     recalculateBankStates();
-    toast(`${partDisplayName(part)}を${proposal.anchor?.sourceId === 'start' ? (proposal.anchor.endpointIndex === 0 ? 'スタート後方' : 'スタート前方') : '接続点'}へ配置しました`);
+    toast(`${partDisplayName(part)}を${proposal.anchor?.sourceId === 'start' ? (proposal.anchor.endpointIndex === 0 ? 'スタート後方' : 'スタート前方') : '接続点'}へ配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`);
     persistLocal();
   }
 
@@ -2367,7 +2424,7 @@
 
   function finalizeManualLayoutMove() {
     if (!state.layoutMove.active) return;
-    if (!layoutIsInsideField()) return toast('レイアウト全体が作成範囲内に入ってから固定してください');
+    const overflowCount = outOfBoundsItems().length;
     const base = state.layoutMove.base;
     if (base?.historyState) {
       state.history.push(base.historyState);
@@ -2378,7 +2435,7 @@
     state.mode = move.previousMode === 'start' && state.start ? 'place' : move.previousMode;
     state.layoutMove = { active: false, anchor: null, base: null, previousMode: state.mode, pointer: null };
     persistLocal(); updateUI(); render();
-    toast('レイアウト全体の位置を固定しました');
+    toast(overflowCount ? `範囲外${overflowCount}パーツを含む位置で固定しました` : 'レイアウト全体の位置を固定しました');
   }
 
   function cancelManualLayoutMove() {
@@ -2406,13 +2463,38 @@
       toast('レイアウトが作成範囲より大きいため、全体を収められません');
       return;
     }
-    const dx = -box.minX;
-    const dy = -box.minY;
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
+    const dx = frame.minX - box.minX;
+    const dy = frame.minY - box.minY;
     if (Math.abs(dx) < .001 && Math.abs(dy) < .001) return toast('すでに左上へ揃っています');
     snapshot();
     translateWholeLayout(dx, dy);
     persistLocal(); updateUI(); render();
     toast('レイアウト外形の左上を作成範囲の左上へ揃えました');
+  }
+
+  function autoFitFieldToLayout(options = {}) {
+    if (!state.parts.length && !state.start) {
+      if (!options.silent) toast('自動フィットするレイアウトがありません');
+      return false;
+    }
+    const box = layoutBounds();
+    const nextField = FIELD_BOUNDARY.fitFieldToBounds(state.field, box, {
+      marginCm: Math.max(state.field.gridCm, 10),
+      minSizeCm: 100
+    });
+    if (FIELD_BOUNDARY.sameField(state.field, nextField)) {
+      if (!options.silent) toast('作成範囲はすでにレイアウトへフィットしています');
+      return true;
+    }
+    snapshot();
+    state.field = nextField;
+    persistLocal();
+    fitView();
+    updateUI();
+    render();
+    if (!options.silent) toast('パーツを動かさず、作成範囲を自動フィットしました');
+    return true;
   }
 
   function translateWholeLayout(dx, dy) {
@@ -2424,9 +2506,7 @@
   }
 
   function layoutIsInsideField() {
-    const box = layoutBounds();
-    const epsilon = .001;
-    return box.minX >= -epsilon && box.minY >= -epsilon && box.maxX <= state.field.widthCm + epsilon && box.maxY <= state.field.heightCm + epsilon;
+    return FIELD_BOUNDARY.containsBounds(state.field, layoutBounds(), .001);
   }
 
   function drawLayoutMoveOverlay(c) {
@@ -2443,7 +2523,7 @@
     c.fillStyle = valid ? '#14785d' : '#b32335';
     c.font = `${Math.max(11, 13 / state.view.scale)}px sans-serif`;
     c.textBaseline = 'bottom';
-    c.fillText(valid ? 'クリックで固定' : '範囲内へ移動してください', box.minX, box.minY - 6 / state.view.scale);
+    c.fillText(valid ? 'クリックで固定' : '範囲外のまま固定できます', box.minX, box.minY - 6 / state.view.scale);
     c.restore();
   }
 
@@ -2466,15 +2546,16 @@
   }
 
   function clampAllToField() {
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
     state.parts.forEach(p => {
       const b = partBounds(p);
-      p.x += b.minX < 0 ? -b.minX : b.maxX > state.field.widthCm ? state.field.widthCm - b.maxX : 0;
-      p.y += b.minY < 0 ? -b.minY : b.maxY > state.field.heightCm ? state.field.heightCm - b.maxY : 0;
+      p.x += b.minX < frame.minX ? frame.minX - b.minX : b.maxX > frame.maxX ? frame.maxX - b.maxX : 0;
+      p.y += b.minY < frame.minY ? frame.minY - b.minY : b.maxY > frame.maxY ? frame.maxY - b.maxY : 0;
     });
     if (state.start) {
       const b = startBounds(state.start);
-      state.start.x = clamp(state.start.x, b.w / 2, state.field.widthCm - b.w / 2);
-      state.start.y = clamp(state.start.y, b.h / 2, state.field.heightCm - b.h / 2);
+      state.start.x += b.minX < frame.minX ? frame.minX - b.minX : b.maxX > frame.maxX ? frame.maxX - b.maxX : 0;
+      state.start.y += b.minY < frame.minY ? frame.minY - b.minY : b.maxY > frame.maxY ? frame.maxY - b.maxY : 0;
     }
     recalculateBankStates();
     rebuildActiveConnectionFromTail();
@@ -2671,6 +2752,11 @@
     els.fieldWidthText.textContent = `${(state.field.widthCm / 100).toFixed(2)} m`;
     els.fieldHeightText.textContent = `${(state.field.heightCm / 100).toFixed(2)} m`;
     els.gridText.textContent = `${state.field.gridCm} cm`;
+    if (els.fieldOriginText) els.fieldOriginText.textContent = `${(state.field.originX / 100).toFixed(2)} / ${(state.field.originY / 100).toFixed(2)} m`;
+    const outside = outOfBoundsItems();
+    if (els.fieldOverflowText) els.fieldOverflowText.textContent = outside.length ? `作成範囲外：${outside.length}パーツ` : 'すべて作成範囲内';
+    if (els.fieldOverflowNotice) els.fieldOverflowNotice.classList.toggle('has-overflow', !!outside.length);
+    if (els.statusOverflow) els.statusOverflow.textContent = String(outside.length);
     els.startText.textContent = state.start ? `${(state.start.x / 100).toFixed(2)} / ${(state.start.y / 100).toFixed(2)}m・${state.start.rotation}°` : '未設定';
     els.connectionText.textContent = state.start ? `${openConnections.length}か所（ゴーストに近い端へ吸着）` : '未設定';
     if (els.bankStateText) {
@@ -2708,7 +2794,8 @@
         return acc;
       }, {});
       els.selectionInfo.className = 'selection-info';
-      els.selectionInfo.innerHTML = `<strong>${state.selectedIds.length}個選択</strong><br>${Object.entries(names).map(([name, n]) => `${name} ${n}`).join(' / ')}`;
+      const selectedOutside = selectedParts().filter(part => !isPartInsideField(part)).length;
+      els.selectionInfo.innerHTML = `<strong>${state.selectedIds.length}個選択</strong><br>${Object.entries(names).map(([name, n]) => `${name} ${n}`).join(' / ')}${selectedOutside ? `<br><span class="selection-overflow">作成範囲外 ${selectedOutside}個</span>` : ''}`;
     } else {
       els.selectionInfo.className = 'selection-info empty-summary';
       els.selectionInfo.textContent = '選択なし';
@@ -2774,6 +2861,10 @@
       rewindLastPart,
       rotateCurrent,
       autoAlignLayoutTopLeft,
+      autoFitFieldToLayout,
+      getOutOfBoundsItems: () => JSON.parse(JSON.stringify(outOfBoundsItems())),
+      getFieldBounds: () => FIELD_BOUNDARY.fieldBounds(state.field),
+      getLayoutBounds: () => ({ ...layoutBounds() }),
       selectPartType,
       placePartAtCursor,
       getOpenConnections: () => JSON.parse(JSON.stringify(getOpenConnections())),
