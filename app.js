@@ -18,6 +18,8 @@
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
   if (!PART_RENDER_POSE) throw new Error('part-render-pose.jsが読み込まれていません');
+  const PLACEMENT_PROPOSAL = window.M4WD_PLACEMENT_PROPOSAL;
+  if (!PLACEMENT_PROPOSAL) throw new Error('placement-proposal.js must be loaded before app.js');
   const CORNER_DIRECTION = window.M4WD_CORNER_DIRECTION;
   if (!CORNER_DIRECTION) throw new Error('corner-direction.jsが読み込まれていません');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
@@ -81,7 +83,7 @@
       lastX: 0, lastY: 0, draggingParts: false, dragStart: null,
       dragBase: null, dragSnapshotTaken: false,
       marquee: false, marqueeStart: null, marqueeEnd: null, marqueeAdd: false,
-      groupSnap: null, pendingPlacement: false
+      groupSnap: null, pendingPlacement: false, pendingPlacementProposal: null
     },
     layoutMove: { active: false, anchor: null, base: null, previousMode: 'place', pointer: null },
     history: [],
@@ -93,6 +95,8 @@
     assetsReady: 0,
     ghostProposal: null,
     ghostProposalKey: null,
+    placementProposalSequence: 0,
+    placementCommitCount: 0,
     cornerDiagnostics: []
   };
 
@@ -336,7 +340,7 @@
     canvas.addEventListener('pointerdown', onPointerDown);
     canvas.addEventListener('pointermove', onPointerMove);
     canvas.addEventListener('pointerup', onPointerUp);
-    canvas.addEventListener('pointercancel', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerCancel);
     canvas.addEventListener('pointerleave', onPointerLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
     canvas.addEventListener('contextmenu', e => e.preventDefault());
@@ -918,15 +922,44 @@
   }
 
   function cacheGhostProposal(proposal) {
-    state.ghostProposal = proposal;
+    state.ghostProposal = PLACEMENT_PROPOSAL.snapshotVisibleProposal(
+      proposal,
+      `proposal-${++state.placementProposalSequence}`
+    );
     state.ghostProposalKey = placementProposalKey();
-    return proposal;
+    return state.ghostProposal;
   }
 
+  // This is the one proposal that the user can see.  It is immutable and may
+  // be replaced only when ghost state changes; confirmation never evaluates a
+  // new snap candidate.
   function currentGhostProposal() {
     return state.ghostProposalKey === placementProposalKey()
       ? state.ghostProposal
       : cacheGhostProposal(getPlacementProposal());
+  }
+
+  function captureVisiblePlacementProposal(reason) {
+    const visible = currentGhostProposal();
+    if (!visible) return null;
+    const captured = PLACEMENT_PROPOSAL.cloneForCommit(visible);
+    recordCornerDiagnostic('ghost-before-click', renderPartFromProposal(visible), {
+      placementId: visible.placementId,
+      captureReason: reason,
+      activeProposalId: visible.placementId,
+      pathHash: traceHash(partRenderTrace(renderPartFromProposal(visible))),
+      commitReevaluated: false
+    });
+    return captured;
+  }
+
+  function traceHash(trace) {
+    const rounded = value => Math.round(Number(value) * 1e6) / 1e6;
+    return JSON.stringify({
+      pose: trace?.pose || null,
+      path: (trace?.path || []).map(point => [rounded(point.x), rounded(point.y)]),
+      connectors: (trace?.connectors || []).map(connector => [connector.id, rounded(connector.x), rounded(connector.y), rounded(connector.heading)])
+    });
   }
 
   function recordCornerDiagnostic(stage, part, extra = {}) {
@@ -939,16 +972,18 @@
       y: endpoint.y,
       heading: endpoint.heading
     }));
+    const trace = partRenderTrace(part);
     const record = {
       stage,
       pose,
       type: part.type,
       shapeVariant: PARTS[part.type]?.renderKind || part.type,
-      path: partShapePathPoints(part),
+      path: trace.path,
       connectors: entrypoints,
+      pathHash: traceHash(trace),
       ...extra
     };
-    state.cornerDiagnostics = [...state.cornerDiagnostics.slice(-19), JSON.parse(JSON.stringify(record))];
+    state.cornerDiagnostics = [...state.cornerDiagnostics.slice(-59), JSON.parse(JSON.stringify(record))];
     if (window.__COURSE_ENABLE_DEBUG__) console.log(`[corner-render:${stage}]`, record);
   }
 
@@ -2138,7 +2173,11 @@
         c.save();
         c.globalAlpha = proposal.snapped ? .72 : .34;
         const ghostPart = renderPartFromProposal(proposal);
-        recordCornerDiagnostic('proposal', ghostPart, { proposal: { ...proposal } });
+        recordCornerDiagnostic('proposal', ghostPart, {
+          placementId: proposal.placementId,
+          activeProposalId: proposal.placementId,
+          proposal: PLACEMENT_PROPOSAL.cloneForCommit(proposal)
+        });
         drawPart(c, ghostPart);
         c.restore();
         drawConnectionGuide(c, proposal);
@@ -2214,7 +2253,13 @@
     }
 
     if (state.mode === 'place') {
+      // Re-evaluate once for the new pointer position, render/cache that
+      // proposal, then capture a distinct deep clone for this gesture.
+      const visibleProposal = cacheGhostProposal(getPlacementProposal());
+      updateSnapCandidatePanel(visibleProposal);
+      updatePlacementInstruction(visibleProposal);
       state.pointer.pendingPlacement = true;
+      state.pointer.pendingPlacementProposal = captureVisiblePlacementProposal('pointerdown');
       updateUI();
       render();
       return;
@@ -2357,6 +2402,11 @@
     if (state.mode === 'place') {
       const liveProposal = getPlacementProposal();
       cacheGhostProposal(liveProposal);
+      if (state.pointer.pendingPlacement) {
+        // A drag between pointerdown and pointerup updates the visible ghost,
+        // so commit the newest rendered proposal rather than a stale one.
+        state.pointer.pendingPlacementProposal = captureVisiblePlacementProposal('pointermove');
+      }
       updateSnapCandidatePanel(liveProposal);
       updatePlacementInstruction(liveProposal);
     }
@@ -2365,9 +2415,15 @@
   }
 
   function onPointerUp(e) {
-    if (state.pointer.pendingPlacement) {
+    const pendingPlacementProposal = state.pointer.pendingPlacementProposal;
+    const pendingPlacement = state.pointer.pendingPlacement;
+    // Consume the event before any placement code. Duplicate pointerup/click
+    // notifications cannot create a second part.
+    state.pointer.pendingPlacement = false;
+    state.pointer.pendingPlacementProposal = null;
+    if (pendingPlacement) {
       if (state.mode === 'start') placeStartLane();
-      else if (state.mode === 'place') placePartAtCursor();
+      else if (state.mode === 'place') placePartAtCursor(pendingPlacementProposal, { source: 'pointerup', reevaluated: false });
     }
     const movedIds = state.pointer.dragSnapshotTaken && state.pointer.dragBase
       ? state.pointer.dragBase.map(item => item.id)
@@ -2412,6 +2468,7 @@
     state.pointer.marqueeEnd = null;
     state.pointer.marqueeAdd = false;
     state.pointer.pendingPlacement = false;
+    state.pointer.pendingPlacementProposal = null;
     const hoverAfter = ['move','delete','color'].includes(state.mode) ? hitTest(state.pointer.x, state.pointer.y) : null;
     state.hoveredPartId = hoverAfter?.id || null;
     els.courseCanvas.classList.toggle('is-hovering-part', !!state.hoveredPartId);
@@ -2426,6 +2483,28 @@
     if (state.pointer.down || state.layoutMove.active) return;
     state.hoveredPartId = null;
     els.courseCanvas.classList.remove('is-hovering-part');
+    render();
+  }
+
+  function onPointerCancel(e) {
+    // Cancellation is not a click.  Discard its captured proposal so touch
+    // cancellation cannot later become a second placement.
+    state.pointer.down = false;
+    state.pointer.panning = false;
+    state.pointer.pendingPlacement = false;
+    state.pointer.pendingPlacementProposal = null;
+    state.pointer.draggingParts = false;
+    state.pointer.dragStart = null;
+    state.pointer.dragBase = null;
+    state.pointer.dragSnapshotTaken = false;
+    state.pointer.groupSnap = null;
+    state.pointer.marquee = false;
+    state.pointer.marqueeStart = null;
+    state.pointer.marqueeEnd = null;
+    state.pointer.marqueeAdd = false;
+    els.courseCanvas.classList.remove('is-panning', 'is-moving');
+    try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    updateUI();
     render();
   }
 
@@ -2567,11 +2646,22 @@
     updateUI(); render();
   }
 
-  function placePartAtCursor() {
+  function placePartAtCursor(proposalOverride = null, placementMeta = {}) {
     if (!state.start) return toast('先にスタートレーンを配置してください');
-    const proposal = currentGhostProposal();
+    // The pointer path supplies a deep clone of the exact proposal that was
+    // rendered. Keyboard/debug placement may capture the currently visible
+    // proposal, but confirmation never recomputes snapping here.
+    const visibleProposal = proposalOverride || currentGhostProposal();
+    const proposal = visibleProposal ? PLACEMENT_PROPOSAL.cloneForCommit(visibleProposal) : null;
     if (!proposal) return toast('配置位置を計算できませんでした');
     if (proposal.requiresHeightChoice && !proposal.valid) return toast('同じ位置に高さ違いの候補があります。右側で高さを選択してください');
+    recordCornerDiagnostic('placement-begin', renderPartFromProposal(proposal), {
+      placementId: proposal.placementId || null,
+      source: placementMeta.source || 'programmatic',
+      commitReevaluated: Boolean(placementMeta.reevaluated),
+      activeProposalId: state.ghostProposal?.placementId || null,
+      pathHash: traceHash(partRenderTrace(renderPartFromProposal(proposal)))
+    });
     snapshot();
     const id = makeId();
     let bankSectionId = proposal.bankSectionId;
@@ -2605,9 +2695,15 @@
       part.appliedHandedness = appliedHandedness;
       part.handedness = appliedHandedness;
       part.cornerHandedness = appliedHandedness;
-      recordCornerDiagnostic('placed', part, { proposal: { ...proposal } });
+      recordCornerDiagnostic('placed', part, {
+        placementId: proposal.placementId || null,
+        partId: id,
+        proposal: PLACEMENT_PROPOSAL.cloneForCommit(proposal),
+        pathHash: traceHash(partRenderTrace(part))
+      });
     }
     state.parts.push(part);
+    state.placementCommitCount += 1;
     if (proposal.snapped && proposal.edge) {
       state.connections = LAYOUT_GRAPH.addEdge(state.connections, { ...proposal.edge, partBId: id, createdOrder: state.connections.length + 1 });
     }
@@ -2625,6 +2721,10 @@
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
     clearSnapTargetChoice();
+    // The next ghost must be a fresh proposal. It cannot share objects with
+    // the part just committed from the captured proposal above.
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
     recalculateBankStates();
     recalculateLayoutWarnings();
     toast(proposal.snapped
@@ -2803,6 +2903,7 @@
     state.pointer.marqueeEnd = null;
     state.pointer.marqueeAdd = false;
     state.pointer.pendingPlacement = false;
+    state.pointer.pendingPlacementProposal = null;
     state.hoveredPartId = null;
     els.courseCanvas?.classList.remove('is-panning', 'is-moving', 'is-hovering-part');
   }
@@ -3312,7 +3413,7 @@
     window.__mini4wdCourseDebug = {
       getState: () => JSON.parse(JSON.stringify(serializeState())),
       getRuntimeState: () => {
-        const proposal = state.mode === 'place' ? getPlacementProposal() : null;
+        const proposal = state.mode === 'place' ? currentGhostProposal() : null;
         return {
         mode: state.mode,
         selectedIds: [...state.selectedIds],
@@ -3338,6 +3439,9 @@
         candidateRotation: proposal?.candidateRotation ?? null,
         appliedRotation: proposal?.rotation ?? null,
         cornerMirror: proposal?.cornerMirror ?? null,
+        activePlacementProposalId: proposal?.placementId || null,
+        pendingPlacementProposalId: state.pointer.pendingPlacementProposal?.placementId || null,
+        placementCommitCount: state.placementCommitCount,
         placementHeightMode: state.placementHeightMode,
         placementHeightMm: state.placementHeightMm,
         cornerDiagnostics: JSON.parse(JSON.stringify(state.cornerDiagnostics)),
