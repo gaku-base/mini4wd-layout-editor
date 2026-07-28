@@ -16,6 +16,8 @@
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
+  const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
+  if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
@@ -57,7 +59,7 @@
     rotation: 0,
     activeConnection: null,
     connections: [],
-    snapEnabled: true,
+    snapEnabled: SNAP_TOGGLE.initialState().enabled,
     altSnapDisabled: false,
     snapCandidateIndex: 0,
     snapCandidateConfirmed: false,
@@ -296,8 +298,13 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
-    els.snapToggleBtn?.addEventListener('click', () => {
-      state.snapEnabled = !state.snapEnabled;
+    document.addEventListener('click', e => {
+      const target = e.target instanceof Element
+        ? e.target.closest('#snapToggleBtn,[data-action="toggle-snap"]')
+        : null;
+      if (!target) return;
+      e.preventDefault();
+      state.snapEnabled = SNAP_TOGGLE.toggle({ enabled: state.snapEnabled, altDisabled: state.altSnapDisabled }).enabled;
       state.snapCandidateIndex = 0;
       updateUI(); render();
     });
