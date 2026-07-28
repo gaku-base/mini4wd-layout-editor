@@ -6,10 +6,12 @@
 
   function resolvePartPose(part = {}) {
     return Object.freeze({
-      rotation: finite(part.rotation),
-      cornerMirror: Boolean(part.cornerMirror),
-      handedness: part.appliedHandedness || part.handedness || part.cornerHandedness || null
+      rotation: finite(part.rotation)
     });
+  }
+
+  function cornerY(definition, y) {
+    return definition?.geometry?.pathOrientation === 'left' ? -finite(y) : finite(y);
   }
 
   function cornerGeometry(definition) {
@@ -23,8 +25,8 @@
     const center = { x: -radialCentroid * Math.cos(bisector), y: -radialCentroid * Math.sin(bisector) };
     const startAngle = -Math.PI / 2;
     const endAngle = -Math.PI / 4;
-    const entry = { x: center.x + r * Math.cos(startAngle), y: center.y + r * Math.sin(startAngle) };
-    const exit = { x: center.x + r * Math.cos(endAngle), y: center.y + r * Math.sin(endAngle) };
+    const entry = { x: center.x + r * Math.cos(startAngle), y: cornerY(definition, center.y + r * Math.sin(startAngle)) };
+    const exit = { x: center.x + r * Math.cos(endAngle), y: cornerY(definition, center.y + r * Math.sin(endAngle)) };
     const points = localCornerPath(definition, 48, { r, ri, ro, center, startAngle, endAngle });
     const minX = Math.min(...points.map(point => point.x));
     const maxX = Math.max(...points.map(point => point.x));
@@ -39,20 +41,20 @@
     const points = [];
     for (let index = 0; index <= count; index++) {
       const angle = g.startAngle + (g.endAngle - g.startAngle) * index / count;
-      points.push({ x: g.center.x + g.ro * Math.cos(angle), y: g.center.y + g.ro * Math.sin(angle) });
+      points.push({ x: g.center.x + g.ro * Math.cos(angle), y: cornerY(definition, g.center.y + g.ro * Math.sin(angle)) });
     }
     for (let index = count; index >= 0; index--) {
       const angle = g.startAngle + (g.endAngle - g.startAngle) * index / count;
-      points.push({ x: g.center.x + g.ri * Math.cos(angle), y: g.center.y + g.ri * Math.sin(angle) });
+      points.push({ x: g.center.x + g.ri * Math.cos(angle), y: cornerY(definition, g.center.y + g.ri * Math.sin(angle)) });
     }
     return points;
   }
 
   function transformPoint(part, point) {
-    const pose = resolvePartPose(part);
     const localX = finite(point?.x);
-    const localY = pose.cornerMirror ? -finite(point?.y) : finite(point?.y);
-    const radians = pose.rotation * Math.PI / 180;
+    const localY = finite(point?.y);
+    const rotation = finite(part?.rotation);
+    const radians = rotation * Math.PI / 180;
     return {
       x: finite(part?.x) + localX * Math.cos(radians) - localY * Math.sin(radians),
       y: finite(part?.y) + localX * Math.sin(radians) + localY * Math.cos(radians)
@@ -74,14 +76,12 @@
 
   function traceConnectors(definition, part) {
     return (definition?.geometry?.connectors || []).map((connector, index) => {
-      const pose = resolvePartPose(part);
       const point = transformPoint(part, { x: connector.x, y: connector.y });
-      const localHeading = pose.cornerMirror ? -finite(connector.heading) : finite(connector.heading);
       return {
         id: connector.id || (index === 0 ? 'a' : 'b'),
         x: point.x,
         y: point.y,
-        heading: normalizeAngle(localHeading + pose.rotation)
+        heading: normalizeAngle(finite(connector.heading) + finite(part.rotation))
       };
     });
   }

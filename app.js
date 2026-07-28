@@ -20,8 +20,8 @@
   if (!PART_RENDER_POSE) throw new Error('part-render-pose.jsが読み込まれていません');
   const PLACEMENT_PROPOSAL = window.M4WD_PLACEMENT_PROPOSAL;
   if (!PLACEMENT_PROPOSAL) throw new Error('placement-proposal.js must be loaded before app.js');
-  const CORNER_DIRECTION = window.M4WD_CORNER_DIRECTION;
-  if (!CORNER_DIRECTION) throw new Error('corner-direction.jsが読み込まれていません');
+  const CORNER_VARIANT = window.M4WD_CORNER_VARIANT;
+  if (!CORNER_VARIANT) throw new Error('corner-variant.js must be loaded before app.js');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
@@ -65,8 +65,7 @@
     rotation: 0,
     activeConnection: null,
     connections: [],
-    lastPlacedCornerHandedness: null,
-    cornerGhostHandedness: CORNER_DIRECTION.defaultDirection(PARTS.corner45),
+    activeCornerVariant: 'right',
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
     // Only a height/target choice may be remembered while the pointer is still.
     // Corner entry A/B is always recomputed from the current ghost position.
@@ -106,6 +105,21 @@
   let toastTimer = 0;
   let layoutStore;
 
+  function migrateLayoutCornerTypes(layout) {
+    if (!layout || typeof layout !== 'object') return layout;
+    return {
+      ...layout,
+      selectedType: migratedPartType({ type: layout.selectedType }),
+      parts: Array.isArray(layout.parts)
+        ? layout.parts.map(part => {
+          const type = migratedPartType(part || {});
+          const { cornerMirror, handedness, cornerHandedness, selectedHandedness, appliedHandedness, ...persistentPart } = part || {};
+          return { ...persistentPart, type };
+        })
+        : layout.parts
+    };
+  }
+
   function cacheElements() {
     const ids = [
       'courseCanvas','canvasWrap','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
@@ -133,7 +147,8 @@
       version: VERSION,
       partTypes: Object.keys(PARTS).filter(type => type !== 'start'),
       colorKeys: COLORS.map(color => color.key),
-      connectorIdsByType: Object.fromEntries(Object.entries(PARTS).map(([type, definition]) => [type, LAYOUT_GRAPH.connectorsForDefinition(definition).map(connector => connector.id)]))
+      connectorIdsByType: Object.fromEntries(Object.entries(PARTS).map(([type, definition]) => [type, LAYOUT_GRAPH.connectorsForDefinition(definition).map(connector => connector.id)])),
+      migrateLayout: migrateLayoutCornerTypes
     });
     const restored = restoreLocal();
     bindEvents();
@@ -312,7 +327,7 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
-    els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerGhostHandedness);
+    els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerVariant);
     document.addEventListener('click', e => {
       const target = e.target instanceof Element
         ? e.target.closest('#snapToggleBtn,[data-action="toggle-snap"]')
@@ -391,7 +406,7 @@
       state.selectedType = 'start';
       state.rotation = 0;
       state.mode = 'start';
-      resetCornerDirectionSession();
+      resetCornerVariantSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
       state.history = [];
       state.future = [];
@@ -436,9 +451,10 @@
       return;
     }
     if (!state.start) return toast('最初に「5 スタート」を配置してください');
-    state.selectedType = type;
+    if (isCornerType(type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(type);
+    state.selectedType = isCornerType(type) ? activeCornerType() : type;
     state.mode = 'place';
-    prepareCornerGhostForSelection(type);
+    prepareCornerGhostForSelection();
     state.hoveredPartId = null;
     clearSelection(false);
     updateUI();
@@ -484,36 +500,22 @@
     };
   }
 
+  function migratedPartType(part) {
+    const migrated = CORNER_VARIANT.migrateLegacyType(part);
+    if (PARTS[migrated] && migrated !== 'start') return migrated;
+    return ({ half: 'straight' }[migrated] || 'straight');
+  }
+
   function applySerialized(data, resetHistory = true, options = {}) {
     if (!data || !data.field || !Array.isArray(data.parts)) throw new Error('不正なレイアウトデータです');
     state.field = FIELD_BOUNDARY.normalizeField(data.field);
     state.parts = data.parts.map((p, index) => {
-      const type = PARTS[p.type] && p.type !== 'start' ? p.type : ({ half: 'straight', curve: 'corner45' }[p.type] || 'straight');
+      const type = migratedPartType(p);
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
       const connectors = LAYOUT_GRAPH.connectorsForDefinition(PARTS[type]);
       const entryConnectorId = connectors.some(connector => connector.id === p.entryConnectorId)
         ? p.entryConnectorId
         : connectors[routeIndex]?.id || 'a';
-      const entryIndex = Math.max(0, connectors.findIndex(connector => connector.id === entryConnectorId));
-      const savedHandedness = p.handedness ?? p.cornerHandedness;
-      const requestedHandedness = PARTS[type]?.corner45 && CORNER_DIRECTION.directionsForDefinition(PARTS[type]).includes(String(savedHandedness))
-        ? String(savedHandedness)
-        : null;
-      const hasStoredMirror = PARTS[type]?.corner45 && typeof p.cornerMirror === 'boolean';
-      // rotation + cornerMirror are the physical rendering pose. Preserve an
-      // explicit mirror exactly; only legacy records without one derive it
-      // from their semantic direction and entry connector.
-      const restoredMirror = !PARTS[type]?.corner45
-        ? false
-        : hasStoredMirror
-          ? p.cornerMirror
-          : requestedHandedness
-            ? CORNER_DIRECTION.mirrorForDirectionAndEntry(PARTS[type], requestedHandedness, entryIndex)
-            : false;
-      const derivedHandedness = PARTS[type]?.corner45
-        ? CORNER_DIRECTION.handednessForEntryAndMirror(PARTS[type], entryIndex, restoredMirror)
-        : null;
-      const storedHandedness = requestedHandedness || derivedHandedness;
       const part = {
         id: String(p.id || makeId()),
         type,
@@ -522,7 +524,6 @@
         rotation: normalizeRotation(Number(p.rotation) || 0),
         routeIndex,
         entryConnectorId,
-        cornerMirror: restoredMirror,
         colorKey: COLORS.some(c => c.key === p.colorKey) ? p.colorKey : 'default',
         zMm: Number.isFinite(Number(p.zMm)) ? Number(p.zMm) : 0,
         pitchDeg: Number.isFinite(Number(p.pitchDeg ?? p.pitch)) ? Number(p.pitchDeg ?? p.pitch) : 0,
@@ -530,12 +531,6 @@
         zOrder: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1,
         zIndex: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1
       };
-      if (storedHandedness) {
-        part.handedness = storedHandedness;
-        part.cornerHandedness = storedHandedness;
-        part.selectedHandedness = storedHandedness;
-        part.appliedHandedness = storedHandedness;
-      }
       return part;
     });
 
@@ -561,7 +556,9 @@
     state.connections = LAYOUT_GRAPH.dedupeEdges(loadedEdges);
 
     state.startPhase = 'position';
-    state.selectedType = state.start ? (PARTS[data.selectedType] && data.selectedType !== 'start' ? data.selectedType : 'straight') : 'start';
+    const restoredSelectedType = migratedPartType({ type: data.selectedType });
+    state.selectedType = state.start ? (PARTS[restoredSelectedType] ? restoredSelectedType : 'straight') : 'start';
+    if (isCornerType(state.selectedType)) state.activeCornerVariant = CORNER_VARIANT.variantForType(state.selectedType);
     state.rotation = normalizeRotation(Number(data.rotation) || 0);
     state.selectedIds = [];
     state.mode = state.start ? 'place' : 'start';
@@ -614,7 +611,7 @@
     if (!file) return;
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
+      const parsed = migrateLayoutCornerTypes(JSON.parse(text));
       const validationOptions = { app: 'mini4wd-course-layout-mouse-flow', version: VERSION, partTypes: Object.keys(PARTS).filter(type => type !== 'start'), colorKeys: COLORS.map(color => color.key), connectorIdsByType: Object.fromEntries(Object.entries(PARTS).map(([type, definition]) => [type, LAYOUT_GRAPH.connectorsForDefinition(definition).map(connector => connector.id)])) };
       const versionStatus = PERSISTENCE.classifyLayoutVersion(parsed?.version, validationOptions);
       if (!PERSISTENCE.validateLayout(parsed, validationOptions)) throw new Error('未対応または不正な保存形式です');
@@ -730,9 +727,9 @@
 
   function drawCornerJointsForPart(c, part, earlierParts) {
     const currentEnds = partEndpoints(part);
-    const currentIsCorner = part.type === 'corner45';
+    const currentIsCorner = isCornerType(part.type);
     for (const earlier of earlierParts) {
-      const earlierIsCorner = earlier.type === 'corner45';
+      const earlierIsCorner = isCornerType(earlier.type);
       if (!currentIsCorner && !earlierIsCorner) continue;
       const earlierEnds = partEndpoints(earlier);
       for (const currentEnd of currentEnds) {
@@ -917,7 +914,7 @@
       state.selectedType, state.cursor.x, state.cursor.y, state.rotation,
       state.snapEnabled, state.placementHeightMode, state.placementHeightMm,
       state.snapTargetChoiceKey, state.snapTargetChoiceConfirmed,
-      state.cornerGhostHandedness, state.view.scale, state.connections.length, state.parts.length
+      state.activeCornerVariant, state.view.scale, state.connections.length, state.parts.length
     ]);
   }
 
@@ -963,7 +960,7 @@
   }
 
   function recordCornerDiagnostic(stage, part, extra = {}) {
-    if (!hasCornerDirection(part?.type)) return;
+    if (!isCornerType(part?.type)) return;
     if (!window.__COURSE_ENABLE_DEBUG__ && !/test-index\.html$/.test(window.location.pathname)) return;
     const pose = resolvePartPose(part);
     const entrypoints = partEndpoints(part).map(endpoint => ({
@@ -977,6 +974,7 @@
       stage,
       pose,
       type: part.type,
+      definitionId: part.type,
       shapeVariant: PARTS[part.type]?.renderKind || part.type,
       path: trace.path,
       connectors: entrypoints,
@@ -996,11 +994,6 @@
       rotation: proposal.rotation,
       routeIndex: proposal.routeIndex,
       entryConnectorId: proposal.entryConnectorId,
-      cornerMirror: Boolean(proposal.cornerMirror),
-      handedness: proposal.appliedHandedness || proposal.handedness || null,
-      selectedHandedness: proposal.selectedHandedness || null,
-      appliedHandedness: proposal.appliedHandedness || proposal.handedness || null,
-      cornerHandedness: proposal.appliedHandedness || proposal.handedness || null,
       colorKey: 'default'
     };
   }
@@ -1022,8 +1015,6 @@
     c.save();
     c.translate(part.x, part.y);
     c.rotate(pose.rotation * Math.PI / 180);
-    if (pose.cornerMirror) c.scale(1, -1);
-
     recordCornerDiagnostic('resolved-pose', part, { poseSource: 'resolvePartPose' });
     const usedAsset = drawPartAsset(c, def, part.colorKey || 'default', part);
     if (!usedAsset) {
@@ -1344,6 +1335,7 @@
   function drawCorner45(c, def, exportMode) {
     const g = corner45Geometry(def);
     c.save();
+    if (def.geometry?.pathOrientation === 'left') c.scale(1, -1);
     c.translate(g.center.x, g.center.y);
     c.strokeStyle = def.base;
     c.lineWidth = TRACK_WIDTH_CM;
@@ -1367,12 +1359,15 @@
     if (!def) return false;
     if (def.corner45) {
       const g = corner45Geometry(def);
+      c.save();
+      if (def.geometry?.pathOrientation === 'left') c.scale(1, -1);
       c.beginPath();
       c.moveTo(g.center.x + g.ro * Math.cos(g.startAngle), g.center.y + g.ro * Math.sin(g.startAngle));
       c.arc(g.center.x, g.center.y, g.ro, g.startAngle, g.endAngle, false);
       c.lineTo(g.center.x + g.ri * Math.cos(g.endAngle), g.center.y + g.ri * Math.sin(g.endAngle));
       c.arc(g.center.x, g.center.y, g.ri, g.endAngle, g.startAngle, true);
       c.closePath();
+      c.restore();
       return true;
     }
     if (def.burning) {
@@ -1462,59 +1457,35 @@
     c.restore();
   }
 
-  function hasCornerDirection(type = state.selectedType) {
-    return CORNER_DIRECTION.directionsForDefinition(PARTS[type]).length > 0;
+  function isCornerType(type = state.selectedType) {
+    return CORNER_VARIANT.isCornerType(type);
   }
 
-  function cornerGhostDirection(type = state.selectedType) {
-    return CORNER_DIRECTION.normalizeDirection(PARTS[type], state.cornerGhostHandedness);
+  function activeCornerType() {
+    return CORNER_VARIANT.typeForVariant(state.activeCornerVariant);
   }
 
-  function resetCornerDirectionSession() {
-    state.lastPlacedCornerHandedness = null;
-    state.cornerGhostHandedness = CORNER_DIRECTION.defaultDirection(PARTS.corner45);
+  function resetCornerVariantSession() {
+    state.activeCornerVariant = 'right';
   }
 
-  function prepareCornerGhostForSelection(type) {
-    const def = PARTS[type];
-    if (!hasCornerDirection(type)) {
-      if (state.activeConnection) state.rotation = normalizeRotation(state.activeConnection.heading);
-      return;
-    }
-    state.cornerGhostHandedness = CORNER_DIRECTION.normalizeDirection(def,
-      state.lastPlacedCornerHandedness || CORNER_DIRECTION.defaultDirection(def));
-    if (state.activeConnection) {
-      state.rotation = CORNER_DIRECTION.rotationForConnection(def, state.activeConnection.heading, state.cornerGhostHandedness);
-    }
+  function prepareCornerGhostForSelection() {
+    if (state.activeConnection) state.rotation = normalizeRotation(state.activeConnection.heading);
   }
 
-  function setCornerGhostHandedness(direction) {
-    const def = PARTS[state.selectedType];
-    if (!hasCornerDirection()) return;
-    const previous = cornerGhostDirection();
-    const next = CORNER_DIRECTION.normalizeDirection(def, direction);
-    if (previous === next) return;
-    state.cornerGhostHandedness = next;
-    state.rotation = normalizeRotation(state.rotation + CORNER_DIRECTION.rotationDeltaForDirectionChange(def, previous, next));
+  function setActiveCornerVariant(variant) {
+    const next = variant === 'left' ? 'left' : 'right';
+    if (!isCornerType()) return;
+    state.activeCornerVariant = next;
+    state.selectedType = activeCornerType();
+    if (state.activeConnection) state.rotation = normalizeRotation(state.activeConnection.heading);
     clearSnapTargetChoice();
     updateUI();
     render();
   }
 
-  function toggleCornerGhostHandedness() {
-    const directions = CORNER_DIRECTION.directionsForDefinition(PARTS[state.selectedType]);
-    if (directions.length < 2) return;
-    const current = cornerGhostDirection();
-    const next = directions[(directions.indexOf(current) + 1) % directions.length];
-    setCornerGhostHandedness(next);
-  }
-
-  function cancelCornerGhostDirection() {
-    if (!hasCornerDirection()) return;
-    const def = PARTS[state.selectedType];
-    const next = CORNER_DIRECTION.normalizeDirection(def,
-      state.lastPlacedCornerHandedness || CORNER_DIRECTION.defaultDirection(def));
-    setCornerGhostHandedness(next);
+  function toggleCornerVariant() {
+    setActiveCornerVariant(state.activeCornerVariant === 'left' ? 'right' : 'left');
   }
 
   const WAVE_PATH_SAMPLES = 72;
@@ -1865,26 +1836,14 @@
   }
 
   function freePlacement(type, x, y) {
-    // This is the user's direction choice.  It remains read-only while snap
-    // candidates choose their entry connector and target-facing transform.
-    const handedness = hasCornerDirection(type) ? cornerGhostDirection(type) : null;
-    const entryIndex = hasCornerDirection(type)
-      ? CORNER_DIRECTION.defaultEntryIndexForDirection(PARTS[type], handedness)
-      : 0;
+    const entryIndex = 0;
     const proposal = {
       type, id: 'ghost', x, y, zMm: selectedFreeHeightMm(), rotation: state.rotation,
       pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex: entryIndex,
-      entryConnectorId: CORNER_DIRECTION.entryConnectorId(PARTS[type], entryIndex),
-      cornerMirror: hasCornerDirection(type) && CORNER_DIRECTION.mirrorForDirectionAndEntry(PARTS[type], handedness, entryIndex),
-      handedness,
-      selectedHandedness: handedness,
-      candidateHandedness: handedness,
-      appliedHandedness: handedness
+      entryConnectorId: LAYOUT_GRAPH.connectorsForDefinition(PARTS[type])[entryIndex]?.id || 'a'
     };
     proposal.attachedIndex = entryIndex;
-    proposal.otherIndex = hasCornerDirection(type)
-      ? CORNER_DIRECTION.exitIndexForEntry(PARTS[type], entryIndex)
-      : (entryIndex === 0 ? 1 : 0);
+    proposal.otherIndex = entryIndex === 0 ? 1 : 0;
     proposal.endpoints = partEndpoints(proposal);
     proposal.entry = proposal.endpoints[proposal.attachedIndex];
     proposal.exit = proposal.endpoints[proposal.otherIndex];
@@ -1892,10 +1851,8 @@
   }
 
   function getPlacementProposal() {
-    const def = PARTS[state.selectedType];
-    if (!def || state.selectedType === 'start') return null;
+    if (!PARTS[state.selectedType] || state.selectedType === 'start') return null;
     const free = freePlacement(state.selectedType, state.cursor.x, state.cursor.y);
-    const selectedHandedness = hasCornerDirection(state.selectedType) ? free.handedness : null;
     const targets = getAllEndpoints().map(endpoint => ({
       ...endpoint, partId: endpoint.sourceId, directionDeg: endpoint.heading,
       bankAngleDeg: Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0
@@ -1906,30 +1863,7 @@
       snapEnabled: state.snapEnabled,
       freeHeightMm: selectedFreeHeightMm(),
       selectedTargetKey: state.snapTargetChoiceKey,
-      // Measure both physical ghost ends before the per-entry pose is rotated
-      // and mirrored toward a target.  This is what lets pointer proximity pick
-      // A or B without a user-facing entry selector.
       partForSnapDistanceCandidate: () => free,
-      partForSnapCandidate: hasCornerDirection(state.selectedType)
-        ? (_connector, entryIndex, target) => {
-          // A/B is selected per candidate, but every candidate is locked to
-          // the direction selected by the user.  Do not infer handedness back
-          // from a mirror value or an entry connector.
-          const pose = CORNER_DIRECTION.poseForConnection(def, target.directionDeg, selectedHandedness, entryIndex);
-          return {
-            ...free,
-            rotation: pose.rotation,
-            routeIndex: pose.entryIndex,
-            entryConnectorId: pose.entryConnectorId,
-            cornerMirror: pose.cornerMirror,
-            targetTangent: pose.targetTangent,
-            candidateRotation: pose.candidateRotation,
-            handedness: selectedHandedness,
-            selectedHandedness,
-            candidateHandedness: pose.handedness
-          };
-        }
-        : undefined,
       edges: state.connections
     });
     if (placement.kind === 'free') {
@@ -1937,42 +1871,14 @@
     }
     const chosen = placement.selected;
     const attachedIndex = chosen.localConnectorIndex;
-    const candidateHandedness = hasCornerDirection(state.selectedType)
-      ? String(chosen.pose.candidateHandedness || '')
-      : null;
-    const shapeHandedness = hasCornerDirection(state.selectedType)
-      ? CORNER_DIRECTION.handednessForEntryAndMirror(def, attachedIndex, Boolean(chosen.pose.cornerMirror))
-      : null;
-    // A transform that no longer represents the selected direction must never
-    // win merely because it is closer.  The correct fallback is free placement.
-    if (selectedHandedness && (candidateHandedness !== selectedHandedness || shapeHandedness !== selectedHandedness)) {
-      return {
-        ...free,
-        snapped: false,
-        valid: true,
-        outOfBounds: !isPartInsideField(free),
-        candidates: placement.candidates,
-        rawCandidates: placement.rawCandidates,
-        selectedHandedness,
-        candidateHandedness,
-        appliedHandedness: selectedHandedness
-      };
-    }
-    const otherIndex = hasCornerDirection(state.selectedType)
-      ? CORNER_DIRECTION.exitIndexForEntry(def, attachedIndex)
-      : (attachedIndex === 0 ? 1 : 0);
+    const otherIndex = attachedIndex === 0 ? 1 : 0;
     const bank = connectionStateForPlacement(state.selectedType, chosen.target.connectionState, attachedIndex);
     const candidate = {
       ...free,
       ...chosen.pose,
       ...bank,
       routeIndex: attachedIndex,
-      entryConnectorId: chosen.entryConnectorId,
-      cornerMirror: Boolean(chosen.pose.cornerMirror),
-      handedness: selectedHandedness,
-      selectedHandedness,
-      candidateHandedness,
-      appliedHandedness: selectedHandedness
+      entryConnectorId: chosen.entryConnectorId
     };
     const endpoints = partEndpoints(candidate);
     return {
@@ -2041,7 +1947,6 @@
     c.save();
     c.translate(part.x, part.y);
     c.rotate(part.rotation * Math.PI / 180);
-    if (part.cornerMirror) c.scale(1, -1);
     if (tracePartShapePath(c, part.type)) {
       c.strokeStyle = '#d52f4d';
       c.lineWidth = 3 / Math.max(state.view.scale, .15);
@@ -2599,7 +2504,6 @@
     if (key === 'g') { e.preventDefault(); toggleGrid(); return; }
     if (key === 'escape') {
       e.preventDefault();
-      cancelCornerGhostDirection();
       if (state.start) {
         state.mode = 'place';
         clearSelection(false);
@@ -2673,7 +2577,7 @@
     const part = {
       ...renderPartFromProposal(proposal, id),
       routeIndex: Number.isInteger(proposal.routeIndex) ? proposal.routeIndex : (Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0),
-      entryConnectorId: proposal.entryConnectorId || CORNER_DIRECTION.entryConnectorId(PARTS[proposal.type], proposal.attachedIndex),
+      entryConnectorId: proposal.entryConnectorId || LAYOUT_GRAPH.connectorsForDefinition(PARTS[proposal.type])[proposal.attachedIndex || 0]?.id || 'a',
       endpointStates,
       bankRole: proposal.bankRole || null,
       zMm: Number(proposal.zMm) || 0,
@@ -2684,17 +2588,7 @@
       zOrder: nextZIndex(),
       zIndex: nextZIndex()
     };
-    if (hasCornerDirection(part.type)) {
-      const selectedHandedness = CORNER_DIRECTION.normalizeDirection(
-        PARTS[part.type], proposal.selectedHandedness || proposal.handedness
-      );
-      const appliedHandedness = CORNER_DIRECTION.normalizeDirection(
-        PARTS[part.type], proposal.appliedHandedness || selectedHandedness
-      );
-      part.selectedHandedness = selectedHandedness;
-      part.appliedHandedness = appliedHandedness;
-      part.handedness = appliedHandedness;
-      part.cornerHandedness = appliedHandedness;
+    if (isCornerType(part.type)) {
       recordCornerDiagnostic('placed', part, {
         placementId: proposal.placementId || null,
         partId: id,
@@ -2710,14 +2604,8 @@
     const ends = partEndpoints(part);
     const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
-    if (hasCornerDirection(part.type)) {
-      const handedness = part.handedness;
-      state.lastPlacedCornerHandedness = handedness;
-      state.cornerGhostHandedness = handedness;
-      state.rotation = CORNER_DIRECTION.rotationForConnection(PARTS[part.type], newOpen.heading, handedness);
-    } else {
-      state.rotation = normalizeRotation(newOpen.heading);
-    }
+    if (isCornerType(part.type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(part.type);
+    state.rotation = normalizeRotation(newOpen.heading);
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
     clearSnapTargetChoice();
@@ -3082,8 +2970,9 @@
     rebuildActiveConnectionFromTail();
   }
 
-  function pointInCorner45Local(x, y, tolerance = 0) {
-    const def = PARTS.corner45;
+  function pointInCorner45Local(x, y, type, tolerance = 0) {
+    const def = PARTS[type];
+    if (def?.geometry?.pathOrientation === 'left') y = -y;
     const g = corner45Geometry(def);
     const dx = x - g.center.x;
     const dy = y - g.center.y;
@@ -3097,7 +2986,7 @@
 
   function pointInPartShape(x, y, part) {
     const local = toLocal(x, y, part);
-    if (part.type === 'corner45') return pointInCorner45Local(local.x, local.y, 0.8 / Math.max(state.view.scale, .25));
+    if (isCornerType(part.type)) return pointInCorner45Local(local.x, local.y, part.type, 0.8 / Math.max(state.view.scale, .25));
     if (part.type === 'burning') {
       const geometry = burningGeometry(PARTS.burning);
       return BURNING_CHANGER_VISUAL.containsPoint(
@@ -3111,7 +3000,7 @@
   }
 
   function corner45PolygonWorld(part, samples = 40) {
-    return PART_RENDER_POSE.tracePartPath(PARTS.corner45, part, samples);
+    return PART_RENDER_POSE.tracePartPath(PARTS[part.type], part, samples);
   }
 
   function pointInPolygon(point, polygon) {
@@ -3174,7 +3063,7 @@
 
   function partsInRect(rect) {
     return state.parts.filter(p => {
-      if (p.type === 'corner45') return polygonIntersectsRect(corner45PolygonWorld(p), rect);
+      if (isCornerType(p.type)) return polygonIntersectsRect(corner45PolygonWorld(p), rect);
       const b = partBounds(p);
       return b.maxX >= rect.minX && b.minX <= rect.maxX && b.maxY >= rect.minY && b.minY <= rect.maxY;
     });
@@ -3192,7 +3081,7 @@
     const a = -p.rotation * Math.PI / 180;
     const dx = x - p.x, dy = y - p.y;
     const local = { x: dx * Math.cos(a) - dy * Math.sin(a), y: dx * Math.sin(a) + dy * Math.cos(a) };
-    return p.cornerMirror ? { x: local.x, y: -local.y } : local;
+    return local;
   }
 
   function rotatedRectBounds(cx, cy, width, height, rotation) {
@@ -3204,12 +3093,11 @@
     return { minX: cx - w / 2, maxX: cx + w / 2, minY: cy - h / 2, maxY: cy + h / 2, w, h };
   }
 
-  function transformedBounds(localBounds, cx, cy, rotation, mirrorY = false) {
+  function transformedBounds(localBounds, cx, cy, rotation) {
     const corners = [
       {x:localBounds.minX,y:localBounds.minY}, {x:localBounds.maxX,y:localBounds.minY},
       {x:localBounds.maxX,y:localBounds.maxY}, {x:localBounds.minX,y:localBounds.maxY}
     ].map(point => {
-      if (mirrorY) point = { x: point.x, y: -point.y };
       const p = rotatePoint(point, rotation);
       return { x: cx + p.x, y: cy + p.y };
     });
@@ -3219,7 +3107,7 @@
   }
 
   function partBounds(p) {
-    return transformedBounds(localPartBounds(p.type), p.x, p.y, p.rotation, Boolean(p.cornerMirror));
+    return transformedBounds(localPartBounds(p.type), p.x, p.y, p.rotation);
   }
 
 
@@ -3233,7 +3121,7 @@
     document.querySelectorAll('[data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === state.mode));
     document.querySelectorAll('[data-part]').forEach(button => {
       const isStart = button.dataset.part === 'start';
-      button.classList.toggle('active', button.dataset.part === state.selectedType || (state.mode === 'start' && isStart));
+      button.classList.toggle('active', button.dataset.part === state.selectedType || (isCornerType(button.dataset.part) && isCornerType(state.selectedType)) || (state.mode === 'start' && isStart));
       button.disabled = isStart && !!state.start;
       button.title = isStart && state.start ? 'スタートレーンは配置済みです' : '';
     });
@@ -3291,11 +3179,10 @@
       els.snapToggleBtn.setAttribute('aria-pressed', String(state.snapEnabled));
     }
     if (els.cornerDirectionControl && els.cornerDirectionToggleBtn) {
-      const visible = state.mode === 'place' && hasCornerDirection();
+      const visible = state.mode === 'place' && isCornerType();
       els.cornerDirectionControl.hidden = !visible;
       if (visible) {
-        const direction = cornerGhostDirection();
-        const isLeft = direction === 'left';
+        const isLeft = state.activeCornerVariant === 'left';
         els.cornerDirectionToggleBtn.textContent = `コーナー方向: ${isLeft ? '左' : '右'}`;
         els.cornerDirectionToggleBtn.setAttribute('aria-pressed', String(isLeft));
       }
@@ -3429,16 +3316,13 @@
         layoutWarnings: JSON.parse(JSON.stringify(state.layoutWarnings)),
         connections: JSON.parse(JSON.stringify(state.connections)),
         snapEnabled: state.snapEnabled,
-        lastPlacedCornerHandedness: state.lastPlacedCornerHandedness,
-        cornerGhostHandedness: state.cornerGhostHandedness,
-        selectedHandedness: proposal?.selectedHandedness || state.cornerGhostHandedness,
-        candidateHandedness: proposal?.candidateHandedness || null,
-        appliedHandedness: proposal?.appliedHandedness || state.lastPlacedCornerHandedness,
+        activeCornerVariant: state.activeCornerVariant,
+        ghostPartType: proposal?.type || null,
         entryConnectorId: proposal?.entryConnectorId || null,
         targetTangent: proposal?.targetTangent ?? null,
         candidateRotation: proposal?.candidateRotation ?? null,
         appliedRotation: proposal?.rotation ?? null,
-        cornerMirror: proposal?.cornerMirror ?? null,
+        renderedPartDefinitionId: proposal?.type || null,
         activePlacementProposalId: proposal?.placementId || null,
         pendingPlacementProposalId: state.pointer.pendingPlacementProposal?.placementId || null,
         placementCommitCount: state.placementCommitCount,
@@ -3465,8 +3349,8 @@
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
       setSnapEnabled: value => { state.snapEnabled = !!value; updateUI(); render(); },
-      setCornerHandedness: value => setCornerGhostHandedness(value),
-      getCornerDirectionSession: () => ({ lastPlacedCornerHandedness: state.lastPlacedCornerHandedness, cornerGhostHandedness: state.cornerGhostHandedness }),
+      setCornerVariant: value => setActiveCornerVariant(value),
+      getCornerVariantSession: () => ({ activeCornerVariant: state.activeCornerVariant, selectedType: state.selectedType }),
       setPlacementHeight: value => { state.placementHeightMode = 'custom'; state.placementHeightMm = Number(value) || 0; updateUI(); render(); },
       selectSnapCandidate: index => {
         const proposal = getPlacementProposal();

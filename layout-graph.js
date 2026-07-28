@@ -91,7 +91,7 @@
 
   function worldConnector(partValue, connectorValue, index = 0) {
     const part = normalizePart(partValue);
-    const connector = mirroredConnector(connectorValue, Boolean(part.cornerMirror), index);
+    const connector = normalizeConnector(connectorValue, index);
     const offset = rotate({ x: connector.localX, y: connector.localY }, part.rotation);
     return {
       ...connector,
@@ -218,7 +218,7 @@
 
   function solveSnapPose(partValue, localConnectorValue, target) {
     const part = normalizePart(partValue);
-    const local = mirroredConnector(localConnectorValue, Boolean(part.cornerMirror));
+    const local = normalizeConnector(localConnectorValue);
     const solvedRotation = normalizeAngle(target.directionDeg + 180 - local.directionDeg);
     // Corner pose generation may already have calculated a target-tangent
     // rotation for this exact entry/mirror combination.  Retain it only when
@@ -267,24 +267,28 @@
         // come from the actual ghost currently under the pointer.  Otherwise a
         // mirrored reversible corner can map A and B onto the same screen point
         // before their distances are compared.
-        const targetFacing = worldConnector(candidatePart, local, localIndex);
+        // Connection compatibility belongs to the pose that would result from
+        // this exact local connector meeting the target.  Checking the
+        // free-ghost rotation here rejects a valid A/B candidate before its
+        // target tangent can calculate the required rotation.
+        const solvedPose = solveSnapPose(candidatePart, local, target);
+        const targetFacing = worldConnector(solvedPose, local, localIndex);
         const current = worldConnector(distancePart, local, localIndex);
         const movingForTarget = inheritsBank ? { ...targetFacing, bankAngleDeg: target.bankAngleDeg } : targetFacing;
         if (!connectorCompatible(movingForTarget, target, options)) return;
         const distanceWorld = Math.hypot(current.x - target.x, current.y - target.y);
         const distancePx = distanceWorld * scale;
         if (distancePx > radiusPx) return;
-        const pose = solveSnapPose(candidatePart, local, target);
         result.push({
           localConnector: local,
           localConnectorIndex: localIndex,
           entryConnectorId: local.id,
           target,
-          pose,
+          pose: solvedPose,
           distanceWorld,
           distancePx,
           used: (usage.get(endpointKey(target.partId, target.connectorId)) || 0) > 0,
-          level: pose.zMm / LEVEL_HEIGHT_MM
+          level: solvedPose.zMm / LEVEL_HEIGHT_MM
         });
       });
     });

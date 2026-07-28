@@ -32,11 +32,17 @@
       visual: { file: 'assets/parts/straight.png', canvasWidth: 54, canvasHeight: 36, originX: 27, originY: 18 },
       ...palette
     },
-    corner45: {
-      key: '2', name: 'コーナー（45度）', short: '45°', renderKind: 'corner45', corner45: true,
-      turnDirections: Object.freeze(['right', 'left']), defaultTurnDirection: 'right',
+    'corner-45-right': {
+      key: '2', name: 'コーナー（45度・右）', short: '45° R', renderKind: 'corner45', corner45: true, cornerVariant: 'right',
       w: 53.711688245, h: 49.344155877, radius: 54, trackWidth: 36,
-      geometry: { centerlineRadius: 54, innerRadius: 36, outerRadius: 72, angleDeg: 45, connectors: [{ id: 'a', label: '入口', x: -20.883700800371177, y: -3.58228629520206, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '出口', x: 17.300065383702393, y: 12.233947520724378, localZMm: 0, heading: 45, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }] },
+      geometry: { centerlineRadius: 54, innerRadius: 36, outerRadius: 72, angleDeg: 45, pathOrientation: 'right', connectors: [{ id: 'a', label: '接続口A', x: -20.883700800371177, y: -3.58228629520206, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '接続口B', x: 17.300065383702393, y: 12.233947520724378, localZMm: 0, heading: 45, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }] },
+      visual: { file: 'assets/parts/corner45.png', canvasWidth: 53.711688245, canvasHeight: 49.344155877, originX: 22.283700800, originY: 22.982286295 },
+      ...palette
+    },
+    'corner-45-left': {
+      key: '2', name: 'コーナー（45度・左）', short: '45° L', renderKind: 'corner45', corner45: true, cornerVariant: 'left',
+      w: 53.711688245, h: 49.344155877, radius: 54, trackWidth: 36,
+      geometry: { centerlineRadius: 54, innerRadius: 36, outerRadius: 72, angleDeg: 45, pathOrientation: 'left', connectors: [{ id: 'a', label: '接続口A', x: -20.883700800371177, y: 3.58228629520206, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '接続口B', x: 17.300065383702393, y: -12.233947520724378, localZMm: 0, heading: 315, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }] },
       visual: { file: 'assets/parts/corner45.png', canvasWidth: 53.711688245, canvasHeight: 49.344155877, originX: 22.283700800, originY: 22.982286295 },
       ...palette
     },
@@ -112,7 +118,7 @@
     }
   };
 
-  const MENU_ORDER = ['straight','corner45','lanechange','wave','start','slope','bank20','lcjump','burning'];
+  const MENU_ORDER = ['straight','corner-45-right','lanechange','wave','start','slope','bank20','lcjump','burning'];
 
   window.M4WD_PART_CATALOG = Object.freeze({
     version: '1.3.0',

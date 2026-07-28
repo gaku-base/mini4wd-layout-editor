@@ -1,5 +1,16 @@
 # 意思決定ログ
 
+### Concrete left/right corner part types (2026-07-29)
+
+- 45-degree corners use the concrete catalog types `corner-45-right` and
+  `corner-45-left`; a part type, rather than runtime mirror state, is the
+  source of truth for its physical curve, lanes, and connectors.
+- The selected corner direction changes the ghost type. Confirmation copies
+  that type directly to the placed part. Connector A/B selection and tangent
+  rotation remain automatic geometry decisions and cannot change the type.
+- New layouts do not persist `handedness`, `cornerHandedness`, or
+  `cornerMirror`. Legacy corner JSON migrates only from its semantic direction.
+
 ## 2026-07-25: 静的RC保存形式の後方互換性
 
 - 現行保存形式は `1.1.0-RC2` とする。
