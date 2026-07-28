@@ -69,7 +69,11 @@
   }
 
   function mirrorForDirectionAndEntry(definition, direction, entryIndex) {
-    return Number(entryIndex) !== defaultEntryIndexForDirection(definition, direction);
+    const handedness = normalizeDirection(definition, direction);
+    const index = normalizedEntryIndex(definition, entryIndex);
+    return [false, true].find(cornerMirror => (
+      handednessForEntryAndMirror(definition, index, cornerMirror) === handedness
+    )) ?? false;
   }
 
   // The mirror is a rendering/geometry transform, not a direction setting.
@@ -87,25 +91,57 @@
     return normalizeAngle(mirrored ? -Number(heading) : Number(heading));
   }
 
-  function rotationForConnection(definition, targetHeading, direction, entryIndex = defaultEntryIndexForDirection(definition, direction)) {
-    const connector = connectorsForDefinition(definition)[entryIndex];
+  // Calculate the entry tangent from the actual transformed connector.  This
+  // deliberately takes the mirror as an input: an A/B connector ID identifies
+  // only the end being connected, never a pre-baked corner pose.
+  function rotationForEntryAndMirror(definition, targetHeading, entryIndex, cornerMirror) {
+    const index = normalizedEntryIndex(definition, entryIndex);
+    const connector = connectorsForDefinition(definition)[index];
     const localHeading = mirroredHeading(
       Number(connector?.directionDeg ?? connector?.heading),
-      mirrorForDirectionAndEntry(definition, direction, entryIndex)
+      Boolean(cornerMirror)
     );
     return normalizeAngle(Number(targetHeading) + 180 - (Number.isFinite(localHeading) ? localHeading : 180));
+  }
+
+  function rotationForConnection(definition, targetHeading, direction, entryIndex = defaultEntryIndexForDirection(definition, direction)) {
+    return poseForConnection(definition, targetHeading, direction, entryIndex).candidateRotation;
   }
 
   function poseForConnection(definition, targetHeading, direction, entryIndex = defaultEntryIndexForDirection(definition, direction)) {
     const handedness = normalizeDirection(definition, direction);
     const index = normalizedEntryIndex(definition, entryIndex);
-    const cornerMirror = mirrorForDirectionAndEntry(definition, handedness, index);
+    const targetTangent = normalizeAngle(targetHeading);
+    // Evaluate the physical transforms independently for this entry and this
+    // target tangent.  The transform whose resulting course turn matches the
+    // read-only user selection is the only valid pose.  In particular, do not
+    // map entry A/B directly to a fixed rotation or mirror value.
+    const candidates = [false, true].map(cornerMirror => {
+      const candidateRotation = rotationForEntryAndMirror(definition, targetTangent, index, cornerMirror);
+      const entryTangent = normalizeAngle(
+        mirroredHeading(
+          Number(connectorsForDefinition(definition)[index]?.directionDeg ?? connectorsForDefinition(definition)[index]?.heading),
+          cornerMirror
+        ) + candidateRotation
+      );
+      return {
+        cornerMirror,
+        candidateRotation,
+        entryTangent,
+        handedness: handednessForEntryAndMirror(definition, index, cornerMirror)
+      };
+    });
+    const selected = candidates.find(candidate => candidate.handedness === handedness)
+      || candidates[0];
     return {
       handedness,
       entryIndex: index,
       entryConnectorId: entryConnectorId(definition, index),
-      cornerMirror,
-      rotation: rotationForConnection(definition, targetHeading, handedness, index)
+      targetTangent,
+      entryTangent: selected.entryTangent,
+      cornerMirror: selected.cornerMirror,
+      candidateRotation: selected.candidateRotation,
+      rotation: selected.candidateRotation
     };
   }
 
@@ -129,6 +165,7 @@
     mirrorForDirectionAndEntry,
     handednessForEntryAndMirror,
     mirroredHeading,
+    rotationForEntryAndMirror,
     rotationForConnection,
     poseForConnection,
     rotationDeltaForDirectionChange

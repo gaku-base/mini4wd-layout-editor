@@ -174,3 +174,9 @@
 
 - 吸着候補は、ユーザーが選択中の`cornerGhostHandedness`を読み取り専用の固定条件として生成する。候補ごとに自動選択できるのは`entryConnectorId`、接続先、rotation、高さ、およびその方向を保つ`cornerMirror`だけであり、最短距離でも`right`／`left`を反転しない。
 - 確定候補は`selectedHandedness`、`candidateHandedness`、`appliedHandedness`が一致する場合だけ配置する。不一致の変換候補は採用せず自由配置へ戻す。配置済みコーナーには形状値`entryConnectorId`／`cornerMirror`と整合する`cornerHandedness`を保存するが、次のゴーストのUIセッション方向はJSON、localStorage、Undo/Redoから復元しない。
+
+### 45度コーナーの入口別姿勢計算（2026-07-29）
+
+- 入口A/Bは既存コースへ接続する端だけを表す。候補生成では、選択中の右／左を固定したまま、各入口について鏡像あり／なしの物理変換を接続先endpointの接線方向ごとに評価する。
+- 候補の回転角は、変換後の入口接線が接続先接線の反対向きになるよう毎回算出する。入口IDから固定のrotationやcornerMirrorを返さず、古い候補rotationは接線互換でない限り再利用しない。
+- 入口A/B、targetTangent、candidateRotation、cornerMirrorは候補の別々の値として扱う。利用者が選んだhandednessは候補比較・配置確定の間、読み取り専用で維持する。

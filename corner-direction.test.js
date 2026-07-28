@@ -390,3 +390,111 @@ test('54. saved part geometry keeps semantic handedness without restoring the se
   assert.doesNotMatch(restore, /cornerGhostHandedness\s*=/);
   assert.doesNotMatch(restore, /lastPlacedCornerHandedness\s*=/);
 });
+
+function assertTargetTangentPose(direction, index, heading, zMm = 0, id = 'target-tangent') {
+  const anchor = target(heading, zMm, id);
+  const pose = DIRECTION.poseForConnection(corner, anchor.directionDeg, direction, index);
+  const solved = GRAPH.solveSnapPose({
+    id: 'candidate', type: 'corner45', x: 0, y: 0, zMm: 0,
+    rotation: pose.rotation, candidateRotation: pose.candidateRotation,
+    cornerMirror: pose.cornerMirror, pitchDeg: 0, bankAngleDeg: 0
+  }, corner.geometry.connectors[index], anchor);
+  const entry = GRAPH.worldConnector(solved, corner.geometry.connectors[index], index);
+  assert.equal(pose.entryConnectorId, index === 0 ? 'a' : 'b');
+  assert.equal(pose.handedness, direction);
+  assert.equal(pose.targetTangent, heading);
+  assert.equal(pose.rotation, pose.candidateRotation);
+  assert.equal(pose.entryTangent, (heading + 180) % 360);
+  assert.equal(solved.rotation, pose.candidateRotation);
+  assert.equal(entry.directionDeg, (heading + 180) % 360);
+  assert.equal(entry.x, anchor.x);
+  assert.equal(entry.y, anchor.y);
+  assert.equal(solved.zMm, zMm);
+  assert.equal(DIRECTION.handednessForEntryAndMirror(corner, index, pose.cornerMirror), direction);
+  return pose;
+}
+
+for (const direction of ['right', 'left']) {
+  for (const index of [0, 1]) {
+    for (const heading of [0, 45, 90, 180]) {
+      test(`pose: ${direction} + entry ${index === 0 ? 'a' : 'b'} follows target tangent ${heading} degrees`, () => {
+        assertTargetTangentPose(direction, index, heading, 0, `${direction}-${index}-${heading}`);
+      });
+    }
+  }
+}
+
+test('pose: the same entry A has a distinct target-facing rotation at 0, 45, 90, and 180 degrees', () => {
+  const rotations = [0, 45, 90, 180].map(heading => assertTargetTangentPose('right', 0, heading).candidateRotation);
+  assert.equal(new Set(rotations).size, 4);
+});
+
+test('pose: the same entry B has a distinct target-facing rotation at 0, 45, 90, and 180 degrees', () => {
+  const rotations = [0, 45, 90, 180].map(heading => assertTargetTangentPose('left', 1, heading).candidateRotation);
+  assert.equal(new Set(rotations).size, 4);
+});
+
+test('pose: either entry supports both selected directions', () => {
+  [0, 1].forEach(index => ['right', 'left'].forEach(direction => {
+    assertTargetTangentPose(direction, index, 90, 0, `both-${direction}-${index}`);
+  }));
+});
+
+test('pose: mirror is not fixed by entry connector alone', () => {
+  [0, 1].forEach(index => {
+    const right = assertTargetTangentPose('right', index, 0, 0, `right-${index}`);
+    const left = assertTargetTangentPose('left', index, 0, 0, `left-${index}`);
+    assert.notEqual(right.cornerMirror, left.cornerMirror);
+  });
+});
+
+test('pose: 115mm and 230mm targets retain the independent entry transforms', () => {
+  [115, 230].forEach(zMm => ['right', 'left'].forEach(direction => [0, 1].forEach(index => {
+    assertTargetTangentPose(direction, index, 45, zMm, `height-${zMm}-${direction}-${index}`);
+  })));
+});
+
+test('pose: a target-facing entry connects naturally to a corner exit', () => {
+  ['right', 'left'].forEach(existingDirection => ['right', 'left'].forEach(direction => [0, 1].forEach(index => {
+    const pose = assertTargetTangentPose(direction, index, cornerExitTarget(existingDirection).directionDeg, 0, `corner-${existingDirection}-${direction}-${index}`);
+    assert.equal(pose.handedness, direction);
+  })));
+});
+
+test('pose: straight, slope, and 20-degree bank tangents use the same target-facing calculation', () => {
+  const targets = [
+    { name: 'straight', heading: 0, zMm: 0 },
+    { name: 'slope', heading: 90, zMm: 115 },
+    { name: 'bank20', heading: 180, zMm: 230 }
+  ];
+  targets.forEach(value => {
+    const pose = assertTargetTangentPose('right', 1, value.heading, value.zMm, value.name);
+    assert.equal(pose.targetTangent, value.heading);
+  });
+});
+
+test('pose: stale candidate rotations are discarded rather than reused for another target', () => {
+  const pose = DIRECTION.poseForConnection(corner, 90, 'left', 0);
+  const stale = GRAPH.solveSnapPose({
+    id: 'stale', type: 'corner45', x: 0, y: 0, zMm: 0,
+    rotation: pose.rotation, candidateRotation: (pose.candidateRotation + 45) % 360,
+    cornerMirror: pose.cornerMirror, pitchDeg: 0, bankAngleDeg: 0
+  }, corner.geometry.connectors[0], target(90));
+  assert.equal(stale.rotation, pose.candidateRotation);
+});
+
+test('pose: app passes target tangent and candidate rotation into every corner snap candidate', () => {
+  const proposal = section('function getPlacementProposal', 'function isPartInsideField');
+  assert.match(proposal, /targetTangent: pose\.targetTangent/);
+  assert.match(proposal, /candidateRotation: pose\.candidateRotation/);
+  assert.match(appSource, /targetTangent: proposal\?\.targetTangent/);
+  assert.match(appSource, /appliedRotation: proposal\?\.rotation/);
+});
+
+test('pose: target-facing transform is derived by candidate evaluation, not an entry-to-pose map', () => {
+  const source = fs.readFileSync('./corner-direction.js', 'utf8');
+  const poseSection = source.slice(source.indexOf('function poseForConnection'), source.indexOf('function rotationDeltaForDirectionChange'));
+  assert.match(poseSection, /\[false, true\]\.map/);
+  assert.match(poseSection, /rotationForEntryAndMirror/);
+  assert.doesNotMatch(poseSection, /mirrorForDirectionAndEntry/);
+});
