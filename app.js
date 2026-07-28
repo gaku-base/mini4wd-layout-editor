@@ -60,7 +60,6 @@
     activeConnection: null,
     connections: [],
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
-    altSnapDisabled: false,
     snapCandidateIndex: 0,
     snapCandidateConfirmed: false,
     placementHeightMode: 'auto',
@@ -304,7 +303,7 @@
         : null;
       if (!target) return;
       e.preventDefault();
-      state.snapEnabled = SNAP_TOGGLE.toggle({ enabled: state.snapEnabled, altDisabled: state.altSnapDisabled }).enabled;
+      state.snapEnabled = SNAP_TOGGLE.toggle({ enabled: state.snapEnabled }).enabled;
       state.snapCandidateIndex = 0;
       updateUI(); render();
     });
@@ -1246,6 +1245,7 @@
       c.closePath();
       return true;
     }
+    if (def.wave) return traceWaveOuterPath(c, def);
     const b = localPartBounds(type);
     c.beginPath();
     c.rect(b.minX, b.minY, b.w, b.h);
@@ -1296,41 +1296,54 @@
 
 
   function drawWave(c, def, exportMode) {
-    const amp = def.geometry?.amplitude || def.amplitude || 4;
     const trackWidth = def.geometry?.trackWidth || TRACK_WIDTH_CM;
-    const samples = 72;
-    const waveY = x => {
-      const t = (x + def.w / 2) / def.w;
-      return (def.geometry?.connectors?.[0]?.y || 0) - amp * (0.5 - 0.5 * Math.cos(Math.PI * 2 * t));
-    };
+    const waveY = waveCenterline(def);
     c.save();
     c.fillStyle = def.base;
     c.strokeStyle = def.edge;
     c.lineWidth = 1.05;
-    c.beginPath();
-    for (let i = 0; i <= samples; i++) {
-      const x = -def.w / 2 + def.w * i / samples;
-      const y = -trackWidth / 2 + waveY(x);
-      if (!i) c.moveTo(x, y); else c.lineTo(x, y);
-    }
-    for (let i = samples; i >= 0; i--) {
-      const x = -def.w / 2 + def.w * i / samples;
-      c.lineTo(x, trackWidth / 2 + waveY(x));
-    }
-    c.closePath(); c.fill(); c.stroke();
+    traceWaveOuterPath(c, def); c.fill(); c.stroke();
     c.strokeStyle = def.lane;
     c.lineWidth = .8;
     for (let laneIndex = 1; laneIndex < 3; laneIndex++) {
       const base = -trackWidth / 2 + trackWidth * laneIndex / 3;
       c.beginPath();
-      for (let i = 0; i <= samples; i++) {
-        const x = -def.w / 2 + def.w * i / samples;
+      for (let i = 0; i <= WAVE_PATH_SAMPLES; i++) {
+        const x = -def.w / 2 + def.w * i / WAVE_PATH_SAMPLES;
         const y = base + waveY(x);
         if (!i) c.moveTo(x,y); else c.lineTo(x,y);
       }
       c.stroke();
     }
     c.restore();
+  }
+
+  const WAVE_PATH_SAMPLES = 72;
+
+  function waveCenterline(def) {
+    const amp = def.geometry?.amplitude || def.amplitude || 4;
+    const connectorY = def.geometry?.connectors?.[0]?.y || 0;
+    return x => {
+      const t = (x + def.w / 2) / def.w;
+      return connectorY - amp * (0.5 - 0.5 * Math.cos(Math.PI * 2 * t));
+    };
+  }
+
+  function traceWaveOuterPath(c, def) {
+    const trackWidth = def.geometry?.trackWidth || TRACK_WIDTH_CM;
+    const waveY = waveCenterline(def);
+    c.beginPath();
+    for (let i = 0; i <= WAVE_PATH_SAMPLES; i++) {
+      const x = -def.w / 2 + def.w * i / WAVE_PATH_SAMPLES;
+      const y = -trackWidth / 2 + waveY(x);
+      if (!i) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    for (let i = WAVE_PATH_SAMPLES; i >= 0; i--) {
+      const x = -def.w / 2 + def.w * i / WAVE_PATH_SAMPLES;
+      c.lineTo(x, trackWidth / 2 + waveY(x));
+    }
+    c.closePath();
+    return true;
   }
 
 
@@ -1583,7 +1596,7 @@
   }
 
   function groupMoveSnapProposal(movingParts, movingIds) {
-    if (!state.snapEnabled || state.altSnapDisabled) return null;
+    if (!state.snapEnabled) return null;
     const movingSet = new Set(movingIds);
     const movingOpen = movingParts.flatMap(part => partEndpoints(part));
     const stationaryEndpoints = [];
@@ -1672,7 +1685,6 @@
       scale: state.view.scale,
       radiusPx: LAYOUT_GRAPH.SNAP_RADIUS_PX,
       snapEnabled: state.snapEnabled,
-      altKey: state.altSnapDisabled,
       freeHeightMm: selectedFreeHeightMm(),
       candidateIndex: state.snapCandidateIndex,
       edges: state.connections
@@ -1738,14 +1750,27 @@
   }
 
   function drawLayoutWarnings(c) {
-    const warnedIds = new Set(state.layoutWarnings.flatMap(warning => warning.partIds || (warning.connector?.partId ? [warning.connector.partId] : [])));
-    warnedIds.forEach(id => {
+    const interferedIds = new Set(state.layoutWarnings
+      .filter(warning => warning.type === 'interference')
+      .flatMap(warning => warning.partIds || []));
+    interferedIds.forEach(id => {
       const part = id === 'start' ? state.start : state.parts.find(item => item.id === id);
       if (!part) return;
-      const bounds = id === 'start' ? startBounds(part) : partBounds(part);
-      c.save(); c.strokeStyle = '#bd3268'; c.lineWidth = 2 / state.view.scale; c.setLineDash([7 / state.view.scale, 5 / state.view.scale]);
-      c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h); c.restore();
+      drawInterferenceOutline(c, { ...part, type: id === 'start' ? 'start' : part.type });
     });
+  }
+
+  function drawInterferenceOutline(c, part) {
+    c.save();
+    c.translate(part.x, part.y);
+    c.rotate(part.rotation * Math.PI / 180);
+    if (tracePartShapePath(c, part.type)) {
+      c.strokeStyle = '#d52f4d';
+      c.lineWidth = 3 / Math.max(state.view.scale, .15);
+      c.lineJoin = 'round';
+      c.stroke();
+    }
+    c.restore();
   }
 
   function normalizeConnection(connection) {
@@ -1909,7 +1934,6 @@
   function onPointerDown(e) {
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
-    if (e.altKey) state.altSnapDisabled = true;
     const rect = els.courseCanvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -2000,7 +2024,6 @@
   }
 
   function onPointerMove(e) {
-    if (state.altSnapDisabled !== !!e.altKey) state.altSnapDisabled = !!e.altKey;
     const rect = els.courseCanvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -2198,12 +2221,6 @@
   function onKeyDown(e) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement || e.target?.isContentEditable) return;
 
-    if (e.key === 'Alt') {
-      state.altSnapDisabled = true;
-      updateUI(); render();
-      return;
-    }
-
     if (state.layoutMove.active) {
       const moveKey = e.key.toLowerCase();
       if (moveKey === 'escape') { e.preventDefault(); cancelManualLayoutMove(); return; }
@@ -2285,7 +2302,6 @@
 
   function onKeyUp(e) {
     if (e.code === 'Space') state.pointer.spaceDown = false;
-    if (e.key === 'Alt') { state.altSnapDisabled = false; updateUI(); render(); }
   }
 
   function cycleSnapCandidate(delta) {
@@ -2912,9 +2928,9 @@
         : '警告なし';
     }
     if (els.snapToggleBtn) {
-      const enabled = state.snapEnabled && !state.altSnapDisabled;
-      els.snapToggleBtn.textContent = state.altSnapDisabled ? '吸着 一時OFF' : `吸着 ${state.snapEnabled ? 'ON' : 'OFF'}`;
-      els.snapToggleBtn.classList.toggle('active', enabled);
+      const view = SNAP_TOGGLE.view({ enabled: state.snapEnabled });
+      els.snapToggleBtn.textContent = view.label;
+      els.snapToggleBtn.classList.toggle('active', view.active);
       els.snapToggleBtn.setAttribute('aria-pressed', String(state.snapEnabled));
     }
     if (els.placementHeightSelect) els.placementHeightSelect.value = state.placementHeightMode;
@@ -2993,7 +3009,7 @@
   }
 
   function updatePlacementInstruction(proposal) {
-    els.instruction.innerHTML = `<strong>${proposal?.snapped ? (proposal.used ? '使用済み接続口へ追加吸着' : '接続口へ吸着') : '自由配置'}</strong><span>24px以内で吸着・離れた場所は自由配置・Altで一時OFF・Z/Xで45°回転${proposal ? `・高さ ${proposal.zMm || 0}mm` : ''}</span>`;
+    els.instruction.innerHTML = `<strong>${proposal?.snapped ? (proposal.used ? '使用済み接続口へ追加吸着' : '接続口へ吸着') : '自由配置'}</strong><span>24px以内で吸着・離れた場所は自由配置・Z/Xで45°回転${proposal ? `・高さ ${proposal.zMm || 0}mm` : ''}</span>`;
   }
 
   function updateSummary() {
@@ -3038,7 +3054,6 @@
         layoutWarnings: JSON.parse(JSON.stringify(state.layoutWarnings)),
         connections: JSON.parse(JSON.stringify(state.connections)),
         snapEnabled: state.snapEnabled,
-        altSnapDisabled: state.altSnapDisabled,
         placementHeightMode: state.placementHeightMode,
         placementHeightMm: state.placementHeightMm,
         seamCount: PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect).length,
@@ -3059,7 +3074,6 @@
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
       setSnapEnabled: value => { state.snapEnabled = !!value; updateUI(); render(); },
-      setAltSnapDisabled: value => { state.altSnapDisabled = !!value; updateUI(); render(); },
       setPlacementHeight: value => { state.placementHeightMode = 'custom'; state.placementHeightMm = Number(value) || 0; updateUI(); render(); },
       selectSnapCandidate: index => { state.snapCandidateIndex = Math.max(0, Number(index) || 0); state.snapCandidateConfirmed = true; updateUI(); render(); },
       getLayoutWarnings: () => JSON.parse(JSON.stringify(recalculateLayoutWarnings())),

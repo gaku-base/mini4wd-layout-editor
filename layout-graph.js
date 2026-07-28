@@ -223,7 +223,7 @@
   }
 
   function snapCandidates(partValue, catalog, targets, options = {}) {
-    if (options.altKey || options.snapEnabled === false) return [];
+    if (options.snapEnabled === false) return [];
     const scale = Math.max(0.0001, finite(options.scale, 1));
     const radiusPx = finite(options.radiusPx, SNAP_RADIUS_PX);
     const usage = connectorUsage(options.edges || []);
