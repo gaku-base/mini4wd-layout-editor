@@ -228,9 +228,13 @@
     const radiusPx = finite(options.radiusPx, SNAP_RADIUS_PX);
     const usage = connectorUsage(options.edges || []);
     const localConnectors = connectorsForDefinition(catalog[partValue.type]);
+    const allowedLocalConnectorIndexes = Array.isArray(options.localConnectorIndexes)
+      ? new Set(options.localConnectorIndexes.map(value => Math.trunc(finite(value))).filter(index => index >= 0))
+      : null;
     const inheritsBank = connectorsInheritBank(catalog[partValue.type]);
     const result = [];
     localConnectors.forEach((local, localIndex) => {
+      if (allowedLocalConnectorIndexes && !allowedLocalConnectorIndexes.has(localIndex)) return;
       const current = worldConnector(partValue, local, localIndex);
       targets.forEach(target => {
         const movingForTarget = inheritsBank ? { ...current, bankAngleDeg: target.bankAngleDeg } : current;

@@ -16,6 +16,8 @@
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
+  const CORNER_DIRECTION = window.M4WD_CORNER_DIRECTION;
+  if (!CORNER_DIRECTION) throw new Error('corner-direction.jsが読み込まれていません');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
@@ -59,6 +61,8 @@
     rotation: 0,
     activeConnection: null,
     connections: [],
+    lastPlacedCornerHandedness: null,
+    cornerGhostHandedness: CORNER_DIRECTION.defaultDirection(PARTS.corner45),
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
     snapCandidateIndex: 0,
     snapCandidateConfirmed: false,
@@ -100,7 +104,7 @@
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
-      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','placementHeightSelect',
+      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
@@ -297,6 +301,7 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerGhostHandedness);
     document.addEventListener('click', e => {
       const target = e.target instanceof Element
         ? e.target.closest('#snapToggleBtn,[data-action="toggle-snap"]')
@@ -373,6 +378,7 @@
       state.selectedType = 'start';
       state.rotation = 0;
       state.mode = 'start';
+      resetCornerDirectionSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
       state.history = [];
       state.future = [];
@@ -419,6 +425,7 @@
     if (!state.start) return toast('最初に「5 スタート」を配置してください');
     state.selectedType = type;
     state.mode = 'place';
+    prepareCornerGhostForSelection(type);
     state.hoveredPartId = null;
     clearSelection(false);
     updateUI();
@@ -1318,6 +1325,62 @@
     c.restore();
   }
 
+  function hasCornerDirection(type = state.selectedType) {
+    return CORNER_DIRECTION.directionsForDefinition(PARTS[type]).length > 0;
+  }
+
+  function cornerGhostDirection(type = state.selectedType) {
+    return CORNER_DIRECTION.normalizeDirection(PARTS[type], state.cornerGhostHandedness);
+  }
+
+  function resetCornerDirectionSession() {
+    state.lastPlacedCornerHandedness = null;
+    state.cornerGhostHandedness = CORNER_DIRECTION.defaultDirection(PARTS.corner45);
+  }
+
+  function prepareCornerGhostForSelection(type) {
+    const def = PARTS[type];
+    if (!hasCornerDirection(type)) {
+      if (state.activeConnection) state.rotation = normalizeRotation(state.activeConnection.heading);
+      return;
+    }
+    state.cornerGhostHandedness = CORNER_DIRECTION.normalizeDirection(def,
+      state.lastPlacedCornerHandedness || CORNER_DIRECTION.defaultDirection(def));
+    if (state.activeConnection) {
+      state.rotation = CORNER_DIRECTION.rotationForConnection(def, state.activeConnection.heading, state.cornerGhostHandedness);
+    }
+  }
+
+  function setCornerGhostHandedness(direction) {
+    const def = PARTS[state.selectedType];
+    if (!hasCornerDirection()) return;
+    const previous = cornerGhostDirection();
+    const next = CORNER_DIRECTION.normalizeDirection(def, direction);
+    if (previous === next) return;
+    state.cornerGhostHandedness = next;
+    state.rotation = normalizeRotation(state.rotation + CORNER_DIRECTION.rotationDeltaForDirectionChange(def, previous, next));
+    state.snapCandidateIndex = 0;
+    state.snapCandidateConfirmed = false;
+    updateUI();
+    render();
+  }
+
+  function toggleCornerGhostHandedness() {
+    const directions = CORNER_DIRECTION.directionsForDefinition(PARTS[state.selectedType]);
+    if (directions.length < 2) return;
+    const current = cornerGhostDirection();
+    const next = directions[(directions.indexOf(current) + 1) % directions.length];
+    setCornerGhostHandedness(next);
+  }
+
+  function cancelCornerGhostDirection() {
+    if (!hasCornerDirection()) return;
+    const def = PARTS[state.selectedType];
+    const next = CORNER_DIRECTION.normalizeDirection(def,
+      state.lastPlacedCornerHandedness || CORNER_DIRECTION.defaultDirection(def));
+    setCornerGhostHandedness(next);
+  }
+
   const WAVE_PATH_SAMPLES = 72;
 
   function waveCenterline(def) {
@@ -1666,10 +1729,15 @@
   }
 
   function freePlacement(type, x, y) {
-    const proposal = { type, id: 'ghost', x, y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex: 0 };
+    const routeIndex = hasCornerDirection(type)
+      ? CORNER_DIRECTION.routeIndexForDirection(PARTS[type], cornerGhostDirection(type))
+      : 0;
+    const proposal = { type, id: 'ghost', x, y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex };
+    proposal.attachedIndex = routeIndex;
+    proposal.otherIndex = routeIndex === 0 ? 1 : 0;
     proposal.endpoints = partEndpoints(proposal);
-    proposal.entry = proposal.endpoints[0];
-    proposal.exit = proposal.endpoints[1];
+    proposal.entry = proposal.endpoints[proposal.attachedIndex];
+    proposal.exit = proposal.endpoints[proposal.otherIndex];
     return proposal;
   }
 
@@ -1687,6 +1755,7 @@
       snapEnabled: state.snapEnabled,
       freeHeightMm: selectedFreeHeightMm(),
       candidateIndex: state.snapCandidateIndex,
+      localConnectorIndexes: hasCornerDirection(state.selectedType) ? [free.routeIndex] : undefined,
       edges: state.connections
     });
     if (placement.kind === 'free') {
@@ -2274,6 +2343,7 @@
     if (key === 'g') { e.preventDefault(); toggleGrid(); return; }
     if (key === 'escape') {
       e.preventDefault();
+      cancelCornerGhostDirection();
       if (state.start) {
         state.mode = 'place';
         clearSelection(false);
@@ -2332,7 +2402,7 @@
       x: proposal.x,
       y: proposal.y,
       rotation: proposal.rotation,
-      routeIndex: Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0,
+      routeIndex: Number.isInteger(proposal.routeIndex) ? proposal.routeIndex : (Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0),
       colorKey: 'default',
       endpointStates,
       bankRole: proposal.bankRole || null,
@@ -2351,7 +2421,14 @@
     const ends = partEndpoints(part);
     const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
-    state.rotation = normalizeRotation(newOpen.heading);
+    if (hasCornerDirection(part.type)) {
+      const handedness = CORNER_DIRECTION.directionForRouteIndex(PARTS[part.type], part.routeIndex);
+      state.lastPlacedCornerHandedness = handedness;
+      state.cornerGhostHandedness = handedness;
+      state.rotation = CORNER_DIRECTION.rotationForConnection(PARTS[part.type], newOpen.heading, handedness);
+    } else {
+      state.rotation = normalizeRotation(newOpen.heading);
+    }
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
     state.snapCandidateIndex = 0;
@@ -2933,6 +3010,16 @@
       els.snapToggleBtn.classList.toggle('active', view.active);
       els.snapToggleBtn.setAttribute('aria-pressed', String(state.snapEnabled));
     }
+    if (els.cornerDirectionControl && els.cornerDirectionToggleBtn) {
+      const visible = state.mode === 'place' && hasCornerDirection();
+      els.cornerDirectionControl.hidden = !visible;
+      if (visible) {
+        const direction = cornerGhostDirection();
+        const isLeft = direction === 'left';
+        els.cornerDirectionToggleBtn.textContent = `コーナー方向: ${isLeft ? '左' : '右'}`;
+        els.cornerDirectionToggleBtn.setAttribute('aria-pressed', String(isLeft));
+      }
+    }
     if (els.placementHeightSelect) els.placementHeightSelect.value = state.placementHeightMode;
     if (els.placementHeightCustom) {
       els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
@@ -3054,6 +3141,8 @@
         layoutWarnings: JSON.parse(JSON.stringify(state.layoutWarnings)),
         connections: JSON.parse(JSON.stringify(state.connections)),
         snapEnabled: state.snapEnabled,
+        lastPlacedCornerHandedness: state.lastPlacedCornerHandedness,
+        cornerGhostHandedness: state.cornerGhostHandedness,
         placementHeightMode: state.placementHeightMode,
         placementHeightMm: state.placementHeightMm,
         seamCount: PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect).length,
@@ -3074,6 +3163,8 @@
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
       setSnapEnabled: value => { state.snapEnabled = !!value; updateUI(); render(); },
+      setCornerHandedness: value => setCornerGhostHandedness(value),
+      getCornerDirectionSession: () => ({ lastPlacedCornerHandedness: state.lastPlacedCornerHandedness, cornerGhostHandedness: state.cornerGhostHandedness }),
       setPlacementHeight: value => { state.placementHeightMode = 'custom'; state.placementHeightMm = Number(value) || 0; updateUI(); render(); },
       selectSnapCandidate: index => { state.snapCandidateIndex = Math.max(0, Number(index) || 0); state.snapCandidateConfirmed = true; updateUI(); render(); },
       getLayoutWarnings: () => JSON.parse(JSON.stringify(recalculateLayoutWarnings())),
