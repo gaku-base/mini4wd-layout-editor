@@ -245,13 +245,22 @@
     const partForSnapCandidate = typeof options.partForSnapCandidate === 'function'
       ? options.partForSnapCandidate
       : () => partValue;
+    const partForSnapDistanceCandidate = typeof options.partForSnapDistanceCandidate === 'function'
+      ? options.partForSnapDistanceCandidate
+      : () => partValue;
     const result = [];
     localConnectors.forEach((local, localIndex) => {
       if (allowedLocalConnectorIndexes && !allowedLocalConnectorIndexes.has(localIndex)) return;
       targets.forEach(target => {
         const candidatePart = normalizePart(partForSnapCandidate(local, localIndex, target, partValue) || partValue);
-        const current = worldConnector(candidatePart, local, localIndex);
-        const movingForTarget = inheritsBank ? { ...current, bankAngleDeg: target.bankAngleDeg } : current;
+        const distancePart = normalizePart(partForSnapDistanceCandidate(local, localIndex, target, partValue) || partValue);
+        // Compatibility belongs to the target-facing pose, but proximity must
+        // come from the actual ghost currently under the pointer.  Otherwise a
+        // mirrored reversible corner can map A and B onto the same screen point
+        // before their distances are compared.
+        const targetFacing = worldConnector(candidatePart, local, localIndex);
+        const current = worldConnector(distancePart, local, localIndex);
+        const movingForTarget = inheritsBank ? { ...targetFacing, bankAngleDeg: target.bankAngleDeg } : targetFacing;
         if (!connectorCompatible(movingForTarget, target, options)) return;
         const distanceWorld = Math.hypot(current.x - target.x, current.y - target.y);
         const distancePx = distanceWorld * scale;
@@ -270,15 +279,53 @@
         });
       });
     });
-    return result.sort((a, b) => a.distancePx - b.distancePx || a.target.zMm - b.target.zMm || a.target.partId.localeCompare(b.target.partId));
+    return result.sort(compareSnapCandidates);
+  }
+
+  // A target connection can be reached by either end of a reversible corner.
+  // Keep both raw candidates for geometry, then choose the closest end for each
+  // target.  This deliberately happens after distance and compatibility checks:
+  // handedness is never used as an entry-connector filter.
+  function snapTargetKey(candidate) {
+    const target = candidate?.target || {};
+    return [
+      encodeURIComponent(String(target.partId || '')),
+      encodeURIComponent(String(target.connectorId || '')),
+      finite(target.zMm).toFixed(4),
+      finite(target.x).toFixed(4),
+      finite(target.y).toFixed(4),
+      normalizeAngle(target.directionDeg).toFixed(4)
+    ].join('|');
+  }
+
+  function compareSnapCandidates(left, right) {
+    return left.distancePx - right.distancePx
+      || left.target.zMm - right.target.zMm
+      || endpointKey(left.target.partId, left.target.connectorId).localeCompare(endpointKey(right.target.partId, right.target.connectorId))
+      || left.localConnectorIndex - right.localConnectorIndex
+      || String(left.entryConnectorId).localeCompare(String(right.entryConnectorId));
+  }
+
+  function nearestCandidateForEachTarget(candidates) {
+    const nearest = new Map();
+    candidates.forEach(candidate => {
+      const key = snapTargetKey(candidate);
+      if (!nearest.has(key)) nearest.set(key, candidate);
+    });
+    return [...nearest.values()].sort(compareSnapCandidates);
   }
 
   function choosePlacement(part, catalog, targets, options = {}) {
-    const candidates = snapCandidates(part, catalog, targets, options);
-    if (!candidates.length) return { kind: 'free', part: normalizePart({ ...part, zMm: finite(options.freeHeightMm, part.zMm) }), candidates: [] };
-    const index = Math.max(0, Math.min(candidates.length - 1, Math.trunc(finite(options.candidateIndex))));
+    const rawCandidates = snapCandidates(part, catalog, targets, options);
+    if (!rawCandidates.length) return { kind: 'free', part: normalizePart({ ...part, zMm: finite(options.freeHeightMm, part.zMm) }), candidates: [], rawCandidates: [] };
+    const candidates = nearestCandidateForEachTarget(rawCandidates);
+    const requestedTargetKey = String(options.selectedTargetKey || '');
+    const selected = candidates.find(candidate => snapTargetKey(candidate) === requestedTargetKey) || candidates[0];
     const distinctHeights = new Set(candidates.map(candidate => Math.round(candidate.target.zMm / Z_EPSILON_MM))).size;
-    return { kind: 'snap', part: candidates[index].pose, selected: candidates[index], candidates, requiresHeightChoice: distinctHeights > 1 };
+    return {
+      kind: 'snap', part: selected.pose, selected, candidates, rawCandidates,
+      selectedTargetKey: snapTargetKey(selected), requiresHeightChoice: distinctHeights > 1
+    };
   }
 
   function verticalEnvelope(part, definition, bodyHeightMm = COURSE_BODY_HEIGHT_MM) {
@@ -362,7 +409,7 @@
     normalizeAngle, angleDistance, rotate, normalizeConnector, connectorsForDefinition, normalizePart,
     worldConnector, allWorldConnectors, endpointKey, normalizeEdge, edgeKey, dedupeEdges, addEdge,
     removeEdgesForParts, connectorUsage, duplicateConnectorWarnings, connectedComponent,
-    connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, mirroredConnector, solveSnapPose, snapCandidates, choosePlacement, verticalEnvelope,
+    connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, mirroredConnector, solveSnapPose, snapCandidates, snapTargetKey, nearestCandidateForEachTarget, choosePlacement, verticalEnvelope,
     boundsOverlap, verticalOverlap, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
   });
 });

@@ -64,8 +64,10 @@
     lastPlacedCornerHandedness: null,
     cornerGhostHandedness: CORNER_DIRECTION.defaultDirection(PARTS.corner45),
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
-    snapCandidateIndex: 0,
-    snapCandidateConfirmed: false,
+    // Only a height/target choice may be remembered while the pointer is still.
+    // Corner entry A/B is always recomputed from the current ghost position.
+    snapTargetChoiceKey: null,
+    snapTargetChoiceConfirmed: false,
     placementHeightMode: 'auto',
     placementHeightMm: 0,
     lastPlacementHeightMm: 0,
@@ -309,17 +311,19 @@
       if (!target) return;
       e.preventDefault();
       state.snapEnabled = SNAP_TOGGLE.toggle({ enabled: state.snapEnabled }).enabled;
-      state.snapCandidateIndex = 0;
+      clearSnapTargetChoice();
       updateUI(); render();
     });
     els.placementHeightSelect?.addEventListener('change', () => {
       state.placementHeightMode = els.placementHeightSelect.value;
       els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
       if (state.placementHeightMode !== 'auto' && state.placementHeightMode !== 'custom') state.placementHeightMm = Number(state.placementHeightMode);
+      clearSnapTargetChoice();
       updateUI(); render();
     });
     els.placementHeightCustom?.addEventListener('input', () => {
       state.placementHeightMm = Number(els.placementHeightCustom.value) || 0;
+      clearSnapTargetChoice();
       updateUI(); render();
     });
 
@@ -1369,8 +1373,7 @@
     if (previous === next) return;
     state.cornerGhostHandedness = next;
     state.rotation = normalizeRotation(state.rotation + CORNER_DIRECTION.rotationDeltaForDirectionChange(def, previous, next));
-    state.snapCandidateIndex = 0;
-    state.snapCandidateConfirmed = false;
+    clearSnapTargetChoice();
     updateUI();
     render();
   }
@@ -1773,7 +1776,11 @@
       radiusPx: LAYOUT_GRAPH.SNAP_RADIUS_PX,
       snapEnabled: state.snapEnabled,
       freeHeightMm: selectedFreeHeightMm(),
-      candidateIndex: state.snapCandidateIndex,
+      selectedTargetKey: state.snapTargetChoiceKey,
+      // Measure both physical ghost ends before the per-entry pose is rotated
+      // and mirrored toward a target.  This is what lets pointer proximity pick
+      // A or B without a user-facing entry selector.
+      partForSnapDistanceCandidate: () => free,
       partForSnapCandidate: hasCornerDirection(state.selectedType)
         ? (_connector, entryIndex, target) => ({
           ...free,
@@ -1789,7 +1796,6 @@
       return { ...free, ...placement.part, snapped: false, valid: true, outOfBounds: !isPartInsideField(placement.part), candidates: [] };
     }
     const chosen = placement.selected;
-    state.snapCandidateIndex = Math.min(state.snapCandidateIndex, placement.candidates.length - 1);
     const attachedIndex = chosen.localConnectorIndex;
     const otherIndex = hasCornerDirection(state.selectedType)
       ? CORNER_DIRECTION.exitIndexForEntry(def, attachedIndex)
@@ -1809,8 +1815,9 @@
       endpoints,
       entry: { ...chosen.target }, exit: { ...endpoints[otherIndex] }, anchor: { ...chosen.target },
       attachedIndex, otherIndex, endpointDistance: chosen.distanceWorld, distancePx: chosen.distancePx,
-      snapped: true, valid: !placement.requiresHeightChoice || state.snapCandidateConfirmed,
+      snapped: true, valid: !placement.requiresHeightChoice || state.snapTargetChoiceConfirmed,
       requiresHeightChoice: placement.requiresHeightChoice, candidates: placement.candidates,
+      rawCandidates: placement.rawCandidates, selectedTargetKey: placement.selectedTargetKey,
       used: chosen.used, outOfBounds: !isPartInsideField(candidate),
       edge: { partAId: chosen.target.partId, connectorAId: chosen.target.connectorId, partBId: 'pending', connectorBId: chosen.localConnector.id }
     };
@@ -2163,7 +2170,7 @@
     }
 
     const nextCursor = { x: snap(world.x), y: snap(world.y) };
-    if (nextCursor.x !== state.cursor.x || nextCursor.y !== state.cursor.y) state.snapCandidateConfirmed = false;
+    if (nextCursor.x !== state.cursor.x || nextCursor.y !== state.cursor.y) clearSnapTargetChoice();
     state.cursor = nextCursor;
 
     const canHover = ['move','delete','color'].includes(state.mode) && !state.pointer.draggingParts && !state.pointer.marquee;
@@ -2306,8 +2313,8 @@
     e.preventDefault();
     if (((state.mode === 'start' && !state.start) || state.mode === 'place') && !e.ctrlKey && !e.metaKey) {
       const proposal = state.mode === 'place' ? getPlacementProposal() : null;
-      if (proposal?.candidates?.length > 1) {
-        cycleSnapCandidate(e.deltaY < 0 ? -1 : 1);
+      if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
+        cycleSnapTargetChoice(e.deltaY < 0 ? -1 : 1);
         return;
       }
       rotateCurrent(e.deltaY < 0 ? -45 : 45);
@@ -2353,7 +2360,10 @@
     const key = e.key.toLowerCase();
 
     if ((key === '[' || key === ']') && state.mode === 'place') {
-      e.preventDefault(); cycleSnapCandidate(key === '[' ? -1 : 1); return;
+      const proposal = getPlacementProposal();
+      if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
+        e.preventDefault(); cycleSnapTargetChoice(key === '[' ? -1 : 1); return;
+      }
     }
 
     if ((e.ctrlKey || e.metaKey) && key === 'z') { e.preventDefault(); undo(); return; }
@@ -2412,12 +2422,19 @@
     if (e.code === 'Space') state.pointer.spaceDown = false;
   }
 
-  function cycleSnapCandidate(delta) {
+  function clearSnapTargetChoice() {
+    state.snapTargetChoiceKey = null;
+    state.snapTargetChoiceConfirmed = false;
+  }
+
+  function cycleSnapTargetChoice(delta) {
     const proposal = getPlacementProposal();
     const count = proposal?.candidates?.length || 0;
-    if (!count) return;
-    state.snapCandidateIndex = (state.snapCandidateIndex + delta + count) % count;
-    state.snapCandidateConfirmed = true;
+    if (!count || !proposal.requiresHeightChoice) return;
+    const current = proposal.candidates.findIndex(candidate => LAYOUT_GRAPH.snapTargetKey(candidate) === state.snapTargetChoiceKey);
+    const next = (Math.max(0, current) + delta + count) % count;
+    state.snapTargetChoiceKey = LAYOUT_GRAPH.snapTargetKey(proposal.candidates[next]);
+    state.snapTargetChoiceConfirmed = true;
     updateUI(); render();
   }
 
@@ -2471,8 +2488,7 @@
     }
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
-    state.snapCandidateIndex = 0;
-    state.snapCandidateConfirmed = false;
+    clearSnapTargetChoice();
     recalculateBankStates();
     recalculateLayoutWarnings();
     toast(proposal.snapped
@@ -3123,18 +3139,21 @@
   function updateSnapCandidatePanel(proposal) {
     if (!els.snapCandidatePanel) return;
     const candidates = proposal?.candidates || [];
-    els.snapCandidatePanel.hidden = candidates.length < 2;
-    els.snapCandidatePanel.innerHTML = candidates.length < 2 ? '' : candidates.map((candidate, index) => {
+    // This panel is reserved for explicit height choices.  A corner's A/B
+    // entrance is deliberately absent: its nearest compatible end is selected
+    // automatically by the placement proposal on every cursor update.
+    const showHeightChoices = Boolean(proposal?.requiresHeightChoice) && candidates.length > 1;
+    els.snapCandidatePanel.hidden = !showHeightChoices;
+    els.snapCandidatePanel.innerHTML = !showHeightChoices ? '' : candidates.map(candidate => {
       const level = candidate.target.zMm / LAYOUT_GRAPH.LEVEL_HEIGHT_MM;
       const name = candidate.target.partId === 'start' ? START_DEF.name : partDisplayName(state.parts.find(part => part.id === candidate.target.partId));
-      const entry = hasCornerDirection() && candidate.entryConnectorId
-        ? `／入口 ${String(candidate.entryConnectorId).toUpperCase()}`
-        : '';
-      return `<button class="snap-candidate-button${index === state.snapCandidateIndex ? ' active' : ''}" type="button" data-snap-candidate="${index}">${Number.isInteger(level) ? `${level}段` : `${level.toFixed(2)}段`}（${candidate.target.zMm}mm） ${name}／${candidate.target.label || candidate.target.connectorId}${entry}${candidate.used ? '・使用済み' : '・空き'}</button>`;
+      const targetKey = LAYOUT_GRAPH.snapTargetKey(candidate);
+      const active = targetKey === proposal.selectedTargetKey;
+      return `<button class="snap-candidate-button${active ? ' active' : ''}" type="button" data-snap-target-key="${targetKey}">${Number.isInteger(level) ? `${level}段` : `${level.toFixed(2)}段`}（${candidate.target.zMm}mm） ${name}／${candidate.target.label || candidate.target.connectorId}${candidate.used ? '・使用済み' : '・空き'}</button>`;
     }).join('');
-    els.snapCandidatePanel.querySelectorAll('[data-snap-candidate]').forEach(button => button.addEventListener('click', () => {
-      state.snapCandidateIndex = Number(button.dataset.snapCandidate) || 0;
-      state.snapCandidateConfirmed = true;
+    els.snapCandidatePanel.querySelectorAll('[data-snap-target-key]').forEach(button => button.addEventListener('click', () => {
+      state.snapTargetChoiceKey = button.dataset.snapTargetKey || null;
+      state.snapTargetChoiceConfirmed = true;
       updateUI(); render();
     }));
   }
@@ -3210,7 +3229,15 @@
       setCornerHandedness: value => setCornerGhostHandedness(value),
       getCornerDirectionSession: () => ({ lastPlacedCornerHandedness: state.lastPlacedCornerHandedness, cornerGhostHandedness: state.cornerGhostHandedness }),
       setPlacementHeight: value => { state.placementHeightMode = 'custom'; state.placementHeightMm = Number(value) || 0; updateUI(); render(); },
-      selectSnapCandidate: index => { state.snapCandidateIndex = Math.max(0, Number(index) || 0); state.snapCandidateConfirmed = true; updateUI(); render(); },
+      selectSnapCandidate: index => {
+        const proposal = getPlacementProposal();
+        const candidate = proposal?.candidates?.[Math.max(0, Number(index) || 0)];
+        if (candidate && proposal?.requiresHeightChoice) {
+          state.snapTargetChoiceKey = LAYOUT_GRAPH.snapTargetKey(candidate);
+          state.snapTargetChoiceConfirmed = true;
+        }
+        updateUI(); render();
+      },
       getLayoutWarnings: () => JSON.parse(JSON.stringify(recalculateLayoutWarnings())),
       setRotation: value => { state.rotation = normalizeRotation(Number(value)); updateUI(); render(); },
       setSelectedIds: ids => {

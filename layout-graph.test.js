@@ -156,7 +156,8 @@ test('46 同一bank角の標準パーツは20度区間を継続', () => {
 
 test('47 同一XYの異高さ候補はマウス移動中も選択UIへ反映', () => {
   assert.match(appSource, /if \(state\.mode === 'place'\) \{[\s\S]*updateSnapCandidatePanel\(liveProposal\)/);
-  assert.match(appSource, /state\.snapCandidateConfirmed = true/);
+  assert.match(appSource, /state\.snapTargetChoiceConfirmed = true/);
+  assert.match(appSource, /state\.snapTargetChoiceKey/);
 });
 
 test('48 Alt一時解除の状態・イベント処理・画面説明を持たない', () => {
