@@ -13,7 +13,7 @@ const LEGACY_VERSION = '1.0.0-RC1';
 const options = {
   app: 'mini4wd-course-layout-mouse-flow',
   version: CURRENT_VERSION,
-  partTypes: ['straight', 'corner45'],
+  partTypes: ['straight', 'corner-45-right', 'corner-45-left'],
   colorKeys: ['default', 'red', 'blue', 'orange', 'green', 'white']
 };
 
@@ -47,13 +47,13 @@ function layoutFixture({ version = CURRENT_VERSION, includeOrigin = true } = {})
     parts: [
       { id: 'straight-1', type: 'straight', x: -7, y: 200, rotation: 0, routeIndex: 0, colorKey: 'red', zIndex: 1 },
       { id: 'straight-2', type: 'straight', x: 47, y: 200, rotation: 45, routeIndex: 0, colorKey: 'blue', zIndex: 2 },
-      { id: 'corner-1', type: 'corner45', x: 96, y: 210, rotation: 90, routeIndex: 0, colorKey: 'orange', zIndex: 3 }
+      { id: 'corner-1', type: 'corner-45-left', x: 96, y: 210, rotation: 90, routeIndex: 0, colorKey: 'orange', zIndex: 3 }
     ],
     start: { x: -61, y: 200, rotation: 45 },
     startPhase: 'position',
     selectedType: 'straight',
     rotation: 90,
-    activeConnection: { x: 126, y: 240, heading: 135, sourceId: 'corner-1', sourceType: 'corner45', endpointIndex: 1, label: 'B' }
+    activeConnection: { x: 126, y: 240, heading: 135, sourceId: 'corner-1', sourceType: 'corner-45-left', endpointIndex: 1, label: 'B' }
   };
 }
 
@@ -152,7 +152,7 @@ test('does not persist selection, hover, ghost, or history state', () => {
     ...layoutFixture(),
     selectedIds: ['straight-1'],
     hoveredPartId: 'straight-2',
-    ghost: { type: 'corner45' },
+    ghost: { type: 'corner-45-left' },
     history: ['temporary'],
     future: ['temporary']
   });
@@ -296,53 +296,38 @@ test('12. RC2 additive height, zOrder, and multiple connection edges round-trip'
 test('13. unknown connector references are rejected when catalog connector IDs are supplied', () => {
   const layout = layoutFixture();
   layout.connections = [{ partAId: 'start', connectorAId: 'missing', partBId: 'straight-1', connectorBId: 'a' }];
-  const strictOptions = { ...options, connectorIdsByType: { start: ['a', 'b'], straight: ['a', 'b'], corner45: ['a', 'b'] } };
+  const strictOptions = { ...options, connectorIdsByType: { start: ['a', 'b'], straight: ['a', 'b'], 'corner-45-right': ['a', 'b'], 'corner-45-left': ['a', 'b'] } };
   const storage = new MemoryStorage();
   const store = createLayoutStore(storage, strictOptions);
   store.restore();
   assert.equal(store.save(layout).status, 'failed');
 });
 
-test('14. placed corner handedness round-trips without persisting a ghost direction', () => {
+test('14. placed concrete corner type round-trips without persisting legacy direction fields', () => {
   const layout = layoutFixture();
   layout.parts[2] = {
     ...layout.parts[2],
     entryConnectorId: 'b',
-    cornerMirror: false,
-    handedness: 'left',
-    selectedHandedness: 'left',
-    appliedHandedness: 'left',
-    cornerHandedness: 'left'
+    type: 'corner-45-left'
   };
-  layout.cornerGhostHandedness = 'right';
-  layout.lastPlacedCornerHandedness = 'right';
   const storage = new MemoryStorage();
   const store = createLayoutStore(storage, options);
   store.restore();
   assert.equal(store.save(layout).status, 'saved');
   const saved = JSON.parse(storage.getItem(STORAGE_KEY));
-  assert.equal(saved.parts[2].cornerHandedness, 'left');
-  assert.equal(saved.parts[2].handedness, 'left');
-  assert.equal(saved.parts[2].selectedHandedness, 'left');
-  assert.equal(saved.parts[2].appliedHandedness, 'left');
-  assert.equal('cornerGhostHandedness' in saved, false);
-  assert.equal('lastPlacedCornerHandedness' in saved, false);
+  assert.equal(saved.parts[2].type, 'corner-45-left');
+  assert.equal('cornerMirror' in saved.parts[2], false);
+  assert.equal('handedness' in saved.parts[2], false);
+  assert.equal('cornerHandedness' in saved.parts[2], false);
 });
 
-test('15. explicit left handedness is accepted even when legacy mirror data disagrees', () => {
+test('15. both concrete corner types are accepted without a runtime mirror', () => {
   const layout = layoutFixture();
-  layout.parts[2] = {
-    ...layout.parts[2],
-    entryConnectorId: 'a',
-    cornerMirror: false,
-    handedness: 'left',
-    cornerHandedness: 'left'
-  };
+  layout.parts[2] = { ...layout.parts[2], entryConnectorId: 'a', type: 'corner-45-right' };
   const storage = new MemoryStorage();
   const store = createLayoutStore(storage, options);
   store.restore();
   assert.equal(store.save(layout).status, 'saved');
   const restored = createLayoutStore(storage, options).restore();
-  assert.equal(restored.layout.parts[2].handedness, 'left');
-  assert.equal(restored.layout.parts[2].cornerHandedness, 'left');
+  assert.equal(restored.layout.parts[2].type, 'corner-45-right');
 });

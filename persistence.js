@@ -113,9 +113,6 @@
       if (Object.prototype.hasOwnProperty.call(part, 'zOrder') && !isFiniteNumber(part.zOrder)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'pitchDeg') && !isFiniteNumber(part.pitchDeg)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'bankAngleDeg') && !isFiniteNumber(part.bankAngleDeg)) return false;
-      if (Object.prototype.hasOwnProperty.call(part, 'cornerMirror') && typeof part.cornerMirror !== 'boolean') return false;
-      if (Object.prototype.hasOwnProperty.call(part, 'cornerHandedness') && !['right', 'left'].includes(part.cornerHandedness)) return false;
-      if (Object.prototype.hasOwnProperty.call(part, 'handedness') && !['right', 'left'].includes(part.handedness)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'selectedHandedness') && !['right', 'left'].includes(part.selectedHandedness)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'appliedHandedness') && !['right', 'left'].includes(part.appliedHandedness)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'entryConnectorId')) {
@@ -208,7 +205,8 @@
       }
 
       try {
-        const layout = JSON.parse(raw);
+        const parsedLayout = JSON.parse(raw);
+        const layout = typeof options.migrateLayout === 'function' ? options.migrateLayout(parsedLayout) : parsedLayout;
         const versionStatus = classifyLayoutVersion(layout?.version, options);
         if (versionStatus === 'unsupportedFuture' || versionStatus === 'unsupportedVersion') {
           if (!hasUnsupportedVersionEnvelope(layout, options)) throw new Error('Unsupported layout has an invalid envelope.');

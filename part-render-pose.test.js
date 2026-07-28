@@ -3,117 +3,98 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const vm = require('node:vm');
 const POSE = require('./part-render-pose.js');
 const GRAPH = require('./layout-graph.js');
 
-const corner = {
-  corner45: true,
-  renderKind: 'corner45',
-  radius: 54,
-  w: 53.711688245,
-  h: 49.344155877,
-  geometry: {
-    centerlineRadius: 54,
-    innerRadius: 36,
-    outerRadius: 72,
-    connectors: [
-      { id: 'a', x: -20.883700800371177, y: -3.58228629520206, heading: 180 },
-      { id: 'b', x: 17.300065383702393, y: 12.233947520724378, heading: 45 }
-    ]
-  }
-};
+function catalog() {
+  const context = { window: {} };
+  vm.runInNewContext(fs.readFileSync('./part-catalog.js', 'utf8'), context);
+  return context.window.M4WD_PART_CATALOG.PARTS;
+}
 
+const PARTS = catalog();
+const TYPES = ['corner-45-right', 'corner-45-left'];
 const close = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-9, `${message}: ${actual} !== ${expected}`);
+
+function part(type, overrides = {}) {
+  return { id: 'corner', type, x: 240, y: 180, zMm: 0, rotation: 0, ...overrides };
+}
 
 function assertTraceEqual(actual, expected, label) {
   assert.deepEqual(actual.pose, expected.pose, `${label} pose`);
   assert.equal(actual.shapeVariant, expected.shapeVariant, `${label} variant`);
-  assert.equal(actual.path.length, expected.path.length, `${label} path length`);
-  actual.path.forEach((point, index) => {
-    close(point.x, expected.path[index].x, `${label} path[${index}].x`);
-    close(point.y, expected.path[index].y, `${label} path[${index}].y`);
-  });
-  assert.equal(actual.connectors.length, expected.connectors.length, `${label} connector count`);
-  actual.connectors.forEach((connector, index) => {
-    assert.equal(connector.id, expected.connectors[index].id, `${label} connector id`);
-    close(connector.x, expected.connectors[index].x, `${label} connector[${index}].x`);
-    close(connector.y, expected.connectors[index].y, `${label} connector[${index}].y`);
-    close(connector.heading, expected.connectors[index].heading, `${label} connector[${index}].heading`);
-  });
+  assert.deepEqual(actual.path, expected.path, `${label} path`);
+  assert.deepEqual(actual.connectors, expected.connectors, `${label} connectors`);
 }
 
-function part(overrides = {}) {
-  return {
-    id: 'corner', type: 'corner45', x: 240, y: 180, zMm: 0,
-    rotation: 0, cornerMirror: false, handedness: 'right', ...overrides
-  };
-}
-
-for (const handedness of ['left', 'right']) {
+for (const type of TYPES) {
   for (const snapped of [false, true]) {
-    test(`${handedness} ${snapped ? 'snapped' : 'free'} ghost path equals the confirmed part path`, () => {
-      const ghost = part({ id: 'ghost', handedness, appliedHandedness: handedness, rotation: snapped ? 135 : 45, cornerMirror: handedness === 'left' });
+    test(`${type} ${snapped ? 'snapped' : 'free'} ghost path equals the confirmed part path`, () => {
+      const ghost = part(type, { id: 'ghost', rotation: snapped ? 135 : 45 });
       const placed = { ...ghost, id: 'placed' };
-      assertTraceEqual(POSE.tracePart(corner, ghost), POSE.tracePart(corner, placed), `${handedness}-${snapped}`);
+      assertTraceEqual(POSE.tracePart(PARTS[type], ghost), POSE.tracePart(PARTS[type], placed), `${type}-${snapped}`);
     });
   }
 }
 
-for (const entryConnectorId of ['a', 'b']) {
-  for (const handedness of ['left', 'right']) {
-    test(`${handedness} entry ${entryConnectorId.toUpperCase()} connector coordinates and tangents match layout geometry`, () => {
-      const value = part({ entryConnectorId, handedness, rotation: entryConnectorId === 'a' ? 90 : 270, cornerMirror: handedness === 'left' });
-      const traced = POSE.traceConnectors(corner, value);
-      corner.geometry.connectors.forEach((connector, index) => {
+for (const type of TYPES) {
+  for (const entryConnectorId of ['a', 'b']) {
+    test(`${type} entry ${entryConnectorId.toUpperCase()} connectors match layout geometry`, () => {
+      const value = part(type, { entryConnectorId, rotation: entryConnectorId === 'a' ? 90 : 270 });
+      const traced = POSE.traceConnectors(PARTS[type], value);
+      PARTS[type].geometry.connectors.forEach((connector, index) => {
         const world = GRAPH.worldConnector(value, connector, index);
-        close(traced[index].x, world.x, `${entryConnectorId}-${handedness} x`);
-        close(traced[index].y, world.y, `${entryConnectorId}-${handedness} y`);
-        close(traced[index].heading, world.directionDeg, `${entryConnectorId}-${handedness} heading`);
+        close(traced[index].x, world.x, `${type}-${entryConnectorId} x`);
+        close(traced[index].y, world.y, `${type}-${entryConnectorId} y`);
+        close(traced[index].heading, world.directionDeg, `${type}-${entryConnectorId} heading`);
       });
     });
   }
 }
 
-test('rotation 0/45/90/180/270 and both mirror states produce stable ghost/placed traces', () => {
+test('rotation 0/45/90/180/270 and both concrete definitions produce stable ghost/placed traces', () => {
   for (const rotation of [0, 45, 90, 180, 270]) {
-    for (const cornerMirror of [false, true]) {
-      const ghost = part({ id: 'ghost', rotation, cornerMirror, handedness: cornerMirror ? 'left' : 'right' });
-      assertTraceEqual(POSE.tracePart(corner, ghost), POSE.tracePart(corner, { ...ghost, id: 'placed' }), `${rotation}-${cornerMirror}`);
+    for (const type of TYPES) {
+      const ghost = part(type, { id: 'ghost', rotation });
+      assertTraceEqual(POSE.tracePart(PARTS[type], ghost), POSE.tracePart(PARTS[type], { ...ghost, id: 'placed' }), `${type}-${rotation}`);
     }
   }
 });
 
 test('height 0/115/230 does not change the 2D physical pose', () => {
-  const baseline = POSE.tracePart(corner, part({ zMm: 0, rotation: 180, cornerMirror: true, handedness: 'left' }));
-  for (const zMm of [115, 230]) {
-    assertTraceEqual(baseline, POSE.tracePart(corner, part({ zMm, rotation: 180, cornerMirror: true, handedness: 'left' })), `height-${zMm}`);
+  for (const type of TYPES) {
+    const baseline = POSE.tracePart(PARTS[type], part(type, { zMm: 0, rotation: 180 }));
+    for (const zMm of [115, 230]) {
+      assertTraceEqual(baseline, POSE.tracePart(PARTS[type], part(type, { zMm, rotation: 180 })), `${type}-height-${zMm}`);
+    }
   }
 });
 
 test('JSON, history clone, and localStorage-shaped round trips preserve the physical trace', () => {
-  const original = part({ rotation: 270, cornerMirror: true, handedness: 'left', entryConnectorId: 'b', zMm: 115 });
-  const serialized = JSON.stringify({ parts: [original] });
-  const restored = JSON.parse(serialized).parts[0];
-  assertTraceEqual(POSE.tracePart(corner, original), POSE.tracePart(corner, restored), 'round-trip');
+  for (const type of TYPES) {
+    const original = part(type, { rotation: 270, entryConnectorId: 'b', zMm: 115 });
+    const restored = JSON.parse(JSON.stringify({ parts: [original] })).parts[0];
+    assertTraceEqual(POSE.tracePart(PARTS[type], original), POSE.tracePart(PARTS[restored.type], restored), `${type}-round-trip`);
+  }
 });
 
-test('handedness never overrides an explicit physical mirror during rendering', () => {
-  const leftLabel = part({ handedness: 'left', cornerMirror: false, rotation: 45 });
-  const rightLabel = part({ handedness: 'right', cornerMirror: false, rotation: 45 });
-  const leftTrace = POSE.tracePart(corner, leftLabel);
-  const rightTrace = POSE.tracePart(corner, rightLabel);
-  assert.deepEqual(leftTrace.path, rightTrace.path);
-  assert.deepEqual(leftTrace.connectors, rightTrace.connectors);
+test('the left/right form comes from the catalog definition, not a runtime mirror', () => {
+  const left = POSE.tracePart(PARTS['corner-45-left'], part('corner-45-left', { rotation: 45 }));
+  const right = POSE.tracePart(PARTS['corner-45-right'], part('corner-45-right', { rotation: 45 }));
+  assert.notDeepEqual(left.path, right.path);
+  assert.notDeepEqual(left.connectors, right.connectors);
+  assert.deepEqual(POSE.resolvePartPose(part('corner-45-left')), { rotation: 0 });
 });
 
-test('screen, ghost, selection outline, warnings, and PNG use the shared part pose path', () => {
+test('screen, ghost, selection outline, warnings, and PNG use the shared catalog definition trace', () => {
   const source = fs.readFileSync('./app.js', 'utf8');
   const production = fs.readFileSync('./index.html', 'utf8');
   const qa = fs.readFileSync('./test-index.html', 'utf8');
   assert.match(source, /function drawPart\(c, part, opts = \{\}\)[\s\S]*const pose = resolvePartPose\(part\)/);
   assert.match(source, /const ghostPart = renderPartFromProposal\(proposal\)[\s\S]*drawPart\(c, ghostPart\)/);
+  assert.match(source, /function partRenderTrace\(part\) \{\s*return PART_RENDER_POSE\.tracePart\(PARTS\[part\.type\], part\)/);
   assert.match(source, /drawPartsInLayerOrder\(c, \{ exportMode: true \}\)/);
-  assert.match(source, /function corner45Geometry\(def\) \{\s*return PART_RENDER_POSE\.cornerGeometry\(def\)/);
-  assert.match(production, /part-render-pose\.js[\s\S]*app\.js/);
-  assert.match(qa, /part-render-pose\.js[\s\S]*app\.js/);
+  assert.match(production, /part-render-pose\.js[\s\S]*corner-variant\.js[\s\S]*app\.js/);
+  assert.match(qa, /part-render-pose\.js[\s\S]*corner-variant\.js[\s\S]*app\.js/);
 });

@@ -34,7 +34,7 @@ function rotate(point, degrees) {
 }
 
 function buildEightCornerEndpoints() {
-  const cornerDefinition = loadCatalog().PARTS.corner45;
+  const cornerDefinition = loadCatalog().PARTS['corner-45-right'];
   const angle = Math.PI / 4;
   const innerRadius = cornerDefinition.geometry.innerRadius;
   const outerRadius = cornerDefinition.geometry.outerRadius;
@@ -62,7 +62,7 @@ function buildEightCornerEndpoints() {
       const offset = rotate(endpoint, rotation);
       return {
         sourceId: `corner-${index + 1}`,
-        sourceType: 'corner45',
+        sourceType: 'corner-45-right',
         endpointIndex,
         x: pose.x + offset.x,
         y: pose.y + offset.y,
@@ -102,7 +102,7 @@ test('未接続端点や同一パーツ内の端点には継ぎ目を作らな�
 
 test('RC1の全パーツ種別を除外せず接続境界として扱う', () => {
   const types = [
-    'straight', 'corner45', 'lanechange', 'wave',
+    'straight', 'corner-45-right', 'corner-45-left', 'lanechange', 'wave',
     'slope', 'bank20', 'lcjump', 'burning'
   ];
   const endpoints = types.flatMap((type, index) => [

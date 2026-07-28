@@ -229,6 +229,7 @@
   <script src="layout-graph.js"></script>
   <script src="part-render-pose.js?visible-ghost-pose-v1"></script>
   <script src="placement-proposal.js?visible-ghost-pose-v1"></script>
+  <script src="corner-variant.js?corner-variant-v1"></script>
   <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>
@@ -305,7 +306,7 @@ window.addEventListener('load', () => {
     };
     if (scenario === 'integration-bank') {
       const start = { id: 'start', type: 'start', x: 70, y: 260, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
-      const chain = makeConnectedChain(['straight','corner45','corner45','corner45','corner45','straight'], start);
+      const chain = makeConnectedChain(['straight','corner-45-right','corner-45-right','corner-45-right','corner-45-right','straight'], start);
       d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 700, heightCm: 520, gridCm: 10 }, start, parts: chain.parts, connections: chain.connections });
     } else if (scenario === 'integration-height' || scenario === 'integration-height-mismatch') {
       const start = { id: 'start', type: 'start', x: 70, y: 260, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
@@ -327,12 +328,12 @@ window.addEventListener('load', () => {
     } else if (scenario === 'corner-handedness' || scenario === 'corner-handedness-left' || scenario === 'corner-handedness-115') {
       const start = { id: 'start', type: 'start', x: 70, y: 330, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
       const existingHandedness = scenario === 'corner-handedness-left' ? 'left' : 'right';
-      const existingMirror = existingHandedness === 'left';
+      const existingType = existingHandedness === 'left' ? 'corner-45-left' : 'corner-45-right';
       const existingHeight = scenario === 'corner-handedness-115' ? 115 : 0;
       d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 700, heightCm: 520, gridCm: 10 }, start,
         parts: [
           // Known left/right corners give mouse QA a real corner exit to target.
-          { id:`${existingHandedness}-corner`,type:'corner45',x:350,y:200,zMm:existingHeight,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'blue',routeIndex:0,entryConnectorId:'a',cornerMirror:existingMirror,cornerHandedness:existingHandedness }
+          { id:`${existingHandedness}-corner`,type:existingType,x:350,y:200,zMm:existingHeight,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'blue',routeIndex:0,entryConnectorId:'a' }
         ], connections: [] });
     } else if (scenario === 'integration-level-candidates') {
       const start = { id: 'start', type: 'start', x: 70, y: 90, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
@@ -345,9 +346,9 @@ window.addEventListener('load', () => {
       const start = { id: 'start', type: 'start', x: 70, y: 260, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
       d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 560, heightCm: 420, gridCm: 10 }, start,
         parts: [
-          { id:'corner-low',type:'corner45',x:260,y:210,zMm:0,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'red',routeIndex:0 },
+          { id:'corner-low',type:'corner-45-left',x:260,y:210,zMm:0,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'red',routeIndex:0 },
           { id:'straight-mid',type:'straight',x:260,y:210,zMm:0,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:2,zIndex:2,colorKey:'blue',routeIndex:0 },
-          { id:'corner-high',type:'corner45',x:260,y:210,zMm:0,rotation:90,pitchDeg:0,bankAngleDeg:0,zOrder:3,zIndex:3,colorKey:'green',routeIndex:0 },
+          { id:'corner-high',type:'corner-45-right',x:260,y:210,zMm:0,rotation:90,pitchDeg:0,bankAngleDeg:0,zOrder:3,zIndex:3,colorKey:'green',routeIndex:0 },
           { id:'lane-visual',type:'lanechange',x:150,y:330,zMm:230,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:4,zIndex:4,colorKey:'default',routeIndex:0 },
           { id:'burning-visual',type:'burning',x:430,y:300,zMm:230,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:5,zIndex:5,colorKey:'orange',routeIndex:0 }
         ], connections: [] });
@@ -419,7 +420,7 @@ window.addEventListener('load', () => {
         }))
       });
     } else {
-      const def = window.M4WD_PART_CATALOG.PARTS.corner45;
+      const def = window.M4WD_PART_CATALOG.PARTS['corner-45-right'];
       const angle = Math.PI / 4;
       const inner = def.geometry.innerRadius;
       const outer = def.geometry.outerRadius;
@@ -447,7 +448,7 @@ window.addEventListener('load', () => {
           const offset = rotate(localCenter, rotation);
           return {
             id: `corner-${index + 1}`,
-            type: 'corner45',
+            type: 'corner-45-right',
             x: center.x - offset.x,
             y: center.y - offset.y,
             rotation,
@@ -468,7 +469,7 @@ window.addEventListener('load', () => {
       selectCorners.textContent = 'QA Corner×4を選択';
       selectCorners.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:9999;padding:5px 8px;background:#fff;border:1px solid #777;';
       selectCorners.addEventListener('click', () => {
-        d.setSelectedIds(['corner45-2','corner45-3','corner45-4','corner45-5']);
+        d.setSelectedIds(['corner-45-right-2','corner-45-right-3','corner-45-right-4','corner-45-right-5']);
         if (d.getRuntimeState().mode !== 'move') d.setMode('move');
       });
       document.body.appendChild(selectCorners);
@@ -510,12 +511,12 @@ window.addEventListener('load', () => {
       const proposalText = proposal ? `${proposal.snapped ? 'snap' : 'free'}:${proposal.zMm || 0}:${proposal.used ? 'used' : 'open'}:${proposal.candidates?.length || 0}:${Number(proposal.distancePx || 0).toFixed(2)}px` : 'none';
       const proposalEntry = proposal?.entryConnectorId || 'none';
       const proposalTarget = proposal?.anchor ? `${proposal.anchor.partId}.${proposal.anchor.connectorId}` : 'none';
-      const handednessText = `selectedHandedness=${runtime.selectedHandedness || 'none'}, candidateHandedness=${runtime.candidateHandedness || 'none'}, appliedHandedness=${runtime.appliedHandedness || 'none'}`;
-      const poseText = `targetTangent=${runtime.targetTangent ?? 'none'}, candidateRotation=${runtime.candidateRotation ?? 'none'}, cornerMirror=${runtime.cornerMirror ?? 'none'}, appliedRotation=${runtime.appliedRotation ?? 'none'}`;
-      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,variant:part.variant || null,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default',entryConnectorId:part.entryConnectorId || null,cornerMirror:Boolean(part.cornerMirror),handedness:part.handedness || null,selectedHandedness:part.selectedHandedness || null,appliedHandedness:part.appliedHandedness || null,cornerHandedness:part.cornerHandedness || null })));
+      const typeText = `ghostType=${runtime.ghostPartType || 'none'}, placedType=${placedDiagnostic?.type || 'none'}, loadedType=${state.parts.at(-1)?.type || 'none'}, definitionId=${placedDiagnostic?.definitionId || runtime.renderedPartDefinitionId || 'none'}`;
+      const poseText = `targetTangent=${runtime.targetTangent ?? 'none'}, candidateRotation=${runtime.candidateRotation ?? 'none'}, appliedRotation=${runtime.appliedRotation ?? 'none'}`;
+      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default',entryConnectorId:part.entryConnectorId || null })));
       const fieldDigest = JSON.stringify(state.field);
       const placementText = `activeProposal=${runtime.activePlacementProposalId || 'none'}, pendingProposal=${runtime.pendingPlacementProposalId || 'none'}, placements=${runtime.placementCommitCount || 0}`;
-      qaStatus.textContent = `${scenario}: stage=${persistenceStage}, parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${handednessText}, ${poseText}, ${placementText}, renderTraceMatch=${traceMatch}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
+      qaStatus.textContent = `${scenario}: stage=${persistenceStage}, parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${typeText}, ${poseText}, ${placementText}, renderTraceMatch=${traceMatch}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
     };
     refreshScenarioStatus();
     setInterval(refreshScenarioStatus, 250);
