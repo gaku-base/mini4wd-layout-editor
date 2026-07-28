@@ -132,7 +132,7 @@
         </section>
 
         <section class="panel snap-panel">
-          <div class="panel-heading"><h2>配置・吸着</h2><button id="snapToggleBtn" class="text-button active" type="button" aria-pressed="true">吸着 ON</button></div>
+          <div class="panel-heading"><h2>配置・吸着</h2><button id="snapToggleBtn" data-action="toggle-snap" class="text-button active" type="button" aria-pressed="true">吸着 ON</button></div>
           <label class="control-label" for="placementHeightSelect">配置高さ</label>
           <select id="placementHeightSelect" class="full-control">
             <option value="auto">自動</option><option value="0">0段（0mm）</option><option value="115">1段（115mm）</option>
@@ -223,6 +223,7 @@
 
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
+  <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
   <script src="lane-change-visual.js"></script>
