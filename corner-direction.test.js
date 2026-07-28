@@ -379,8 +379,9 @@ test('53. app locks candidate and applied handedness to the selected direction',
   assert.match(proposal, /CORNER_DIRECTION\.poseForConnection\(def, target\.directionDeg, selectedHandedness, entryIndex\)/);
   assert.match(proposal, /candidateHandedness !== selectedHandedness \|\| shapeHandedness !== selectedHandedness/);
   assert.doesNotMatch(proposal, /state\.cornerGhostHandedness\s*=/);
-  assert.match(placement, /part\.cornerHandedness = CORNER_DIRECTION\.normalizeDirection/);
-  assert.match(placement, /proposal\.appliedHandedness/);
+  assert.match(placement, /part\.selectedHandedness = selectedHandedness/);
+  assert.match(placement, /part\.appliedHandedness = appliedHandedness/);
+  assert.match(placement, /part\.cornerHandedness = appliedHandedness/);
 });
 
 test('54. saved part geometry keeps semantic handedness without restoring the session choice', () => {
@@ -497,4 +498,19 @@ test('pose: target-facing transform is derived by candidate evaluation, not an e
   assert.match(poseSection, /\[false, true\]\.map/);
   assert.match(poseSection, /rotationForEntryAndMirror/);
   assert.doesNotMatch(poseSection, /mirrorForDirectionAndEntry/);
+});
+
+test('placement: the proposal handedness is copied to the confirmed part model', () => {
+  const placement = section('function placePartAtCursor', 'function recalculateBankStates');
+  assert.match(placement, /part\.selectedHandedness = selectedHandedness/);
+  assert.match(placement, /part\.appliedHandedness = appliedHandedness/);
+  assert.match(placement, /part\.handedness = appliedHandedness/);
+  assert.match(placement, /part\.cornerHandedness = appliedHandedness/);
+});
+
+test('placement: explicit handedness survives deserialization instead of geometry-derived fallback', () => {
+  const restore = section('function applySerialized', 'function persistLocal');
+  assert.match(restore, /const savedHandedness = p\.handedness \?\? p\.cornerHandedness/);
+  assert.match(restore, /const storedHandedness = requestedHandedness \|\| derivedHandedness/);
+  assert.match(restore, /const restoredMirror = PARTS\[type\]\?\.corner45 && requestedHandedness/);
 });

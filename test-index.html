@@ -477,6 +477,7 @@ window.addEventListener('load', () => {
     qaStatus.setAttribute('aria-label', 'QA scenario status');
     qaStatus.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;clip-path:inset(100%);white-space:nowrap;';
     document.body.appendChild(qaStatus);
+    let persistenceStage = 'live';
     const refreshScenarioStatus = () => {
       const runtime = d.getRuntimeState();
       const state = d.getState();
@@ -500,12 +501,25 @@ window.addEventListener('load', () => {
       const proposalTarget = proposal?.anchor ? `${proposal.anchor.partId}.${proposal.anchor.connectorId}` : 'none';
       const handednessText = `selectedHandedness=${runtime.selectedHandedness || 'none'}, candidateHandedness=${runtime.candidateHandedness || 'none'}, appliedHandedness=${runtime.appliedHandedness || 'none'}`;
       const poseText = `targetTangent=${runtime.targetTangent ?? 'none'}, candidateRotation=${runtime.candidateRotation ?? 'none'}, cornerMirror=${runtime.cornerMirror ?? 'none'}, appliedRotation=${runtime.appliedRotation ?? 'none'}`;
-      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default',entryConnectorId:part.entryConnectorId || null,cornerMirror:Boolean(part.cornerMirror),cornerHandedness:part.cornerHandedness || null })));
+      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,variant:part.variant || null,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default',entryConnectorId:part.entryConnectorId || null,cornerMirror:Boolean(part.cornerMirror),handedness:part.handedness || null,selectedHandedness:part.selectedHandedness || null,appliedHandedness:part.appliedHandedness || null,cornerHandedness:part.cornerHandedness || null })));
       const fieldDigest = JSON.stringify(state.field);
-      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${handednessText}, ${poseText}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
+      qaStatus.textContent = `${scenario}: stage=${persistenceStage}, parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${handednessText}, ${poseText}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
     };
     refreshScenarioStatus();
     setInterval(refreshScenarioStatus, 250);
+    if (scenario === 'corner-handedness-left' || scenario === 'corner-handedness') {
+      const roundTrip = document.createElement('button');
+      roundTrip.id = 'qaJsonRoundTrip';
+      roundTrip.textContent = 'QA JSON round-trip';
+      roundTrip.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:9999;padding:5px 8px;background:#fff;border:1px solid #777;';
+      roundTrip.addEventListener('click', () => {
+        const serialized = JSON.stringify(d.getState());
+        d.loadState(JSON.parse(serialized));
+        persistenceStage = 'json-load';
+        refreshScenarioStatus();
+      });
+      document.body.appendChild(roundTrip);
+    }
     if (scenario === 'lanechange') {
       const link = document.createElement('a');
       link.id = 'qaLaneChangePng';
