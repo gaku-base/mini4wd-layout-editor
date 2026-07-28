@@ -16,6 +16,8 @@
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
+  const CORNER_DIRECTION = window.M4WD_CORNER_DIRECTION;
+  if (!CORNER_DIRECTION) throw new Error('corner-direction.jsが読み込まれていません');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
@@ -59,8 +61,9 @@
     rotation: 0,
     activeConnection: null,
     connections: [],
+    lastPlacedCornerHandedness: null,
+    cornerGhostHandedness: CORNER_DIRECTION.defaultDirection(PARTS.corner45),
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
-    altSnapDisabled: false,
     snapCandidateIndex: 0,
     snapCandidateConfirmed: false,
     placementHeightMode: 'auto',
@@ -101,7 +104,7 @@
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
-      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','placementHeightSelect',
+      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
@@ -298,13 +301,14 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerGhostHandedness);
     document.addEventListener('click', e => {
       const target = e.target instanceof Element
         ? e.target.closest('#snapToggleBtn,[data-action="toggle-snap"]')
         : null;
       if (!target) return;
       e.preventDefault();
-      state.snapEnabled = SNAP_TOGGLE.toggle({ enabled: state.snapEnabled, altDisabled: state.altSnapDisabled }).enabled;
+      state.snapEnabled = SNAP_TOGGLE.toggle({ enabled: state.snapEnabled }).enabled;
       state.snapCandidateIndex = 0;
       updateUI(); render();
     });
@@ -374,6 +378,7 @@
       state.selectedType = 'start';
       state.rotation = 0;
       state.mode = 'start';
+      resetCornerDirectionSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
       state.history = [];
       state.future = [];
@@ -420,6 +425,7 @@
     if (!state.start) return toast('最初に「5 スタート」を配置してください');
     state.selectedType = type;
     state.mode = 'place';
+    prepareCornerGhostForSelection(type);
     state.hoveredPartId = null;
     clearSelection(false);
     updateUI();
@@ -1246,6 +1252,7 @@
       c.closePath();
       return true;
     }
+    if (def.wave) return traceWaveOuterPath(c, def);
     const b = localPartBounds(type);
     c.beginPath();
     c.rect(b.minX, b.minY, b.w, b.h);
@@ -1296,41 +1303,110 @@
 
 
   function drawWave(c, def, exportMode) {
-    const amp = def.geometry?.amplitude || def.amplitude || 4;
     const trackWidth = def.geometry?.trackWidth || TRACK_WIDTH_CM;
-    const samples = 72;
-    const waveY = x => {
-      const t = (x + def.w / 2) / def.w;
-      return (def.geometry?.connectors?.[0]?.y || 0) - amp * (0.5 - 0.5 * Math.cos(Math.PI * 2 * t));
-    };
+    const waveY = waveCenterline(def);
     c.save();
     c.fillStyle = def.base;
     c.strokeStyle = def.edge;
     c.lineWidth = 1.05;
-    c.beginPath();
-    for (let i = 0; i <= samples; i++) {
-      const x = -def.w / 2 + def.w * i / samples;
-      const y = -trackWidth / 2 + waveY(x);
-      if (!i) c.moveTo(x, y); else c.lineTo(x, y);
-    }
-    for (let i = samples; i >= 0; i--) {
-      const x = -def.w / 2 + def.w * i / samples;
-      c.lineTo(x, trackWidth / 2 + waveY(x));
-    }
-    c.closePath(); c.fill(); c.stroke();
+    traceWaveOuterPath(c, def); c.fill(); c.stroke();
     c.strokeStyle = def.lane;
     c.lineWidth = .8;
     for (let laneIndex = 1; laneIndex < 3; laneIndex++) {
       const base = -trackWidth / 2 + trackWidth * laneIndex / 3;
       c.beginPath();
-      for (let i = 0; i <= samples; i++) {
-        const x = -def.w / 2 + def.w * i / samples;
+      for (let i = 0; i <= WAVE_PATH_SAMPLES; i++) {
+        const x = -def.w / 2 + def.w * i / WAVE_PATH_SAMPLES;
         const y = base + waveY(x);
         if (!i) c.moveTo(x,y); else c.lineTo(x,y);
       }
       c.stroke();
     }
     c.restore();
+  }
+
+  function hasCornerDirection(type = state.selectedType) {
+    return CORNER_DIRECTION.directionsForDefinition(PARTS[type]).length > 0;
+  }
+
+  function cornerGhostDirection(type = state.selectedType) {
+    return CORNER_DIRECTION.normalizeDirection(PARTS[type], state.cornerGhostHandedness);
+  }
+
+  function resetCornerDirectionSession() {
+    state.lastPlacedCornerHandedness = null;
+    state.cornerGhostHandedness = CORNER_DIRECTION.defaultDirection(PARTS.corner45);
+  }
+
+  function prepareCornerGhostForSelection(type) {
+    const def = PARTS[type];
+    if (!hasCornerDirection(type)) {
+      if (state.activeConnection) state.rotation = normalizeRotation(state.activeConnection.heading);
+      return;
+    }
+    state.cornerGhostHandedness = CORNER_DIRECTION.normalizeDirection(def,
+      state.lastPlacedCornerHandedness || CORNER_DIRECTION.defaultDirection(def));
+    if (state.activeConnection) {
+      state.rotation = CORNER_DIRECTION.rotationForConnection(def, state.activeConnection.heading, state.cornerGhostHandedness);
+    }
+  }
+
+  function setCornerGhostHandedness(direction) {
+    const def = PARTS[state.selectedType];
+    if (!hasCornerDirection()) return;
+    const previous = cornerGhostDirection();
+    const next = CORNER_DIRECTION.normalizeDirection(def, direction);
+    if (previous === next) return;
+    state.cornerGhostHandedness = next;
+    state.rotation = normalizeRotation(state.rotation + CORNER_DIRECTION.rotationDeltaForDirectionChange(def, previous, next));
+    state.snapCandidateIndex = 0;
+    state.snapCandidateConfirmed = false;
+    updateUI();
+    render();
+  }
+
+  function toggleCornerGhostHandedness() {
+    const directions = CORNER_DIRECTION.directionsForDefinition(PARTS[state.selectedType]);
+    if (directions.length < 2) return;
+    const current = cornerGhostDirection();
+    const next = directions[(directions.indexOf(current) + 1) % directions.length];
+    setCornerGhostHandedness(next);
+  }
+
+  function cancelCornerGhostDirection() {
+    if (!hasCornerDirection()) return;
+    const def = PARTS[state.selectedType];
+    const next = CORNER_DIRECTION.normalizeDirection(def,
+      state.lastPlacedCornerHandedness || CORNER_DIRECTION.defaultDirection(def));
+    setCornerGhostHandedness(next);
+  }
+
+  const WAVE_PATH_SAMPLES = 72;
+
+  function waveCenterline(def) {
+    const amp = def.geometry?.amplitude || def.amplitude || 4;
+    const connectorY = def.geometry?.connectors?.[0]?.y || 0;
+    return x => {
+      const t = (x + def.w / 2) / def.w;
+      return connectorY - amp * (0.5 - 0.5 * Math.cos(Math.PI * 2 * t));
+    };
+  }
+
+  function traceWaveOuterPath(c, def) {
+    const trackWidth = def.geometry?.trackWidth || TRACK_WIDTH_CM;
+    const waveY = waveCenterline(def);
+    c.beginPath();
+    for (let i = 0; i <= WAVE_PATH_SAMPLES; i++) {
+      const x = -def.w / 2 + def.w * i / WAVE_PATH_SAMPLES;
+      const y = -trackWidth / 2 + waveY(x);
+      if (!i) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    for (let i = WAVE_PATH_SAMPLES; i >= 0; i--) {
+      const x = -def.w / 2 + def.w * i / WAVE_PATH_SAMPLES;
+      c.lineTo(x, trackWidth / 2 + waveY(x));
+    }
+    c.closePath();
+    return true;
   }
 
 
@@ -1583,7 +1659,7 @@
   }
 
   function groupMoveSnapProposal(movingParts, movingIds) {
-    if (!state.snapEnabled || state.altSnapDisabled) return null;
+    if (!state.snapEnabled) return null;
     const movingSet = new Set(movingIds);
     const movingOpen = movingParts.flatMap(part => partEndpoints(part));
     const stationaryEndpoints = [];
@@ -1653,10 +1729,15 @@
   }
 
   function freePlacement(type, x, y) {
-    const proposal = { type, id: 'ghost', x, y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex: 0 };
+    const routeIndex = hasCornerDirection(type)
+      ? CORNER_DIRECTION.routeIndexForDirection(PARTS[type], cornerGhostDirection(type))
+      : 0;
+    const proposal = { type, id: 'ghost', x, y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex };
+    proposal.attachedIndex = routeIndex;
+    proposal.otherIndex = routeIndex === 0 ? 1 : 0;
     proposal.endpoints = partEndpoints(proposal);
-    proposal.entry = proposal.endpoints[0];
-    proposal.exit = proposal.endpoints[1];
+    proposal.entry = proposal.endpoints[proposal.attachedIndex];
+    proposal.exit = proposal.endpoints[proposal.otherIndex];
     return proposal;
   }
 
@@ -1672,9 +1753,9 @@
       scale: state.view.scale,
       radiusPx: LAYOUT_GRAPH.SNAP_RADIUS_PX,
       snapEnabled: state.snapEnabled,
-      altKey: state.altSnapDisabled,
       freeHeightMm: selectedFreeHeightMm(),
       candidateIndex: state.snapCandidateIndex,
+      localConnectorIndexes: hasCornerDirection(state.selectedType) ? [free.routeIndex] : undefined,
       edges: state.connections
     });
     if (placement.kind === 'free') {
@@ -1738,14 +1819,27 @@
   }
 
   function drawLayoutWarnings(c) {
-    const warnedIds = new Set(state.layoutWarnings.flatMap(warning => warning.partIds || (warning.connector?.partId ? [warning.connector.partId] : [])));
-    warnedIds.forEach(id => {
+    const interferedIds = new Set(state.layoutWarnings
+      .filter(warning => warning.type === 'interference')
+      .flatMap(warning => warning.partIds || []));
+    interferedIds.forEach(id => {
       const part = id === 'start' ? state.start : state.parts.find(item => item.id === id);
       if (!part) return;
-      const bounds = id === 'start' ? startBounds(part) : partBounds(part);
-      c.save(); c.strokeStyle = '#bd3268'; c.lineWidth = 2 / state.view.scale; c.setLineDash([7 / state.view.scale, 5 / state.view.scale]);
-      c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h); c.restore();
+      drawInterferenceOutline(c, { ...part, type: id === 'start' ? 'start' : part.type });
     });
+  }
+
+  function drawInterferenceOutline(c, part) {
+    c.save();
+    c.translate(part.x, part.y);
+    c.rotate(part.rotation * Math.PI / 180);
+    if (tracePartShapePath(c, part.type)) {
+      c.strokeStyle = '#d52f4d';
+      c.lineWidth = 3 / Math.max(state.view.scale, .15);
+      c.lineJoin = 'round';
+      c.stroke();
+    }
+    c.restore();
   }
 
   function normalizeConnection(connection) {
@@ -1909,7 +2003,6 @@
   function onPointerDown(e) {
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
-    if (e.altKey) state.altSnapDisabled = true;
     const rect = els.courseCanvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -2000,7 +2093,6 @@
   }
 
   function onPointerMove(e) {
-    if (state.altSnapDisabled !== !!e.altKey) state.altSnapDisabled = !!e.altKey;
     const rect = els.courseCanvas.getBoundingClientRect();
     const sx = e.clientX - rect.left;
     const sy = e.clientY - rect.top;
@@ -2198,12 +2290,6 @@
   function onKeyDown(e) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement || e.target?.isContentEditable) return;
 
-    if (e.key === 'Alt') {
-      state.altSnapDisabled = true;
-      updateUI(); render();
-      return;
-    }
-
     if (state.layoutMove.active) {
       const moveKey = e.key.toLowerCase();
       if (moveKey === 'escape') { e.preventDefault(); cancelManualLayoutMove(); return; }
@@ -2257,6 +2343,7 @@
     if (key === 'g') { e.preventDefault(); toggleGrid(); return; }
     if (key === 'escape') {
       e.preventDefault();
+      cancelCornerGhostDirection();
       if (state.start) {
         state.mode = 'place';
         clearSelection(false);
@@ -2285,7 +2372,6 @@
 
   function onKeyUp(e) {
     if (e.code === 'Space') state.pointer.spaceDown = false;
-    if (e.key === 'Alt') { state.altSnapDisabled = false; updateUI(); render(); }
   }
 
   function cycleSnapCandidate(delta) {
@@ -2316,7 +2402,7 @@
       x: proposal.x,
       y: proposal.y,
       rotation: proposal.rotation,
-      routeIndex: Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0,
+      routeIndex: Number.isInteger(proposal.routeIndex) ? proposal.routeIndex : (Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0),
       colorKey: 'default',
       endpointStates,
       bankRole: proposal.bankRole || null,
@@ -2335,7 +2421,14 @@
     const ends = partEndpoints(part);
     const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
-    state.rotation = normalizeRotation(newOpen.heading);
+    if (hasCornerDirection(part.type)) {
+      const handedness = CORNER_DIRECTION.directionForRouteIndex(PARTS[part.type], part.routeIndex);
+      state.lastPlacedCornerHandedness = handedness;
+      state.cornerGhostHandedness = handedness;
+      state.rotation = CORNER_DIRECTION.rotationForConnection(PARTS[part.type], newOpen.heading, handedness);
+    } else {
+      state.rotation = normalizeRotation(newOpen.heading);
+    }
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
     state.snapCandidateIndex = 0;
@@ -2912,10 +3005,20 @@
         : '警告なし';
     }
     if (els.snapToggleBtn) {
-      const enabled = state.snapEnabled && !state.altSnapDisabled;
-      els.snapToggleBtn.textContent = state.altSnapDisabled ? '吸着 一時OFF' : `吸着 ${state.snapEnabled ? 'ON' : 'OFF'}`;
-      els.snapToggleBtn.classList.toggle('active', enabled);
+      const view = SNAP_TOGGLE.view({ enabled: state.snapEnabled });
+      els.snapToggleBtn.textContent = view.label;
+      els.snapToggleBtn.classList.toggle('active', view.active);
       els.snapToggleBtn.setAttribute('aria-pressed', String(state.snapEnabled));
+    }
+    if (els.cornerDirectionControl && els.cornerDirectionToggleBtn) {
+      const visible = state.mode === 'place' && hasCornerDirection();
+      els.cornerDirectionControl.hidden = !visible;
+      if (visible) {
+        const direction = cornerGhostDirection();
+        const isLeft = direction === 'left';
+        els.cornerDirectionToggleBtn.textContent = `コーナー方向: ${isLeft ? '左' : '右'}`;
+        els.cornerDirectionToggleBtn.setAttribute('aria-pressed', String(isLeft));
+      }
     }
     if (els.placementHeightSelect) els.placementHeightSelect.value = state.placementHeightMode;
     if (els.placementHeightCustom) {
@@ -2993,7 +3096,7 @@
   }
 
   function updatePlacementInstruction(proposal) {
-    els.instruction.innerHTML = `<strong>${proposal?.snapped ? (proposal.used ? '使用済み接続口へ追加吸着' : '接続口へ吸着') : '自由配置'}</strong><span>24px以内で吸着・離れた場所は自由配置・Altで一時OFF・Z/Xで45°回転${proposal ? `・高さ ${proposal.zMm || 0}mm` : ''}</span>`;
+    els.instruction.innerHTML = `<strong>${proposal?.snapped ? (proposal.used ? '使用済み接続口へ追加吸着' : '接続口へ吸着') : '自由配置'}</strong><span>24px以内で吸着・離れた場所は自由配置・Z/Xで45°回転${proposal ? `・高さ ${proposal.zMm || 0}mm` : ''}</span>`;
   }
 
   function updateSummary() {
@@ -3038,7 +3141,8 @@
         layoutWarnings: JSON.parse(JSON.stringify(state.layoutWarnings)),
         connections: JSON.parse(JSON.stringify(state.connections)),
         snapEnabled: state.snapEnabled,
-        altSnapDisabled: state.altSnapDisabled,
+        lastPlacedCornerHandedness: state.lastPlacedCornerHandedness,
+        cornerGhostHandedness: state.cornerGhostHandedness,
         placementHeightMode: state.placementHeightMode,
         placementHeightMm: state.placementHeightMm,
         seamCount: PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect).length,
@@ -3059,7 +3163,8 @@
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
       setSnapEnabled: value => { state.snapEnabled = !!value; updateUI(); render(); },
-      setAltSnapDisabled: value => { state.altSnapDisabled = !!value; updateUI(); render(); },
+      setCornerHandedness: value => setCornerGhostHandedness(value),
+      getCornerDirectionSession: () => ({ lastPlacedCornerHandedness: state.lastPlacedCornerHandedness, cornerGhostHandedness: state.cornerGhostHandedness }),
       setPlacementHeight: value => { state.placementHeightMode = 'custom'; state.placementHeightMm = Number(value) || 0; updateUI(); render(); },
       selectSnapCandidate: index => { state.snapCandidateIndex = Math.max(0, Number(index) || 0); state.snapCandidateConfirmed = true; updateUI(); render(); },
       getLayoutWarnings: () => JSON.parse(JSON.stringify(recalculateLayoutWarnings())),

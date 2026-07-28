@@ -133,6 +133,10 @@
 
         <section class="panel snap-panel">
           <div class="panel-heading"><h2>配置・吸着</h2><button id="snapToggleBtn" data-action="toggle-snap" class="text-button active" type="button" aria-pressed="true">吸着 ON</button></div>
+          <div id="cornerDirectionControl" hidden>
+            <span class="control-label">コーナー方向</span>
+            <button id="cornerDirectionToggleBtn" class="button full-button" type="button" aria-pressed="false">コーナー方向: 右</button>
+          </div>
           <label class="control-label" for="placementHeightSelect">配置高さ</label>
           <select id="placementHeightSelect" class="full-control">
             <option value="auto">自動</option><option value="0">0段（0mm）</option><option value="115">1段（115mm）</option>
@@ -163,7 +167,6 @@
             <div><kbd>Ctrl+Z / Y</kbd><span>アンドゥ / リドゥ（各20工程）</span></div>
             <div><kbd>Space+ドラッグ</kbd><span>画面移動</span></div>
             <div><kbd>ホイール</kbd><span>配置ゴーストを45°回転</span></div>
-            <div><kbd>Alt</kbd><span>押している間は吸着OFF</span></div>
             <div><kbd>[ / ]</kbd><span>吸着候補を切替</span></div>
             <div><kbd>Ctrl＋ホイール</kbd><span>画面の拡大・縮小</span></div>
           </div>
@@ -225,6 +228,7 @@
 
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
+  <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>

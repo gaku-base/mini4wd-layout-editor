@@ -10,12 +10,8 @@ test('2. click transition turns snapping OFF', () => assert.equal(SNAP_TOGGLE.to
 test('3. second click turns snapping ON', () => assert.equal(SNAP_TOGGLE.toggle(SNAP_TOGGLE.toggle(fresh())).enabled, true));
 test('4. OFF state remains inactive with a candidate', () => assert.equal(SNAP_TOGGLE.view(SNAP_TOGGLE.toggle(fresh())).active, false));
 test('5. ON state becomes active again', () => assert.equal(SNAP_TOGGLE.view(SNAP_TOGGLE.toggle(SNAP_TOGGLE.toggle(fresh()))).active, true));
-test('6. Alt temporarily disables snapping', () => assert.equal(SNAP_TOGGLE.view(SNAP_TOGGLE.setAltDisabled(fresh(), true)).active, false));
-test('7. releasing Alt restores the toggle state', () => {
-  const state = SNAP_TOGGLE.setAltDisabled(SNAP_TOGGLE.setAltDisabled(fresh(), true), false);
-  assert.equal(state.enabled, true);
-  assert.equal(SNAP_TOGGLE.view(state).active, true);
-});
+test('6. snap state has no temporary Alt flag', () => assert.deepEqual(fresh(), { enabled: true }));
+test('7. toggle state keeps only the persisted UI concern', () => assert.deepEqual(SNAP_TOGGLE.toggle({ enabled: true, altDisabled: true }), { enabled: false }));
 test('8. redraw view stays consistent with state', () => {
   const state = SNAP_TOGGLE.toggle(fresh());
   assert.deepEqual(SNAP_TOGGLE.view(state), { label: '吸着 OFF', ariaPressed: 'false', active: false });

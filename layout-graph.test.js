@@ -33,7 +33,7 @@ test('4 使用済み端の近くでも追加吸着', () => {
   const t = target(); const edge = { partAId: 'base', connectorAId: 'b', partBId: 'old', connectorBId: 'a' };
   assert.equal(G.snapCandidates(movingNear(), catalog, [t], { scale: 1, edges: [edge] })[0].used, true);
 });
-test('5 Alt押下中は近くても自由配置', () => assert.equal(snap(movingNear(), [target()], { altKey: true }).kind, 'free'));
+test('5 Alt指定があっても近くでは通常どおり吸着', () => assert.equal(snap(movingNear(), [target()], { altKey: true }).kind, 'snap'));
 test('6 吸着OFFでは常に自由配置', () => assert.equal(snap(movingNear(), [target()], { snapEnabled: false }).kind, 'free'));
 test('7 吸着ONへ戻すと再び吸着', () => assert.equal(snap(movingNear(), [target()], { snapEnabled: true }).kind, 'snap'));
 test('8 ズーム変更後も24pxの操作感を維持', () => {
@@ -159,9 +159,9 @@ test('47 同一XYの異高さ候補はマウス移動中も選択UIへ反映', (
   assert.match(appSource, /state\.snapCandidateConfirmed = true/);
 });
 
-test('48 Alt修飾PointerEventでも一時吸着OFFを反映', () => {
-  assert.match(appSource, /if \(e\.altKey\) state\.altSnapDisabled = true/);
-  assert.match(appSource, /state\.altSnapDisabled !== !!e\.altKey/);
+test('48 Alt一時解除の状態・イベント処理・画面説明を持たない', () => {
+  assert.doesNotMatch(appSource, /altSnapDisabled|altKey|e\.key === 'Alt'/);
+  assert.doesNotMatch(fs.readFileSync('./index.html', 'utf8'), /Alt/);
 });
 
 test('49 グループ吸着はbank差分を剛体適用しedge追加後に再計算', () => {
