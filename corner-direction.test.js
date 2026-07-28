@@ -67,6 +67,41 @@ function candidatesFor(direction, anchor = target()) {
   });
 }
 
+function candidatePartFor(direction) {
+  return (_connector, index, snapTarget, ghost) => ({
+    ...ghost,
+    rotation: DIRECTION.rotationForConnection(corner, snapTarget.directionDeg, direction, index),
+    routeIndex: index,
+    entryConnectorId: DIRECTION.entryConnectorId(corner, index),
+    cornerMirror: DIRECTION.mirrorForDirectionAndEntry(corner, direction, index)
+  });
+}
+
+function ghostAtEntry(anchor, direction, index, offset = {}) {
+  const pending = cornerPart(anchor, direction, entryIndex(direction), 'ghost');
+  const endpoint = GRAPH.worldConnector({ ...pending, x: 0, y: 0 }, corner.geometry.connectors[index], index);
+  return {
+    ...pending,
+    x: anchor.x - endpoint.x + (offset.x || 0),
+    y: anchor.y - endpoint.y + (offset.y || 0),
+    zMm: anchor.zMm
+  };
+}
+
+function automaticPlacement(direction, ghost, anchors, options = {}) {
+  return GRAPH.choosePlacement(ghost, catalog, anchors, {
+    scale: 1,
+    radiusPx: 24,
+    partForSnapDistanceCandidate: () => ghost,
+    partForSnapCandidate: candidatePartFor(direction),
+    ...options
+  });
+}
+
+function endpointAtGhost(_direction, ghost, index) {
+  return GRAPH.worldConnector(ghost, corner.geometry.connectors[index], index);
+}
+
 test('1. direction state is semantic right / left, not connector IDs', () => assert.deepEqual(DIRECTION.directionsForDefinition(corner), ['right', 'left']));
 test('2. standard ghost direction is right', () => assert.equal(DIRECTION.defaultDirection(corner), 'right'));
 test('3. right and left default entry indexes are distinct numbers', () => assert.deepEqual([entryIndex('right'), entryIndex('left')], [0, 1]));
@@ -163,7 +198,102 @@ test('33. Alt remains absent from corner snap behavior', () => {
   const relevant = [section('function freePlacement', 'function getPlacementProposal'), section('function placePartAtCursor', 'function recalculateBankStates')].join('\n');
   assert.doesNotMatch(relevant, /altKey|Alt/);
 });
-test('34. multiple corner candidates expose their separate entry connectors in the UI', () => {
+test('34. UI does not expose manual entry A/B selection', () => {
   const panel = section('function updateSnapCandidatePanel', 'function updatePlacementInstruction');
-  assert.match(panel, /入口 \$\{String\(candidate\.entryConnectorId\)\.toUpperCase\(\)\}/);
+  assert.doesNotMatch(panel, /entryConnectorId|data-snap-candidate|入口/);
+  assert.match(panel, /data-snap-target-key/);
+});
+test('35. automatic nearest selection reaches A and B for right and left corners', () => {
+  ['right', 'left'].forEach(direction => {
+    [0, 1].forEach(index => {
+      const anchor = target(0, 0, `${direction}-${index}`);
+      const placement = automaticPlacement(direction, ghostAtEntry(anchor, direction, index), [anchor]);
+      assert.equal(placement.kind, 'snap');
+      assert.equal(placement.selected.entryConnectorId, index === 0 ? 'a' : 'b');
+    });
+  });
+});
+test('36. nearest entry wins when both corner ends are within 24px', () => {
+  const direction = 'right';
+  const ghost = cornerPart(target(), direction);
+  const a = endpointAtGhost(direction, ghost, 0);
+  const b = endpointAtGhost(direction, ghost, 1);
+  const nearA = { ...target(0, 0, 'target-a'), x: a.x + 4, y: a.y };
+  const nearB = { ...target(0, 0, 'target-b'), x: b.x + 12, y: b.y };
+  const placement = automaticPlacement(direction, ghost, [nearB, nearA]);
+  assert.equal(placement.selected.entryConnectorId, 'a');
+  assert.equal(placement.selected.target.partId, 'target-a');
+});
+test('37. equal-distance choices use a stable target then connector ordering', () => {
+  const direction = 'left';
+  const ghost = cornerPart(target(), direction);
+  const a = endpointAtGhost(direction, ghost, 0);
+  const b = endpointAtGhost(direction, ghost, 1);
+  const sameDistanceA = { ...target(0, 0, 'anchor-a'), x: a.x + 8, y: a.y };
+  const sameDistanceB = { ...target(0, 0, 'anchor-b'), x: b.x + 8, y: b.y };
+  const placement = automaticPlacement(direction, ghost, [sameDistanceB, sameDistanceA]);
+  assert.equal(placement.selected.target.partId, 'anchor-a');
+  assert.equal(placement.selected.entryConnectorId, 'a');
+});
+test('38. moving from a free position to either end recalculates the entry', () => {
+  const anchor = target();
+  const free = automaticPlacement('right', { ...cornerPart(anchor, 'right'), x: 300, y: 300 }, [anchor]);
+  const viaA = automaticPlacement('right', ghostAtEntry(anchor, 'right', 0), [anchor]);
+  const viaB = automaticPlacement('right', ghostAtEntry(anchor, 'right', 1), [anchor]);
+  assert.equal(free.kind, 'free');
+  assert.deepEqual([viaA.selected.entryConnectorId, viaB.selected.entryConnectorId], ['a', 'b']);
+});
+test('39. a previous A selection cannot fix the next ghost to A', () => {
+  const anchor = target();
+  const viaA = automaticPlacement('left', ghostAtEntry(anchor, 'left', 0), [anchor]);
+  const viaB = automaticPlacement('left', ghostAtEntry(anchor, 'left', 1), [anchor]);
+  assert.equal(viaA.selected.entryConnectorId, 'a');
+  assert.equal(viaB.selected.entryConnectorId, 'b');
+  assert.equal(viaB.selectedTargetKey, GRAPH.snapTargetKey(viaB.selected));
+});
+test('40. automatic entry selection works at 0, 45, 90, and 180 degrees', () => {
+  [0, 45, 90, 180].forEach(heading => {
+    ['right', 'left'].forEach(direction => [0, 1].forEach(index => {
+      const anchor = target(heading, 0, `h-${heading}-${direction}-${index}`);
+      const placement = automaticPlacement(direction, ghostAtEntry(anchor, direction, index), [anchor]);
+      assert.equal(placement.selected.entryConnectorId, index === 0 ? 'a' : 'b');
+    }));
+  });
+});
+test('41. automatic entry selection preserves 0, 115, and 230mm targets', () => {
+  [0, 115, 230].forEach(zMm => ['right', 'left'].forEach(direction => [0, 1].forEach(index => {
+    const anchor = target(0, zMm, `z-${zMm}-${direction}-${index}`);
+    const placement = automaticPlacement(direction, ghostAtEntry(anchor, direction, index), [anchor]);
+    assert.equal(placement.selected.entryConnectorId, index === 0 ? 'a' : 'b');
+    assert.equal(placement.part.zMm, zMm);
+  })));
+});
+test('42. used target connectors remain candidates for both automatic entries', () => {
+  const anchor = target();
+  [0, 1].forEach(index => {
+    const placement = automaticPlacement('right', ghostAtEntry(anchor, 'right', index), [anchor], {
+      edges: [{ partAId: 'other', connectorAId: 'a', partBId: anchor.partId, connectorBId: anchor.connectorId }]
+    });
+    assert.equal(placement.selected.entryConnectorId, index === 0 ? 'a' : 'b');
+    assert.equal(placement.selected.used, true);
+  });
+});
+test('43. multiple height targets keep their nearest entry while requiring a height choice', () => {
+  const direction = 'right';
+  const low = target(0, 0, 'low');
+  const high = target(0, 115, 'high');
+  const ghost = ghostAtEntry(low, direction, 1);
+  const first = automaticPlacement(direction, ghost, [high, low]);
+  assert.equal(first.requiresHeightChoice, true);
+  assert.equal(first.selected.entryConnectorId, 'b');
+  const selectedHigh = automaticPlacement(direction, ghost, [high, low], { selectedTargetKey: GRAPH.snapTargetKey(first.candidates.find(candidate => candidate.target.partId === 'high')) });
+  assert.equal(selectedHigh.selected.target.partId, 'high');
+  assert.equal(selectedHigh.selected.entryConnectorId, 'b');
+});
+test('44. app delegates selection to nearest target keys, not a retained candidate index', () => {
+  const proposal = section('function getPlacementProposal', 'function isPartInsideField');
+  const pointer = section('function onPointerMove', 'function onPointerUp');
+  assert.match(proposal, /selectedTargetKey: state\.snapTargetChoiceKey/);
+  assert.doesNotMatch(proposal, /candidateIndex|snapCandidateIndex/);
+  assert.match(pointer, /clearSnapTargetChoice\(\)/);
 });
