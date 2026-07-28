@@ -227,6 +227,7 @@
 
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
+  <script src="part-render-pose.js?corner-render-pose-v1"></script>
   <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>
@@ -264,7 +265,7 @@
       setInterval(refresh, 250);
     });
   </script>
-  <script src="app.js"></script>
+  <script src="app.js?corner-render-pose-v1"></script>
 
 <script>
 window.addEventListener('load', () => {
@@ -495,6 +496,15 @@ window.addEventListener('load', () => {
       const connectorHeightText = graph.allWorldConnectors(allParts, catalog)
         .map(connector => `${connector.partId}.${connector.connectorId}:${connector.zMm}`).join('|');
       const warningText = (runtime.layoutWarnings || []).map(warning => warning.type).sort().join('|');
+      const diagnostics = runtime.cornerDiagnostics || [];
+      const placedDiagnosticIndex = diagnostics.map(item => item.stage).lastIndexOf('placed');
+      const placedDiagnostic = placedDiagnosticIndex >= 0 ? diagnostics[placedDiagnosticIndex] : null;
+      const proposalDiagnostic = placedDiagnosticIndex >= 0
+        ? diagnostics.slice(0, placedDiagnosticIndex).reverse().find(item => item.stage === 'proposal')
+        : null;
+      const traceMatch = proposalDiagnostic && placedDiagnostic
+        ? `pose:${JSON.stringify(proposalDiagnostic.pose) === JSON.stringify(placedDiagnostic.pose)},path:${JSON.stringify(proposalDiagnostic.path) === JSON.stringify(placedDiagnostic.path)},connectors:${JSON.stringify(proposalDiagnostic.connectors) === JSON.stringify(placedDiagnostic.connectors)}`
+        : 'pending';
       const proposal = runtime.proposal;
       const proposalText = proposal ? `${proposal.snapped ? 'snap' : 'free'}:${proposal.zMm || 0}:${proposal.used ? 'used' : 'open'}:${proposal.candidates?.length || 0}:${Number(proposal.distancePx || 0).toFixed(2)}px` : 'none';
       const proposalEntry = proposal?.entryConnectorId || 'none';
@@ -503,7 +513,7 @@ window.addEventListener('load', () => {
       const poseText = `targetTangent=${runtime.targetTangent ?? 'none'}, candidateRotation=${runtime.candidateRotation ?? 'none'}, cornerMirror=${runtime.cornerMirror ?? 'none'}, appliedRotation=${runtime.appliedRotation ?? 'none'}`;
       const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,variant:part.variant || null,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default',entryConnectorId:part.entryConnectorId || null,cornerMirror:Boolean(part.cornerMirror),handedness:part.handedness || null,selectedHandedness:part.selectedHandedness || null,appliedHandedness:part.appliedHandedness || null,cornerHandedness:part.cornerHandedness || null })));
       const fieldDigest = JSON.stringify(state.field);
-      qaStatus.textContent = `${scenario}: stage=${persistenceStage}, parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${handednessText}, ${poseText}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
+      qaStatus.textContent = `${scenario}: stage=${persistenceStage}, parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${handednessText}, ${poseText}, renderTraceMatch=${traceMatch}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
     };
     refreshScenarioStatus();
     setInterval(refreshScenarioStatus, 250);

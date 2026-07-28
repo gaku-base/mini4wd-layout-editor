@@ -16,6 +16,8 @@
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
+  const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
+  if (!PART_RENDER_POSE) throw new Error('part-render-pose.jsが読み込まれていません');
   const CORNER_DIRECTION = window.M4WD_CORNER_DIRECTION;
   if (!CORNER_DIRECTION) throw new Error('corner-direction.jsが読み込まれていません');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
@@ -88,7 +90,10 @@
     dirty: false,
     bankWarnings: [],
     layoutWarnings: [],
-    assetsReady: 0
+    assetsReady: 0,
+    ghostProposal: null,
+    ghostProposalKey: null,
+    cornerDiagnostics: []
   };
 
   let ctx;
@@ -486,21 +491,25 @@
         ? p.entryConnectorId
         : connectors[routeIndex]?.id || 'a';
       const entryIndex = Math.max(0, connectors.findIndex(connector => connector.id === entryConnectorId));
-      const cornerMirror = PARTS[type]?.corner45 ? Boolean(p.cornerMirror) : false;
-      const derivedHandedness = PARTS[type]?.corner45
-        ? CORNER_DIRECTION.handednessForEntryAndMirror(PARTS[type], entryIndex, cornerMirror)
-        : null;
       const savedHandedness = p.handedness ?? p.cornerHandedness;
       const requestedHandedness = PARTS[type]?.corner45 && CORNER_DIRECTION.directionsForDefinition(PARTS[type]).includes(String(savedHandedness))
         ? String(savedHandedness)
         : null;
-      // A confirmed part stores its semantic turn direction separately from
-      // the rendering mirror. Explicit left/right data is authoritative; for
-      // legacy records without it, retain the direction implied by geometry.
+      const hasStoredMirror = PARTS[type]?.corner45 && typeof p.cornerMirror === 'boolean';
+      // rotation + cornerMirror are the physical rendering pose. Preserve an
+      // explicit mirror exactly; only legacy records without one derive it
+      // from their semantic direction and entry connector.
+      const restoredMirror = !PARTS[type]?.corner45
+        ? false
+        : hasStoredMirror
+          ? p.cornerMirror
+          : requestedHandedness
+            ? CORNER_DIRECTION.mirrorForDirectionAndEntry(PARTS[type], requestedHandedness, entryIndex)
+            : false;
+      const derivedHandedness = PARTS[type]?.corner45
+        ? CORNER_DIRECTION.handednessForEntryAndMirror(PARTS[type], entryIndex, restoredMirror)
+        : null;
       const storedHandedness = requestedHandedness || derivedHandedness;
-      const restoredMirror = PARTS[type]?.corner45 && requestedHandedness
-        ? CORNER_DIRECTION.mirrorForDirectionAndEntry(PARTS[type], requestedHandedness, entryIndex)
-        : cornerMirror;
       const part = {
         id: String(p.id || makeId()),
         type,
@@ -895,16 +904,92 @@
     return { ...original, base: palette.base, lane: palette.lane, edge: palette.edge };
   }
 
+  function resolvePartPose(part = {}) {
+    return PART_RENDER_POSE.resolvePartPose(part);
+  }
+
+  function placementProposalKey() {
+    return JSON.stringify([
+      state.selectedType, state.cursor.x, state.cursor.y, state.rotation,
+      state.snapEnabled, state.placementHeightMode, state.placementHeightMm,
+      state.snapTargetChoiceKey, state.snapTargetChoiceConfirmed,
+      state.cornerGhostHandedness, state.view.scale, state.connections.length, state.parts.length
+    ]);
+  }
+
+  function cacheGhostProposal(proposal) {
+    state.ghostProposal = proposal;
+    state.ghostProposalKey = placementProposalKey();
+    return proposal;
+  }
+
+  function currentGhostProposal() {
+    return state.ghostProposalKey === placementProposalKey()
+      ? state.ghostProposal
+      : cacheGhostProposal(getPlacementProposal());
+  }
+
+  function recordCornerDiagnostic(stage, part, extra = {}) {
+    if (!hasCornerDirection(part?.type)) return;
+    if (!window.__COURSE_ENABLE_DEBUG__ && !/test-index\.html$/.test(window.location.pathname)) return;
+    const pose = resolvePartPose(part);
+    const entrypoints = partEndpoints(part).map(endpoint => ({
+      id: endpoint.connectorId,
+      x: endpoint.x,
+      y: endpoint.y,
+      heading: endpoint.heading
+    }));
+    const record = {
+      stage,
+      pose,
+      type: part.type,
+      shapeVariant: PARTS[part.type]?.renderKind || part.type,
+      path: partShapePathPoints(part),
+      connectors: entrypoints,
+      ...extra
+    };
+    state.cornerDiagnostics = [...state.cornerDiagnostics.slice(-19), JSON.parse(JSON.stringify(record))];
+    if (window.__COURSE_ENABLE_DEBUG__) console.log(`[corner-render:${stage}]`, record);
+  }
+
+  function renderPartFromProposal(proposal, id = 'ghost') {
+    return {
+      id,
+      type: proposal.type,
+      x: proposal.x,
+      y: proposal.y,
+      rotation: proposal.rotation,
+      routeIndex: proposal.routeIndex,
+      entryConnectorId: proposal.entryConnectorId,
+      cornerMirror: Boolean(proposal.cornerMirror),
+      handedness: proposal.appliedHandedness || proposal.handedness || null,
+      selectedHandedness: proposal.selectedHandedness || null,
+      appliedHandedness: proposal.appliedHandedness || proposal.handedness || null,
+      cornerHandedness: proposal.appliedHandedness || proposal.handedness || null,
+      colorKey: 'default'
+    };
+  }
+
+  function partShapePathPoints(part, samples = 48) {
+    return PART_RENDER_POSE.tracePartPath(PARTS[part.type], part, samples);
+  }
+
+  function partRenderTrace(part) {
+    return PART_RENDER_POSE.tracePart(PARTS[part.type], part);
+  }
+
   function drawPart(c, part, opts = {}) {
     const def = resolvePartDef(part);
     if (!def) return;
+    const pose = resolvePartPose(part);
     const exportMode = !!opts.exportMode;
     const selected = !!opts.selected;
     c.save();
     c.translate(part.x, part.y);
-    c.rotate(part.rotation * Math.PI / 180);
-    if (part.cornerMirror) c.scale(1, -1);
+    c.rotate(pose.rotation * Math.PI / 180);
+    if (pose.cornerMirror) c.scale(1, -1);
 
+    recordCornerDiagnostic('resolved-pose', part, { poseSource: 'resolvePartPose' });
     const usedAsset = drawPartAsset(c, def, part.colorKey || 'default', part);
     if (!usedAsset) {
       if (def.corner45) drawCorner45(c, def, exportMode);
@@ -912,6 +997,7 @@
       else if (def.burning) drawBurningGraphic(c, def);
       else drawStraightLike(c, def, exportMode, part);
     }
+    recordCornerDiagnostic('drawn', part, { poseSource: 'resolvePartPose', usedAsset });
     if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
     if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
@@ -1215,29 +1301,7 @@
 
 
   function corner45Geometry(def) {
-    const r = def.geometry?.centerlineRadius || def.radius || 54;
-    const angle = Math.PI / 4;
-    const ri = def.geometry?.innerRadius || r - TRACK_WIDTH_CM / 2;
-    const ro = def.geometry?.outerRadius || r + TRACK_WIDTH_CM / 2;
-    const radialCentroid = (4 * Math.sin(angle / 2) / (3 * angle)) * ((ro ** 3 - ri ** 3) / (ro ** 2 - ri ** 2));
-    const bisector = -3 * Math.PI / 8;
-    const center = { x: -radialCentroid * Math.cos(bisector), y: -radialCentroid * Math.sin(bisector) };
-    const startAngle = -Math.PI / 2;
-    const endAngle = -Math.PI / 4;
-    const entry = { x: center.x + r * Math.cos(startAngle), y: center.y + r * Math.sin(startAngle) };
-    const exit = { x: center.x + r * Math.cos(endAngle), y: center.y + r * Math.sin(endAngle) };
-    const points = [];
-    for (const radius of [ri, ro]) {
-      for (let i = 0; i <= 48; i++) {
-        const a = startAngle + (endAngle - startAngle) * i / 48;
-        points.push({ x: center.x + radius * Math.cos(a), y: center.y + radius * Math.sin(a) });
-      }
-    }
-    const minX = Math.min(...points.map(p => p.x));
-    const maxX = Math.max(...points.map(p => p.x));
-    const minY = Math.min(...points.map(p => p.y));
-    const maxY = Math.max(...points.map(p => p.y));
-    return { r, ri, ro, entry, exit, center, startAngle, endAngle, bounds: { minX, maxX, minY, maxY, w: maxX-minX, h:maxY-minY } };
+    return PART_RENDER_POSE.cornerGeometry(def);
   }
 
 
@@ -2069,15 +2133,13 @@
     if (state.mode === 'place') {
       const opens = getOpenConnections();
       opens.forEach(ep => drawConnectionPoint(c, ep, '#62b99c'));
-      const proposal = getPlacementProposal();
+      const proposal = currentGhostProposal();
       if (proposal) {
         c.save();
         c.globalAlpha = proposal.snapped ? .72 : .34;
-        drawPart(c, {
-          id: 'ghost', type: proposal.type, x: proposal.x, y: proposal.y,
-          rotation: proposal.rotation, routeIndex: proposal.routeIndex, entryConnectorId: proposal.entryConnectorId,
-          cornerMirror: proposal.cornerMirror, colorKey: 'default'
-        });
+        const ghostPart = renderPartFromProposal(proposal);
+        recordCornerDiagnostic('proposal', ghostPart, { proposal: { ...proposal } });
+        drawPart(c, ghostPart);
         c.restore();
         drawConnectionGuide(c, proposal);
         if (proposal.anchor) drawConnectionPoint(c, proposal.anchor, proposal.outOfBounds ? '#f07818' : (proposal.valid ? '#1f9c71' : '#de4b5b'));
@@ -2294,6 +2356,7 @@
     if (state.pointer.marquee && state.pointer.down) state.pointer.marqueeEnd = { ...world };
     if (state.mode === 'place') {
       const liveProposal = getPlacementProposal();
+      cacheGhostProposal(liveProposal);
       updateSnapCandidatePanel(liveProposal);
       updatePlacementInstruction(liveProposal);
     }
@@ -2506,7 +2569,7 @@
 
   function placePartAtCursor() {
     if (!state.start) return toast('先にスタートレーンを配置してください');
-    const proposal = getPlacementProposal();
+    const proposal = currentGhostProposal();
     if (!proposal) return toast('配置位置を計算できませんでした');
     if (proposal.requiresHeightChoice && !proposal.valid) return toast('同じ位置に高さ違いの候補があります。右側で高さを選択してください');
     snapshot();
@@ -2518,15 +2581,9 @@
       endpointStates = endpointStates.map(value => value.bankAngle === 20 ? endpointState({ ...value, bankSectionId }) : value);
     }
     const part = {
-      id,
-      type: proposal.type,
-      x: proposal.x,
-      y: proposal.y,
-      rotation: proposal.rotation,
+      ...renderPartFromProposal(proposal, id),
       routeIndex: Number.isInteger(proposal.routeIndex) ? proposal.routeIndex : (Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0),
       entryConnectorId: proposal.entryConnectorId || CORNER_DIRECTION.entryConnectorId(PARTS[proposal.type], proposal.attachedIndex),
-      cornerMirror: Boolean(proposal.cornerMirror),
-      colorKey: 'default',
       endpointStates,
       bankRole: proposal.bankRole || null,
       zMm: Number(proposal.zMm) || 0,
@@ -2548,6 +2605,7 @@
       part.appliedHandedness = appliedHandedness;
       part.handedness = appliedHandedness;
       part.cornerHandedness = appliedHandedness;
+      recordCornerDiagnostic('placed', part, { proposal: { ...proposal } });
     }
     state.parts.push(part);
     if (proposal.snapped && proposal.edge) {
@@ -2952,21 +3010,7 @@
   }
 
   function corner45PolygonWorld(part, samples = 40) {
-    const g = corner45Geometry(PARTS.corner45);
-    const localPoints = [];
-    for (let i = 0; i <= samples; i++) {
-      const a = g.startAngle + (g.endAngle - g.startAngle) * i / samples;
-      localPoints.push({ x: g.center.x + g.ro * Math.cos(a), y: g.center.y + g.ro * Math.sin(a) });
-    }
-    for (let i = samples; i >= 0; i--) {
-      const a = g.startAngle + (g.endAngle - g.startAngle) * i / samples;
-      localPoints.push({ x: g.center.x + g.ri * Math.cos(a), y: g.center.y + g.ri * Math.sin(a) });
-    }
-    return localPoints.map(point => {
-      const mirrored = part.cornerMirror ? { x: point.x, y: -point.y } : point;
-      const rotated = rotatePoint(mirrored, part.rotation);
-      return { x: part.x + rotated.x, y: part.y + rotated.y };
-    });
+    return PART_RENDER_POSE.tracePartPath(PARTS.corner45, part, samples);
   }
 
   function pointInPolygon(point, polygon) {
@@ -3264,7 +3308,7 @@
     toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2300);
   }
 
-  if (window.__COURSE_ENABLE_DEBUG__) {
+  if (window.__COURSE_ENABLE_DEBUG__ || /test-index\.html$/.test(window.location.pathname)) {
     window.__mini4wdCourseDebug = {
       getState: () => JSON.parse(JSON.stringify(serializeState())),
       getRuntimeState: () => {
@@ -3296,6 +3340,8 @@
         cornerMirror: proposal?.cornerMirror ?? null,
         placementHeightMode: state.placementHeightMode,
         placementHeightMm: state.placementHeightMm,
+        cornerDiagnostics: JSON.parse(JSON.stringify(state.cornerDiagnostics)),
+        ghostTrace: state.ghostProposal ? partRenderTrace(renderPartFromProposal(state.ghostProposal)) : null,
         seamCount: PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect).length,
         layers: partsByLayer().map(part => ({ id: part.id, type: part.type, zIndex: part.zIndex }))
         };
@@ -3336,6 +3382,8 @@
         render();
       },
       renderExportDataUrl: scale => createExportCanvas(Number(scale)).toDataURL('image/png'),
+      resolvePartPose,
+      tracePartGeometry: part => JSON.parse(JSON.stringify(partRenderTrace(part))),
       renderPartDataUrl: (type, bankRole = 'entry', scale = 1) => {
         const def = PARTS[type];
         if (!def?.visual) return null;

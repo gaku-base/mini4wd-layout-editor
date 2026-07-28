@@ -512,5 +512,32 @@ test('placement: explicit handedness survives deserialization instead of geometr
   const restore = section('function applySerialized', 'function persistLocal');
   assert.match(restore, /const savedHandedness = p\.handedness \?\? p\.cornerHandedness/);
   assert.match(restore, /const storedHandedness = requestedHandedness \|\| derivedHandedness/);
-  assert.match(restore, /const restoredMirror = PARTS\[type\]\?\.corner45 && requestedHandedness/);
+  assert.match(restore, /const hasStoredMirror = PARTS\[type\]\?\.corner45 && typeof p\.cornerMirror === 'boolean'/);
+  assert.match(restore, /hasStoredMirror\s*\? p\.cornerMirror/);
+});
+
+test('rendering: ghost and placed parts share one proposal pose and render pose resolver', () => {
+  assert.match(appSource, /function resolvePartPose\(part = \{\}\)/);
+  assert.match(appSource, /function renderPartFromProposal\(proposal, id = 'ghost'\)/);
+  assert.match(appSource, /state\.ghostProposalKey === placementProposalKey\(\)/);
+  assert.match(appSource, /const ghostPart = renderPartFromProposal\(proposal\)/);
+  assert.match(appSource, /\.\.\.renderPartFromProposal\(proposal, id\)/);
+  assert.match(appSource, /const pose = resolvePartPose\(part\)/);
+});
+
+test('rendering: stored corner mirror is used directly and not recomputed from handedness', () => {
+  const render = section('function drawPart(c, part, opts = {})', 'function drawTileShadow');
+  assert.match(render, /const pose = resolvePartPose\(part\)/);
+  assert.match(render, /if \(pose\.cornerMirror\) c\.scale\(1, -1\)/);
+  assert.doesNotMatch(render, /mirrorForDirectionAndEntry/);
+});
+
+test('rendering: geometry trace compares path and connectors for ghost and placed poses', () => {
+  assert.match(appSource, /function partShapePathPoints\(part, samples = 48\)/);
+  assert.match(appSource, /function partRenderTrace\(part\)/);
+  assert.match(appSource, /tracePartGeometry: part => JSON\.parse\(JSON\.stringify\(partRenderTrace\(part\)\)\)/);
+  assert.match(appSource, /recordCornerDiagnostic\('proposal'/);
+  assert.match(appSource, /recordCornerDiagnostic\('placed'/);
+  assert.match(appSource, /recordCornerDiagnostic\('resolved-pose'/);
+  assert.match(appSource, /recordCornerDiagnostic\('drawn'/);
 });

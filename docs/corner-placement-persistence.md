@@ -7,4 +7,8 @@ When a corner ghost is confirmed, the real part stores its semantic turn directi
 - `entryConnectorId`, `cornerMirror`, `rotation`, position, height, and connections: persisted placement geometry
 - `cornerGhostHandedness` and `lastPlacedCornerHandedness`: session-only state, never serialized
 
-During JSON, localStorage, and Undo/Redo restoration, explicit `handedness` or `cornerHandedness` is authoritative. The connector mirror is reconstructed for that direction. Legacy parts without an explicit direction continue to derive it from their stored connector and mirror.
+During JSON, localStorage, and Undo/Redo restoration, explicit `rotation` and `cornerMirror` are authoritative for the physical pose. Handedness remains semantic UI and validation data. Only legacy parts without `cornerMirror` derive a compatible mirror from their stored direction and entry connector.
+
+## Rendering decision
+
+Ghosts and confirmed parts use the same proposal-to-part pose and renderer. The click handler reuses the proposal most recently rendered for the current placement inputs, so it cannot silently choose a different connector or rotation than the visible ghost. Rendering reads `rotation` and `cornerMirror` directly; it never recomputes the mirror from handedness or connector ID. Geometry QA traces compare the transformed outer path and world connector coordinates before and after placement.
