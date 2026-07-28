@@ -309,6 +309,9 @@ test('14. placed corner handedness round-trips without persisting a ghost direct
     ...layout.parts[2],
     entryConnectorId: 'b',
     cornerMirror: false,
+    handedness: 'left',
+    selectedHandedness: 'left',
+    appliedHandedness: 'left',
     cornerHandedness: 'left'
   };
   layout.cornerGhostHandedness = 'right';
@@ -319,6 +322,27 @@ test('14. placed corner handedness round-trips without persisting a ghost direct
   assert.equal(store.save(layout).status, 'saved');
   const saved = JSON.parse(storage.getItem(STORAGE_KEY));
   assert.equal(saved.parts[2].cornerHandedness, 'left');
+  assert.equal(saved.parts[2].handedness, 'left');
+  assert.equal(saved.parts[2].selectedHandedness, 'left');
+  assert.equal(saved.parts[2].appliedHandedness, 'left');
   assert.equal('cornerGhostHandedness' in saved, false);
   assert.equal('lastPlacedCornerHandedness' in saved, false);
+});
+
+test('15. explicit left handedness is accepted even when legacy mirror data disagrees', () => {
+  const layout = layoutFixture();
+  layout.parts[2] = {
+    ...layout.parts[2],
+    entryConnectorId: 'a',
+    cornerMirror: false,
+    handedness: 'left',
+    cornerHandedness: 'left'
+  };
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, options);
+  store.restore();
+  assert.equal(store.save(layout).status, 'saved');
+  const restored = createLayoutStore(storage, options).restore();
+  assert.equal(restored.layout.parts[2].handedness, 'left');
+  assert.equal(restored.layout.parts[2].cornerHandedness, 'left');
 });

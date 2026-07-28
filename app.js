@@ -490,12 +490,17 @@
       const derivedHandedness = PARTS[type]?.corner45
         ? CORNER_DIRECTION.handednessForEntryAndMirror(PARTS[type], entryIndex, cornerMirror)
         : null;
-      const requestedHandedness = PARTS[type]?.corner45 && CORNER_DIRECTION.directionsForDefinition(PARTS[type]).includes(String(p.cornerHandedness))
-        ? String(p.cornerHandedness)
+      const savedHandedness = p.handedness ?? p.cornerHandedness;
+      const requestedHandedness = PARTS[type]?.corner45 && CORNER_DIRECTION.directionsForDefinition(PARTS[type]).includes(String(savedHandedness))
+        ? String(savedHandedness)
         : null;
-      // Geometry is authoritative for loaded legacy data.  A mismatched saved
-      // semantic label must not make a left-shaped corner report itself right.
-      const storedHandedness = requestedHandedness === derivedHandedness ? requestedHandedness : derivedHandedness;
+      // A confirmed part stores its semantic turn direction separately from
+      // the rendering mirror. Explicit left/right data is authoritative; for
+      // legacy records without it, retain the direction implied by geometry.
+      const storedHandedness = requestedHandedness || derivedHandedness;
+      const restoredMirror = PARTS[type]?.corner45 && requestedHandedness
+        ? CORNER_DIRECTION.mirrorForDirectionAndEntry(PARTS[type], requestedHandedness, entryIndex)
+        : cornerMirror;
       const part = {
         id: String(p.id || makeId()),
         type,
@@ -504,7 +509,7 @@
         rotation: normalizeRotation(Number(p.rotation) || 0),
         routeIndex,
         entryConnectorId,
-        cornerMirror,
+        cornerMirror: restoredMirror,
         colorKey: COLORS.some(c => c.key === p.colorKey) ? p.colorKey : 'default',
         zMm: Number.isFinite(Number(p.zMm)) ? Number(p.zMm) : 0,
         pitchDeg: Number.isFinite(Number(p.pitchDeg ?? p.pitch)) ? Number(p.pitchDeg ?? p.pitch) : 0,
@@ -512,7 +517,12 @@
         zOrder: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1,
         zIndex: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1
       };
-      if (storedHandedness) part.cornerHandedness = storedHandedness;
+      if (storedHandedness) {
+        part.handedness = storedHandedness;
+        part.cornerHandedness = storedHandedness;
+        part.selectedHandedness = storedHandedness;
+        part.appliedHandedness = storedHandedness;
+      }
       return part;
     });
 
@@ -2528,7 +2538,16 @@
       zIndex: nextZIndex()
     };
     if (hasCornerDirection(part.type)) {
-      part.cornerHandedness = CORNER_DIRECTION.normalizeDirection(PARTS[part.type], proposal.appliedHandedness);
+      const selectedHandedness = CORNER_DIRECTION.normalizeDirection(
+        PARTS[part.type], proposal.selectedHandedness || proposal.handedness
+      );
+      const appliedHandedness = CORNER_DIRECTION.normalizeDirection(
+        PARTS[part.type], proposal.appliedHandedness || selectedHandedness
+      );
+      part.selectedHandedness = selectedHandedness;
+      part.appliedHandedness = appliedHandedness;
+      part.handedness = appliedHandedness;
+      part.cornerHandedness = appliedHandedness;
     }
     state.parts.push(part);
     if (proposal.snapped && proposal.edge) {
@@ -2538,7 +2557,7 @@
     const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
     if (hasCornerDirection(part.type)) {
-      const handedness = CORNER_DIRECTION.normalizeDirection(PARTS[part.type], proposal.appliedHandedness);
+      const handedness = part.handedness;
       state.lastPlacedCornerHandedness = handedness;
       state.cornerGhostHandedness = handedness;
       state.rotation = CORNER_DIRECTION.rotationForConnection(PARTS[part.type], newOpen.heading, handedness);
