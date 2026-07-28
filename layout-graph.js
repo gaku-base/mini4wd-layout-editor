@@ -219,7 +219,16 @@
   function solveSnapPose(partValue, localConnectorValue, target) {
     const part = normalizePart(partValue);
     const local = mirroredConnector(localConnectorValue, Boolean(part.cornerMirror));
-    const rotation = normalizeAngle(target.directionDeg + 180 - local.directionDeg);
+    const solvedRotation = normalizeAngle(target.directionDeg + 180 - local.directionDeg);
+    // Corner pose generation may already have calculated a target-tangent
+    // rotation for this exact entry/mirror combination.  Retain it only when
+    // it still faces the current target; a stale candidate must be recomputed
+    // instead of fixing a connector to an old absolute pose.
+    const requestedRotation = Number(part.candidateRotation);
+    const rotation = Number.isFinite(requestedRotation)
+      && angleDistance(requestedRotation, solvedRotation) <= ANGLE_EPSILON_DEG
+      ? normalizeAngle(requestedRotation)
+      : solvedRotation;
     const offset = rotate({ x: local.localX, y: local.localY }, rotation);
     return {
       ...part,
