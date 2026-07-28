@@ -79,9 +79,19 @@
     };
   }
 
+  function mirroredConnector(connectorValue, mirrorY = false, index = 0) {
+    const connector = normalizeConnector(connectorValue, index);
+    if (!mirrorY) return connector;
+    return {
+      ...connector,
+      localY: -connector.localY,
+      directionDeg: normalizeAngle(-connector.directionDeg)
+    };
+  }
+
   function worldConnector(partValue, connectorValue, index = 0) {
     const part = normalizePart(partValue);
-    const connector = normalizeConnector(connectorValue, index);
+    const connector = mirroredConnector(connectorValue, Boolean(part.cornerMirror), index);
     const offset = rotate({ x: connector.localX, y: connector.localY }, part.rotation);
     return {
       ...connector,
@@ -208,7 +218,7 @@
 
   function solveSnapPose(partValue, localConnectorValue, target) {
     const part = normalizePart(partValue);
-    const local = normalizeConnector(localConnectorValue);
+    const local = mirroredConnector(localConnectorValue, Boolean(part.cornerMirror));
     const rotation = normalizeAngle(target.directionDeg + 180 - local.directionDeg);
     const offset = rotate({ x: local.localX, y: local.localY }, rotation);
     return {
@@ -232,20 +242,25 @@
       ? new Set(options.localConnectorIndexes.map(value => Math.trunc(finite(value))).filter(index => index >= 0))
       : null;
     const inheritsBank = connectorsInheritBank(catalog[partValue.type]);
+    const partForSnapCandidate = typeof options.partForSnapCandidate === 'function'
+      ? options.partForSnapCandidate
+      : () => partValue;
     const result = [];
     localConnectors.forEach((local, localIndex) => {
       if (allowedLocalConnectorIndexes && !allowedLocalConnectorIndexes.has(localIndex)) return;
-      const current = worldConnector(partValue, local, localIndex);
       targets.forEach(target => {
+        const candidatePart = normalizePart(partForSnapCandidate(local, localIndex, target, partValue) || partValue);
+        const current = worldConnector(candidatePart, local, localIndex);
         const movingForTarget = inheritsBank ? { ...current, bankAngleDeg: target.bankAngleDeg } : current;
         if (!connectorCompatible(movingForTarget, target, options)) return;
         const distanceWorld = Math.hypot(current.x - target.x, current.y - target.y);
         const distancePx = distanceWorld * scale;
         if (distancePx > radiusPx) return;
-        const pose = solveSnapPose(partValue, local, target);
+        const pose = solveSnapPose(candidatePart, local, target);
         result.push({
           localConnector: local,
           localConnectorIndex: localIndex,
+          entryConnectorId: local.id,
           target,
           pose,
           distanceWorld,
@@ -347,7 +362,7 @@
     normalizeAngle, angleDistance, rotate, normalizeConnector, connectorsForDefinition, normalizePart,
     worldConnector, allWorldConnectors, endpointKey, normalizeEdge, edgeKey, dedupeEdges, addEdge,
     removeEdgesForParts, connectorUsage, duplicateConnectorWarnings, connectedComponent,
-    connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, solveSnapPose, snapCandidates, choosePlacement, verticalEnvelope,
+    connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, mirroredConnector, solveSnapPose, snapCandidates, choosePlacement, verticalEnvelope,
     boundsOverlap, verticalOverlap, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
   });
 });
