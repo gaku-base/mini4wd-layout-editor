@@ -30,11 +30,11 @@ function entryIndex(direction) {
 }
 
 function cornerPart(anchor, direction, index = entryIndex(direction), id = 'corner') {
-  const cornerMirror = DIRECTION.mirrorForDirectionAndEntry(corner, direction, index);
-  const rotation = DIRECTION.rotationForConnection(corner, anchor.directionDeg, direction, index);
+  const pose = DIRECTION.poseForConnection(corner, anchor.directionDeg, direction, index);
   return {
-    id, type: 'corner45', x: 0, y: 0, zMm: 0, rotation, pitchDeg: 0, bankAngleDeg: 0,
-    routeIndex: index, entryConnectorId: DIRECTION.entryConnectorId(corner, index), cornerMirror
+    id, type: 'corner45', x: 0, y: 0, zMm: 0, rotation: pose.rotation, pitchDeg: 0, bankAngleDeg: 0,
+    routeIndex: pose.entryIndex, entryConnectorId: pose.entryConnectorId, cornerMirror: pose.cornerMirror,
+    handedness: pose.handedness, selectedHandedness: pose.handedness, candidateHandedness: pose.handedness
   };
 }
 
@@ -68,13 +68,19 @@ function candidatesFor(direction, anchor = target()) {
 }
 
 function candidatePartFor(direction) {
-  return (_connector, index, snapTarget, ghost) => ({
-    ...ghost,
-    rotation: DIRECTION.rotationForConnection(corner, snapTarget.directionDeg, direction, index),
-    routeIndex: index,
-    entryConnectorId: DIRECTION.entryConnectorId(corner, index),
-    cornerMirror: DIRECTION.mirrorForDirectionAndEntry(corner, direction, index)
-  });
+  return (_connector, index, snapTarget, ghost) => {
+    const pose = DIRECTION.poseForConnection(corner, snapTarget.directionDeg, direction, index);
+    return {
+      ...ghost,
+      rotation: pose.rotation,
+      routeIndex: pose.entryIndex,
+      entryConnectorId: pose.entryConnectorId,
+      cornerMirror: pose.cornerMirror,
+      handedness: pose.handedness,
+      selectedHandedness: pose.handedness,
+      candidateHandedness: pose.handedness
+    };
+  };
 }
 
 function ghostAtEntry(anchor, direction, index, offset = {}) {
@@ -159,7 +165,7 @@ test('25. graph keeps all local connector candidates when no filter is requested
 });
 test('26. partForSnapCandidate supplies an independently oriented ghost for each entry', () => {
   assert.match(fs.readFileSync('./layout-graph.js', 'utf8'), /partForSnapCandidate/);
-  assert.match(section('function getPlacementProposal', 'function isPartInsideField'), /rotationForConnection\(def, target\.directionDeg, free\.handedness, entryIndex\)/);
+  assert.match(section('function getPlacementProposal', 'function isPartInsideField'), /poseForConnection\(def, target\.directionDeg, selectedHandedness, entryIndex\)/);
 });
 test('27. app no longer filters a corner candidate down to one route index', () => {
   const proposal = section('function getPlacementProposal', 'function isPartInsideField');
@@ -296,4 +302,91 @@ test('44. app delegates selection to nearest target keys, not a retained candida
   assert.match(proposal, /selectedTargetKey: state\.snapTargetChoiceKey/);
   assert.doesNotMatch(proposal, /candidateIndex|snapCandidateIndex/);
   assert.match(pointer, /clearSnapTargetChoice\(\)/);
+});
+
+function cornerExitTarget(direction, index = entryIndex(direction), zMm = 0) {
+  const placed = placeCorner(target(0, zMm, `existing-${direction}-${index}`), direction, index, `existing-${direction}-${index}`);
+  return { ...placed.exit, directionDeg: placed.exit.directionDeg };
+}
+
+function assertLockedSnap(direction, targetEndpoint, index) {
+  const ghost = ghostAtEntry(targetEndpoint, direction, index);
+  const placement = automaticPlacement(direction, ghost, [targetEndpoint]);
+  assert.equal(placement.kind, 'snap', JSON.stringify(placement));
+  const pose = placement.selected.pose;
+  assert.equal(placement.selected.entryConnectorId, index === 0 ? 'a' : 'b');
+  assert.equal(pose.handedness, direction);
+  assert.equal(pose.selectedHandedness, direction);
+  assert.equal(pose.candidateHandedness, direction);
+  assert.equal(DIRECTION.handednessForEntryAndMirror(corner, index, pose.cornerMirror), direction);
+  return placement;
+}
+
+test('45. pose keeps right/left separate from every A/B mirror combination', () => {
+  ['right', 'left'].forEach(direction => [0, 1].forEach(index => {
+    const pose = DIRECTION.poseForConnection(corner, 45, direction, index);
+    assert.equal(pose.handedness, direction);
+    assert.equal(pose.entryConnectorId, index === 0 ? 'a' : 'b');
+    assert.equal(DIRECTION.handednessForEntryAndMirror(corner, index, pose.cornerMirror), direction);
+  }));
+});
+
+test('46. left stays left when snapped from A or B to a straight', () => {
+  [0, 1].forEach(index => assertLockedSnap('left', target(0, 0, `straight-left-${index}`), index));
+});
+
+test('47. right stays right when snapped from A or B to a straight', () => {
+  [0, 1].forEach(index => assertLockedSnap('right', target(0, 0, `straight-right-${index}`), index));
+});
+
+test('48. left stays left when snapping to either handed corner exit', () => {
+  ['right', 'left'].forEach(existingDirection => [0, 1].forEach(index => {
+    assertLockedSnap('left', cornerExitTarget(existingDirection), index);
+  }));
+});
+
+test('49. right stays right when snapping to either handed corner exit', () => {
+  ['right', 'left'].forEach(existingDirection => [0, 1].forEach(index => {
+    assertLockedSnap('right', cornerExitTarget(existingDirection), index);
+  }));
+});
+
+test('50. direction lock remains valid at 0, 115, and 230mm corner targets', () => {
+  [0, 115, 230].forEach(zMm => ['right', 'left'].forEach(direction => [0, 1].forEach(index => {
+    const placement = assertLockedSnap(direction, cornerExitTarget(direction, entryIndex(direction), zMm), index);
+    assert.equal(placement.part.zMm, zMm);
+  })));
+});
+
+test('51. nearest reverse-looking endpoint cannot replace the selected handedness', () => {
+  const anchor = cornerExitTarget('right');
+  const placement = assertLockedSnap('left', anchor, 1);
+  assert.equal(placement.selected.pose.candidateHandedness, 'left');
+  assert.notEqual(placement.selected.pose.candidateHandedness, 'right');
+});
+
+test('52. a free corner keeps its selected handedness outside snap range', () => {
+  const ghost = { ...cornerPart(target(), 'left'), x: 300, y: 300 };
+  const placement = automaticPlacement('left', ghost, [target()]);
+  assert.equal(placement.kind, 'free');
+  assert.equal(ghost.handedness, 'left');
+});
+
+test('53. app locks candidate and applied handedness to the selected direction', () => {
+  const proposal = section('function getPlacementProposal', 'function isPartInsideField');
+  const placement = section('function placePartAtCursor', 'function recalculateBankStates');
+  assert.match(proposal, /const selectedHandedness = hasCornerDirection/);
+  assert.match(proposal, /CORNER_DIRECTION\.poseForConnection\(def, target\.directionDeg, selectedHandedness, entryIndex\)/);
+  assert.match(proposal, /candidateHandedness !== selectedHandedness \|\| shapeHandedness !== selectedHandedness/);
+  assert.doesNotMatch(proposal, /state\.cornerGhostHandedness\s*=/);
+  assert.match(placement, /part\.cornerHandedness = CORNER_DIRECTION\.normalizeDirection/);
+  assert.match(placement, /proposal\.appliedHandedness/);
+});
+
+test('54. saved part geometry keeps semantic handedness without restoring the session choice', () => {
+  const restore = section('function applySerialized', 'function persistLocal');
+  assert.match(restore, /handednessForEntryAndMirror/);
+  assert.match(restore, /cornerHandedness/);
+  assert.doesNotMatch(restore, /cornerGhostHandedness\s*=/);
+  assert.doesNotMatch(restore, /lastPlacedCornerHandedness\s*=/);
 });

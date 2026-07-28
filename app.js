@@ -482,17 +482,29 @@
       const type = PARTS[p.type] && p.type !== 'start' ? p.type : ({ half: 'straight', curve: 'corner45' }[p.type] || 'straight');
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
       const connectors = LAYOUT_GRAPH.connectorsForDefinition(PARTS[type]);
-      return {
+      const entryConnectorId = connectors.some(connector => connector.id === p.entryConnectorId)
+        ? p.entryConnectorId
+        : connectors[routeIndex]?.id || 'a';
+      const entryIndex = Math.max(0, connectors.findIndex(connector => connector.id === entryConnectorId));
+      const cornerMirror = PARTS[type]?.corner45 ? Boolean(p.cornerMirror) : false;
+      const derivedHandedness = PARTS[type]?.corner45
+        ? CORNER_DIRECTION.handednessForEntryAndMirror(PARTS[type], entryIndex, cornerMirror)
+        : null;
+      const requestedHandedness = PARTS[type]?.corner45 && CORNER_DIRECTION.directionsForDefinition(PARTS[type]).includes(String(p.cornerHandedness))
+        ? String(p.cornerHandedness)
+        : null;
+      // Geometry is authoritative for loaded legacy data.  A mismatched saved
+      // semantic label must not make a left-shaped corner report itself right.
+      const storedHandedness = requestedHandedness === derivedHandedness ? requestedHandedness : derivedHandedness;
+      const part = {
         id: String(p.id || makeId()),
         type,
         x: Number(p.x) || 0,
         y: Number(p.y) || 0,
         rotation: normalizeRotation(Number(p.rotation) || 0),
         routeIndex,
-        entryConnectorId: connectors.some(connector => connector.id === p.entryConnectorId)
-          ? p.entryConnectorId
-          : connectors[routeIndex]?.id || 'a',
-        cornerMirror: PARTS[type]?.corner45 ? Boolean(p.cornerMirror) : false,
+        entryConnectorId,
+        cornerMirror,
         colorKey: COLORS.some(c => c.key === p.colorKey) ? p.colorKey : 'default',
         zMm: Number.isFinite(Number(p.zMm)) ? Number(p.zMm) : 0,
         pitchDeg: Number.isFinite(Number(p.pitchDeg ?? p.pitch)) ? Number(p.pitchDeg ?? p.pitch) : 0,
@@ -500,6 +512,8 @@
         zOrder: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1,
         zIndex: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1
       };
+      if (storedHandedness) part.cornerHandedness = storedHandedness;
+      return part;
     });
 
     const loadedRotation = normalizeRotation(Number(data.start?.rotation) || 0);
@@ -1742,6 +1756,8 @@
   }
 
   function freePlacement(type, x, y) {
+    // This is the user's direction choice.  It remains read-only while snap
+    // candidates choose their entry connector and target-facing transform.
     const handedness = hasCornerDirection(type) ? cornerGhostDirection(type) : null;
     const entryIndex = hasCornerDirection(type)
       ? CORNER_DIRECTION.defaultEntryIndexForDirection(PARTS[type], handedness)
@@ -1751,7 +1767,10 @@
       pitchDeg: 0, bankAngleDeg: 0, zOrder: nextZIndex(), routeIndex: entryIndex,
       entryConnectorId: CORNER_DIRECTION.entryConnectorId(PARTS[type], entryIndex),
       cornerMirror: hasCornerDirection(type) && CORNER_DIRECTION.mirrorForDirectionAndEntry(PARTS[type], handedness, entryIndex),
-      handedness
+      handedness,
+      selectedHandedness: handedness,
+      candidateHandedness: handedness,
+      appliedHandedness: handedness
     };
     proposal.attachedIndex = entryIndex;
     proposal.otherIndex = hasCornerDirection(type)
@@ -1767,6 +1786,7 @@
     const def = PARTS[state.selectedType];
     if (!def || state.selectedType === 'start') return null;
     const free = freePlacement(state.selectedType, state.cursor.x, state.cursor.y);
+    const selectedHandedness = hasCornerDirection(state.selectedType) ? free.handedness : null;
     const targets = getAllEndpoints().map(endpoint => ({
       ...endpoint, partId: endpoint.sourceId, directionDeg: endpoint.heading,
       bankAngleDeg: Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0
@@ -1782,13 +1802,22 @@
       // A or B without a user-facing entry selector.
       partForSnapDistanceCandidate: () => free,
       partForSnapCandidate: hasCornerDirection(state.selectedType)
-        ? (_connector, entryIndex, target) => ({
-          ...free,
-          rotation: CORNER_DIRECTION.rotationForConnection(def, target.directionDeg, free.handedness, entryIndex),
-          routeIndex: entryIndex,
-          entryConnectorId: CORNER_DIRECTION.entryConnectorId(def, entryIndex),
-          cornerMirror: CORNER_DIRECTION.mirrorForDirectionAndEntry(def, free.handedness, entryIndex)
-        })
+        ? (_connector, entryIndex, target) => {
+          // A/B is selected per candidate, but every candidate is locked to
+          // the direction selected by the user.  Do not infer handedness back
+          // from a mirror value or an entry connector.
+          const pose = CORNER_DIRECTION.poseForConnection(def, target.directionDeg, selectedHandedness, entryIndex);
+          return {
+            ...free,
+            rotation: pose.rotation,
+            routeIndex: pose.entryIndex,
+            entryConnectorId: pose.entryConnectorId,
+            cornerMirror: pose.cornerMirror,
+            handedness: selectedHandedness,
+            selectedHandedness,
+            candidateHandedness: pose.handedness
+          };
+        }
         : undefined,
       edges: state.connections
     });
@@ -1797,6 +1826,27 @@
     }
     const chosen = placement.selected;
     const attachedIndex = chosen.localConnectorIndex;
+    const candidateHandedness = hasCornerDirection(state.selectedType)
+      ? String(chosen.pose.candidateHandedness || '')
+      : null;
+    const shapeHandedness = hasCornerDirection(state.selectedType)
+      ? CORNER_DIRECTION.handednessForEntryAndMirror(def, attachedIndex, Boolean(chosen.pose.cornerMirror))
+      : null;
+    // A transform that no longer represents the selected direction must never
+    // win merely because it is closer.  The correct fallback is free placement.
+    if (selectedHandedness && (candidateHandedness !== selectedHandedness || shapeHandedness !== selectedHandedness)) {
+      return {
+        ...free,
+        snapped: false,
+        valid: true,
+        outOfBounds: !isPartInsideField(free),
+        candidates: placement.candidates,
+        rawCandidates: placement.rawCandidates,
+        selectedHandedness,
+        candidateHandedness,
+        appliedHandedness: selectedHandedness
+      };
+    }
     const otherIndex = hasCornerDirection(state.selectedType)
       ? CORNER_DIRECTION.exitIndexForEntry(def, attachedIndex)
       : (attachedIndex === 0 ? 1 : 0);
@@ -1807,7 +1857,11 @@
       ...bank,
       routeIndex: attachedIndex,
       entryConnectorId: chosen.entryConnectorId,
-      cornerMirror: Boolean(chosen.pose.cornerMirror)
+      cornerMirror: Boolean(chosen.pose.cornerMirror),
+      handedness: selectedHandedness,
+      selectedHandedness,
+      candidateHandedness,
+      appliedHandedness: selectedHandedness
     };
     const endpoints = partEndpoints(candidate);
     return {
@@ -2471,6 +2525,9 @@
       zOrder: nextZIndex(),
       zIndex: nextZIndex()
     };
+    if (hasCornerDirection(part.type)) {
+      part.cornerHandedness = CORNER_DIRECTION.normalizeDirection(PARTS[part.type], proposal.appliedHandedness);
+    }
     state.parts.push(part);
     if (proposal.snapped && proposal.edge) {
       state.connections = LAYOUT_GRAPH.addEdge(state.connections, { ...proposal.edge, partBId: id, createdOrder: state.connections.length + 1 });
@@ -2479,7 +2536,7 @@
     const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
     if (hasCornerDirection(part.type)) {
-      const handedness = CORNER_DIRECTION.normalizeDirection(PARTS[part.type], proposal.handedness);
+      const handedness = CORNER_DIRECTION.normalizeDirection(PARTS[part.type], proposal.appliedHandedness);
       state.lastPlacedCornerHandedness = handedness;
       state.cornerGhostHandedness = handedness;
       state.rotation = CORNER_DIRECTION.rotationForConnection(PARTS[part.type], newOpen.heading, handedness);
@@ -3189,13 +3246,15 @@
   if (window.__COURSE_ENABLE_DEBUG__) {
     window.__mini4wdCourseDebug = {
       getState: () => JSON.parse(JSON.stringify(serializeState())),
-      getRuntimeState: () => ({
+      getRuntimeState: () => {
+        const proposal = state.mode === 'place' ? getPlacementProposal() : null;
+        return {
         mode: state.mode,
         selectedIds: [...state.selectedIds],
         historyLength: state.history.length,
         futureLength: state.future.length,
         activeConnection: state.activeConnection ? { ...state.activeConnection } : null,
-        proposal: state.mode === 'place' ? getPlacementProposal() : null,
+        proposal,
         openConnections: getOpenConnections(),
         view: { ...state.view },
         cursor: { ...state.cursor },
@@ -3206,11 +3265,15 @@
         snapEnabled: state.snapEnabled,
         lastPlacedCornerHandedness: state.lastPlacedCornerHandedness,
         cornerGhostHandedness: state.cornerGhostHandedness,
+        selectedHandedness: proposal?.selectedHandedness || state.cornerGhostHandedness,
+        candidateHandedness: proposal?.candidateHandedness || null,
+        appliedHandedness: proposal?.appliedHandedness || state.lastPlacedCornerHandedness,
         placementHeightMode: state.placementHeightMode,
         placementHeightMm: state.placementHeightMm,
         seamCount: PART_SEAMS.findConnectedSeams(getAllEndpoints(), endpointsConnect).length,
         layers: partsByLayer().map(part => ({ id: part.id, type: part.type, zIndex: part.zIndex }))
-      }),
+        };
+      },
       loadState: data => applySerialized(data, false),
       setMode,
       rewindLastPart,

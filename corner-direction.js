@@ -55,6 +55,13 @@
       .findIndex(connector => String(connector.id) === String(connectorId)));
   }
 
+  function normalizedEntryIndex(definition, entryIndex) {
+    const connectors = connectorsForDefinition(definition);
+    if (!connectors.length) return 0;
+    const index = Math.trunc(Number(entryIndex));
+    return Number.isInteger(index) && index >= 0 && index < connectors.length ? index : 0;
+  }
+
   function exitIndexForEntry(definition, entryIndex) {
     const connectors = connectorsForDefinition(definition);
     if (connectors.length < 2) return 0;
@@ -63,6 +70,17 @@
 
   function mirrorForDirectionAndEntry(definition, direction, entryIndex) {
     return Number(entryIndex) !== defaultEntryIndexForDirection(definition, direction);
+  }
+
+  // The mirror is a rendering/geometry transform, not a direction setting.
+  // Keeping this inverse mapping here makes the semantic direction verifiable
+  // from a stored entry connector and transform without changing it.
+  function handednessForEntryAndMirror(definition, entryIndex, cornerMirror) {
+    const directions = directionsForDefinition(definition);
+    if (directions.length < 2) return defaultDirection(definition);
+    const index = normalizedEntryIndex(definition, entryIndex);
+    const directionIndex = cornerMirror ? exitIndexForEntry(definition, index) : index;
+    return normalizeDirection(definition, directions[directionIndex]);
   }
 
   function mirroredHeading(heading, mirrored) {
@@ -76,6 +94,19 @@
       mirrorForDirectionAndEntry(definition, direction, entryIndex)
     );
     return normalizeAngle(Number(targetHeading) + 180 - (Number.isFinite(localHeading) ? localHeading : 180));
+  }
+
+  function poseForConnection(definition, targetHeading, direction, entryIndex = defaultEntryIndexForDirection(definition, direction)) {
+    const handedness = normalizeDirection(definition, direction);
+    const index = normalizedEntryIndex(definition, entryIndex);
+    const cornerMirror = mirrorForDirectionAndEntry(definition, handedness, index);
+    return {
+      handedness,
+      entryIndex: index,
+      entryConnectorId: entryConnectorId(definition, index),
+      cornerMirror,
+      rotation: rotationForConnection(definition, targetHeading, handedness, index)
+    };
   }
 
   function rotationDeltaForDirectionChange(definition, fromDirection, toDirection) {
@@ -93,10 +124,13 @@
     defaultEntryIndexForDirection,
     entryConnectorId,
     entryIndexForConnectorId,
+    normalizedEntryIndex,
     exitIndexForEntry,
     mirrorForDirectionAndEntry,
+    handednessForEntryAndMirror,
     mirroredHeading,
     rotationForConnection,
+    poseForConnection,
     rotationDeltaForDirectionChange
   });
 });

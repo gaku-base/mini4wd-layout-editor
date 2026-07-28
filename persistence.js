@@ -114,6 +114,7 @@
       if (Object.prototype.hasOwnProperty.call(part, 'pitchDeg') && !isFiniteNumber(part.pitchDeg)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'bankAngleDeg') && !isFiniteNumber(part.bankAngleDeg)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'cornerMirror') && typeof part.cornerMirror !== 'boolean') return false;
+      if (Object.prototype.hasOwnProperty.call(part, 'cornerHandedness') && !['right', 'left'].includes(part.cornerHandedness)) return false;
       if (Object.prototype.hasOwnProperty.call(part, 'entryConnectorId')) {
         const allowedConnectors = options.connectorIdsByType?.[part.type];
         if (typeof part.entryConnectorId !== 'string' || (Array.isArray(allowedConnectors) && !allowedConnectors.includes(part.entryConnectorId))) return false;

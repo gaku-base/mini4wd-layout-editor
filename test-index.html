@@ -321,6 +321,16 @@ window.addEventListener('load', () => {
         parts: [
           { id:'anchor-straight',type:'straight',x:350,y:200,zMm:anchorHeight,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'blue',routeIndex:0 }
         ], connections: [] });
+    } else if (scenario === 'corner-handedness' || scenario === 'corner-handedness-left' || scenario === 'corner-handedness-115') {
+      const start = { id: 'start', type: 'start', x: 70, y: 330, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
+      const existingHandedness = scenario === 'corner-handedness-left' ? 'left' : 'right';
+      const existingMirror = existingHandedness === 'left';
+      const existingHeight = scenario === 'corner-handedness-115' ? 115 : 0;
+      d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 700, heightCm: 520, gridCm: 10 }, start,
+        parts: [
+          // Known left/right corners give mouse QA a real corner exit to target.
+          { id:`${existingHandedness}-corner`,type:'corner45',x:350,y:200,zMm:existingHeight,rotation:0,pitchDeg:0,bankAngleDeg:0,zOrder:1,zIndex:1,colorKey:'blue',routeIndex:0,entryConnectorId:'a',cornerMirror:existingMirror,cornerHandedness:existingHandedness }
+        ], connections: [] });
     } else if (scenario === 'integration-level-candidates') {
       const start = { id: 'start', type: 'start', x: 70, y: 90, zMm: 0, rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
       d.loadState({ ...base, version: '1.1.0-RC2', field: { originX: 0, originY: 0, widthCm: 620, heightCm: 440, gridCm: 10 }, start,
@@ -487,9 +497,10 @@ window.addEventListener('load', () => {
       const proposalText = proposal ? `${proposal.snapped ? 'snap' : 'free'}:${proposal.zMm || 0}:${proposal.used ? 'used' : 'open'}:${proposal.candidates?.length || 0}:${Number(proposal.distancePx || 0).toFixed(2)}px` : 'none';
       const proposalEntry = proposal?.entryConnectorId || 'none';
       const proposalTarget = proposal?.anchor ? `${proposal.anchor.partId}.${proposal.anchor.connectorId}` : 'none';
-      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default' })));
+      const handednessText = `selectedHandedness=${runtime.selectedHandedness || 'none'}, candidateHandedness=${runtime.candidateHandedness || 'none'}, appliedHandedness=${runtime.appliedHandedness || 'none'}`;
+      const partDigest = JSON.stringify(allParts.map(part => ({ id:part.id,type:part.type,x:part.x,y:part.y,zMm:part.zMm || 0,rotation:part.rotation || 0,pitchDeg:part.pitchDeg || 0,bankAngleDeg:part.bankAngleDeg || 0,zOrder:part.zOrder ?? part.zIndex,colorKey:part.colorKey || 'default',entryConnectorId:part.entryConnectorId || null,cornerMirror:Boolean(part.cornerMirror),cornerHandedness:part.cornerHandedness || null })));
       const fieldDigest = JSON.stringify(state.field);
-      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
+      qaStatus.textContent = `${scenario}: parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${handednessText}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
     };
     refreshScenarioStatus();
     setInterval(refreshScenarioStatus, 250);
