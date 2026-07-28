@@ -302,3 +302,23 @@ test('13. unknown connector references are rejected when catalog connector IDs a
   store.restore();
   assert.equal(store.save(layout).status, 'failed');
 });
+
+test('14. placed corner handedness round-trips without persisting a ghost direction', () => {
+  const layout = layoutFixture();
+  layout.parts[2] = {
+    ...layout.parts[2],
+    entryConnectorId: 'b',
+    cornerMirror: false,
+    cornerHandedness: 'left'
+  };
+  layout.cornerGhostHandedness = 'right';
+  layout.lastPlacedCornerHandedness = 'right';
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, options);
+  store.restore();
+  assert.equal(store.save(layout).status, 'saved');
+  const saved = JSON.parse(storage.getItem(STORAGE_KEY));
+  assert.equal(saved.parts[2].cornerHandedness, 'left');
+  assert.equal('cornerGhostHandedness' in saved, false);
+  assert.equal('lastPlacedCornerHandedness' in saved, false);
+});

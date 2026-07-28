@@ -169,3 +169,8 @@
 - ゴースト更新ごとに45度コーナーの入口connector `a` と `b` を両方生成し、接線・pitch・bank・高さ候補を満たすものだけの画面距離を比較する。`right`／`left`は各候補へ同じ意味値として適用し、入口の事前フィルタには使わない。
 - 同一接続先へ複数の入口が届く場合は距離が最短の入口を採用する。距離が同じ場合は接続先endpointキー、次にconnector順で安定的に決定する。24px外なら自由配置とする。
 - 入口A/Bは通常UIの選択項目にしない。高さが異なる接続先だけは従来どおり高さ候補を選べるが、選んだ接続先での入口は常に最短のものを自動採用する。ポインタ移動時は高さ候補の一時選択も解除し、前回配置した入口を次のゴーストへ引き継がない。
+
+### 45度コーナーの方向固定吸着（2026-07-28）
+
+- 吸着候補は、ユーザーが選択中の`cornerGhostHandedness`を読み取り専用の固定条件として生成する。候補ごとに自動選択できるのは`entryConnectorId`、接続先、rotation、高さ、およびその方向を保つ`cornerMirror`だけであり、最短距離でも`right`／`left`を反転しない。
+- 確定候補は`selectedHandedness`、`candidateHandedness`、`appliedHandedness`が一致する場合だけ配置する。不一致の変換候補は採用せず自由配置へ戻す。配置済みコーナーには形状値`entryConnectorId`／`cornerMirror`と整合する`cornerHandedness`を保存するが、次のゴーストのUIセッション方向はJSON、localStorage、Undo/Redoから復元しない。
