@@ -19,10 +19,11 @@
   function directionsForDefinition(definition) {
     const connectors = connectorsForDefinition(definition);
     const declared = definition?.turnDirections;
-    if (!declared || typeof declared !== 'object') return [];
-    return Object.entries(declared)
-      .filter(([, connectorId]) => connectors.some(connector => String(connector.id) === String(connectorId)))
-      .map(([direction]) => String(direction));
+    if (!declared || !connectors.length) return [];
+    if (Array.isArray(declared)) return declared.map(String).filter(Boolean);
+    // Legacy layouts used a direction-to-connector map.  Directions are now
+    // semantic values and must never be used as connector identifiers.
+    return Object.keys(declared).map(String).filter(Boolean);
   }
 
   function defaultDirection(definition) {
@@ -38,34 +39,50 @@
     return directions.includes(candidate) ? candidate : defaultDirection(definition);
   }
 
-  function routeIndexForDirection(definition, direction) {
-    const normalized = normalizeDirection(definition, direction);
-    if (!normalized) return 0;
-    const connectorId = definition.turnDirections[normalized];
-    const index = connectorsForDefinition(definition).findIndex(connector => String(connector.id) === String(connectorId));
-    return index >= 0 ? index : 0;
+  function defaultEntryIndexForDirection(definition, direction) {
+    const connectors = connectorsForDefinition(definition);
+    const directions = directionsForDefinition(definition);
+    if (connectors.length < 2) return 0;
+    return directions.indexOf(normalizeDirection(definition, direction)) === 1 ? 1 : 0;
   }
 
-  function directionForRouteIndex(definition, routeIndex) {
-    const connector = connectorsForDefinition(definition)[Number(routeIndex) || 0];
-    if (!connector) return defaultDirection(definition);
-    const entry = Object.entries(definition?.turnDirections || {})
-      .find(([, connectorId]) => String(connectorId) === String(connector.id));
-    return entry ? entry[0] : defaultDirection(definition);
+  function entryConnectorId(definition, entryIndex) {
+    return String(connectorsForDefinition(definition)[Number(entryIndex) || 0]?.id || '');
   }
 
-  function rotationForConnection(definition, targetHeading, direction) {
-    const connector = connectorsForDefinition(definition)[routeIndexForDirection(definition, direction)];
-    const localHeading = Number(connector?.directionDeg ?? connector?.heading);
+  function entryIndexForConnectorId(definition, connectorId) {
+    return Math.max(0, connectorsForDefinition(definition)
+      .findIndex(connector => String(connector.id) === String(connectorId)));
+  }
+
+  function exitIndexForEntry(definition, entryIndex) {
+    const connectors = connectorsForDefinition(definition);
+    if (connectors.length < 2) return 0;
+    return Number(entryIndex) === 0 ? 1 : 0;
+  }
+
+  function mirrorForDirectionAndEntry(definition, direction, entryIndex) {
+    return Number(entryIndex) !== defaultEntryIndexForDirection(definition, direction);
+  }
+
+  function mirroredHeading(heading, mirrored) {
+    return normalizeAngle(mirrored ? -Number(heading) : Number(heading));
+  }
+
+  function rotationForConnection(definition, targetHeading, direction, entryIndex = defaultEntryIndexForDirection(definition, direction)) {
+    const connector = connectorsForDefinition(definition)[entryIndex];
+    const localHeading = mirroredHeading(
+      Number(connector?.directionDeg ?? connector?.heading),
+      mirrorForDirectionAndEntry(definition, direction, entryIndex)
+    );
     return normalizeAngle(Number(targetHeading) + 180 - (Number.isFinite(localHeading) ? localHeading : 180));
   }
 
   function rotationDeltaForDirectionChange(definition, fromDirection, toDirection) {
-    const from = connectorsForDefinition(definition)[routeIndexForDirection(definition, fromDirection)];
-    const to = connectorsForDefinition(definition)[routeIndexForDirection(definition, toDirection)];
-    const fromHeading = Number(from?.directionDeg ?? from?.heading);
-    const toHeading = Number(to?.directionDeg ?? to?.heading);
-    return normalizeAngle((Number.isFinite(fromHeading) ? fromHeading : 0) - (Number.isFinite(toHeading) ? toHeading : 0));
+    return normalizeAngle(
+      rotationForConnection(definition, 0, toDirection)
+      - rotationForConnection(definition, 0, fromDirection)
+    );
   }
 
   return Object.freeze({
@@ -73,8 +90,12 @@
     directionsForDefinition,
     defaultDirection,
     normalizeDirection,
-    routeIndexForDirection,
-    directionForRouteIndex,
+    defaultEntryIndexForDirection,
+    entryConnectorId,
+    entryIndexForConnectorId,
+    exitIndexForEntry,
+    mirrorForDirectionAndEntry,
+    mirroredHeading,
     rotationForConnection,
     rotationDeltaForDirectionChange
   });
