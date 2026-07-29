@@ -1,5 +1,19 @@
 # 意思決定ログ
 
+### Default fast-path placement for Straight and 45-degree corners (2026-07-29)
+
+- Fast repeated placement is part of the normal placement workflow, not a
+  separate editing mode. A confirmed Straight, `corner-45-right`, or
+  `corner-45-left` advances an in-memory virtual placement cursor to its exit.
+- The OS pointer is never moved. Until it travels more than 10px from the
+  confirmation point, the already visible virtual proposal is committed again.
+- After meaningful movement, the next type is selected in screen pixels
+  relative to the exit tangent: centre within 20px is Straight, at least 30px
+  to the right is right corner, and at least 30px to the left is left corner.
+  The 20–30px band preserves the current type to prevent flicker.
+- The virtual cursor and automatic type-selection state are session-only and
+  are excluded from JSON, localStorage, Undo/Redo, and layout data.
+
 ### Concrete left/right corner part types (2026-07-29)
 
 - 45-degree corners use the concrete catalog types `corner-45-right` and
