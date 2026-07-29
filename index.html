@@ -137,6 +137,7 @@
             <span class="control-label">コーナー方向</span>
             <button id="cornerDirectionToggleBtn" class="button full-button" type="button" aria-pressed="false">コーナー方向: 右</button>
           </div>
+          <div id="fastPathNextPart" class="layout-warning-summary" hidden></div>
           <label class="control-label" for="placementHeightSelect">配置高さ</label>
           <select id="placementHeightSelect" class="full-control">
             <option value="auto">自動</option><option value="0">0段（0mm）</option><option value="115">1段（115mm）</option>
@@ -231,6 +232,7 @@
   <script src="part-render-pose.js"></script>
   <script src="placement-proposal.js"></script>
   <script src="corner-variant.js"></script>
+  <script src="fast-path-placement.js"></script>
   <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>

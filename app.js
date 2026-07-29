@@ -22,6 +22,8 @@
   if (!PLACEMENT_PROPOSAL) throw new Error('placement-proposal.js must be loaded before app.js');
   const CORNER_VARIANT = window.M4WD_CORNER_VARIANT;
   if (!CORNER_VARIANT) throw new Error('corner-variant.js must be loaded before app.js');
+  const FAST_PATH = window.M4WD_FAST_PATH_PLACEMENT;
+  if (!FAST_PATH) throw new Error('fast-path-placement.js must be loaded before app.js');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
@@ -66,6 +68,16 @@
     activeConnection: null,
     connections: [],
     activeCornerVariant: 'right',
+    fastPath: {
+      virtualCursorActive: false,
+      activePlacementAnchor: null,
+      lastPlacedPartType: null,
+      lastPhysicalPointerPosition: null,
+      virtualPointerOrigin: null,
+      automaticTypeSelection: false,
+      lateralPx: 0,
+      zone: 'manual'
+    },
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
     // Only a height/target choice may be remembered while the pointer is still.
     // Corner entry A/B is always recomputed from the current ghost position.
@@ -130,7 +142,7 @@
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect',
-      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings'
+      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -407,6 +419,7 @@
       state.rotation = 0;
       state.mode = 'start';
       resetCornerVariantSession();
+      resetFastPathSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
       state.history = [];
       state.future = [];
@@ -437,6 +450,7 @@
   function selectPartType(type) {
     if (!PARTS[type]) return;
     if (state.layoutMove.active) cancelManualLayoutMove();
+    resetFastPathSession();
     if (type === 'start') {
       if (state.start) {
         toast('スタートレーンはすでに配置されています');
@@ -563,6 +577,7 @@
     state.selectedIds = [];
     state.mode = state.start ? 'place' : 'start';
     state.layoutMove = { active: false, anchor: null, base: null, previousMode: 'place', pointer: null };
+    resetFastPathSession();
     resetPointerInteraction();
     if (!state.connections.length) state.connections = inferLegacyConnections();
     recalculateBankStates();
@@ -934,6 +949,87 @@
     return state.ghostProposalKey === placementProposalKey()
       ? state.ghostProposal
       : cacheGhostProposal(getPlacementProposal());
+  }
+
+  function isFastPathType(type = state.selectedType) {
+    return FAST_PATH.isFastPathType(type);
+  }
+
+  function worldToScreen(x, y) {
+    return { x: x * state.view.scale + state.view.offsetX, y: y * state.view.scale + state.view.offsetY };
+  }
+
+  function resetFastPathSession() {
+    state.fastPath = {
+      virtualCursorActive: false,
+      activePlacementAnchor: null,
+      lastPlacedPartType: null,
+      lastPhysicalPointerPosition: null,
+      virtualPointerOrigin: null,
+      automaticTypeSelection: false,
+      lateralPx: 0,
+      zone: 'manual'
+    };
+  }
+
+  function setFastPathType(type) {
+    if (!isFastPathType(type) || state.selectedType === type) return false;
+    state.selectedType = type;
+    if (isCornerType(type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(type);
+    clearSnapTargetChoice();
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
+    return true;
+  }
+
+  function fastPathTypeLabel(type) {
+    return type === FAST_PATH.RIGHT ? '右コーナー' : type === FAST_PATH.LEFT ? '左コーナー' : 'ストレート';
+  }
+
+  function activateVirtualPlacementCursor(anchor, type, physicalPointerPosition) {
+    if (!isFastPathType(type)) return;
+    const pointer = physicalPointerPosition || worldToScreen(state.cursor.x, state.cursor.y);
+    state.fastPath.virtualCursorActive = true;
+    state.fastPath.activePlacementAnchor = { ...anchor };
+    state.fastPath.lastPlacedPartType = type;
+    state.fastPath.lastPhysicalPointerPosition = { ...pointer };
+    state.fastPath.virtualPointerOrigin = { ...pointer };
+    state.fastPath.automaticTypeSelection = false;
+    state.fastPath.lateralPx = 0;
+    state.fastPath.zone = 'repeat';
+    state.cursor = { x: anchor.x, y: anchor.y };
+    setFastPathType(type);
+    state.rotation = normalizeRotation(anchor.heading);
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
+  }
+
+  function updateFastPathTypeForPointer(pointerScreen) {
+    const fast = state.fastPath;
+    const anchor = fast.activePlacementAnchor;
+    if (!anchor || !fast.automaticTypeSelection || !isFastPathType(fast.lastPlacedPartType)) return false;
+    const decision = FAST_PATH.typeForPointer({
+      currentType: state.selectedType,
+      fallbackType: fast.lastPlacedPartType,
+      anchorScreen: worldToScreen(anchor.x, anchor.y),
+      pointerScreen,
+      headingDeg: anchor.heading
+    });
+    fast.lateralPx = decision.lateralPx;
+    fast.zone = decision.zone;
+    return setFastPathType(decision.type);
+  }
+
+  // Returns true only while the untouched virtual ghost must remain on screen.
+  function keepVirtualPlacementCursor(pointerScreen) {
+    const fast = state.fastPath;
+    if (!fast.virtualCursorActive) return false;
+    fast.lastPhysicalPointerPosition = { ...pointerScreen };
+    if (!FAST_PATH.hasMeaningfulPointerMove(fast.virtualPointerOrigin, pointerScreen)) return true;
+    fast.virtualCursorActive = false;
+    fast.automaticTypeSelection = true;
+    updateFastPathTypeForPointer(pointerScreen);
+    return false;
   }
 
   function captureVisiblePlacementProposal(reason) {
@@ -2125,6 +2221,7 @@
     const sy = e.clientY - rect.top;
     const world = screenToWorld(sx, sy);
     const snappedWorld = { x: snap(world.x), y: snap(world.y) };
+    const physicalPointer = { x: sx, y: sy };
 
     state.pointer.down = true;
     state.pointer.lastX = e.clientX;
@@ -2148,7 +2245,8 @@
     }
 
     if (e.button !== 0) return;
-    state.cursor = snappedWorld;
+    const keepVirtualProposal = state.mode === 'place' && keepVirtualPlacementCursor(physicalPointer);
+    if (!keepVirtualProposal) state.cursor = snappedWorld;
 
     if (state.mode === 'start') {
       state.pointer.pendingPlacement = true;
@@ -2158,9 +2256,12 @@
     }
 
     if (state.mode === 'place') {
-      // Re-evaluate once for the new pointer position, render/cache that
-      // proposal, then capture a distinct deep clone for this gesture.
-      const visibleProposal = cacheGhostProposal(getPlacementProposal());
+      // A pointer that has not meaningfully moved since confirmation commits
+      // exactly the virtual ghost already shown. Otherwise create one fresh
+      // proposal for the current real pointer position.
+      const visibleProposal = keepVirtualProposal
+        ? currentGhostProposal()
+        : cacheGhostProposal(getPlacementProposal());
       updateSnapCandidatePanel(visibleProposal);
       updatePlacementInstruction(visibleProposal);
       state.pointer.pendingPlacement = true;
@@ -2247,9 +2348,19 @@
       return;
     }
 
+    const physicalPointer = { x: sx, y: sy };
+    if (state.mode === 'place' && keepVirtualPlacementCursor(physicalPointer)) {
+      // Keep the anchored proposal immutable until the real pointer has moved
+      // beyond the intentional-movement threshold.
+      updateStatusOnly();
+      render();
+      return;
+    }
+
     const nextCursor = { x: snap(world.x), y: snap(world.y) };
     if (nextCursor.x !== state.cursor.x || nextCursor.y !== state.cursor.y) clearSnapTargetChoice();
     state.cursor = nextCursor;
+    if (state.mode === 'place') updateFastPathTypeForPointer(physicalPointer);
 
     const canHover = ['move','delete','color'].includes(state.mode) && !state.pointer.draggingParts && !state.pointer.marquee;
     const hovered = canHover ? hitTest(world.x, world.y) : null;
@@ -2328,7 +2439,11 @@
     state.pointer.pendingPlacementProposal = null;
     if (pendingPlacement) {
       if (state.mode === 'start') placeStartLane();
-      else if (state.mode === 'place') placePartAtCursor(pendingPlacementProposal, { source: 'pointerup', reevaluated: false });
+      else if (state.mode === 'place') {
+        const pointerRect = els.courseCanvas.getBoundingClientRect();
+        state.fastPath.lastPhysicalPointerPosition = { x: e.clientX - pointerRect.left, y: e.clientY - pointerRect.top };
+        placePartAtCursor(pendingPlacementProposal, { source: 'pointerup', reevaluated: false });
+      }
     }
     const movedIds = state.pointer.dragSnapshotTaken && state.pointer.dragBase
       ? state.pointer.dragBase.map(item => item.id)
@@ -2605,6 +2720,13 @@
     const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
     if (isCornerType(part.type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(part.type);
+    if (isFastPathType(part.type)) {
+      // Advance only the in-app placement basis. The operating system pointer
+      // is never moved; an untouched repeat click commits this visible ghost.
+      activateVirtualPlacementCursor(newOpen, part.type, placementMeta.physicalPointerPosition || state.fastPath.lastPhysicalPointerPosition);
+    } else {
+      resetFastPathSession();
+    }
     state.rotation = normalizeRotation(newOpen.heading);
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
@@ -3187,6 +3309,11 @@
         els.cornerDirectionToggleBtn.setAttribute('aria-pressed', String(isLeft));
       }
     }
+    if (els.fastPathNextPart) {
+      const visible = state.mode === 'place' && isFastPathType();
+      els.fastPathNextPart.hidden = !visible;
+      if (visible) els.fastPathNextPart.textContent = `次のパーツ: ${fastPathTypeLabel(state.selectedType)}`;
+    }
     if (els.placementHeightSelect) els.placementHeightSelect.value = state.placementHeightMode;
     if (els.placementHeightCustom) {
       els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
@@ -3317,6 +3444,7 @@
         connections: JSON.parse(JSON.stringify(state.connections)),
         snapEnabled: state.snapEnabled,
         activeCornerVariant: state.activeCornerVariant,
+        fastPath: JSON.parse(JSON.stringify(state.fastPath)),
         ghostPartType: proposal?.type || null,
         entryConnectorId: proposal?.entryConnectorId || null,
         targetTangent: proposal?.targetTangent ?? null,
@@ -3348,6 +3476,7 @@
       getOpenConnections: () => JSON.parse(JSON.stringify(getOpenConnections())),
       getPlacementProposal: () => JSON.parse(JSON.stringify(getPlacementProposal())),
       setCursor: (x, y) => { state.cursor = { x:Number(x), y:Number(y) }; updateUI(); render(); },
+      getFastPathState: () => JSON.parse(JSON.stringify(state.fastPath)),
       setSnapEnabled: value => { state.snapEnabled = !!value; updateUI(); render(); },
       setCornerVariant: value => setActiveCornerVariant(value),
       getCornerVariantSession: () => ({ activeCornerVariant: state.activeCornerVariant, selectedType: state.selectedType }),
