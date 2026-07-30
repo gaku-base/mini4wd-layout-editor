@@ -64,6 +64,33 @@ test('rotation uses an exterior rectangle for distances', () => {
   assert.deepEqual(distances, { left: 200, right: 600, top: 100, bottom: 300 });
 });
 
+test('screen and world coordinates round-trip independently of zoom, pan, and DPR', () => {
+  [0.5, 1, 2].forEach(scale => {
+    const view = { scale, offsetX: 137, offsetY: -53 };
+    const world = { x: 321.25, y: -48.5 };
+    const screen = ROOM.worldToScreen(world, view);
+    assert.deepEqual(ROOM.screenToWorld(screen, view), world);
+  });
+});
+
+test('cutout dragging uses the start position plus one total rounded delta', () => {
+  const drag = ROOM.beginCutoutDrag({ id: 'a', x: 1000, y: 2000, width: 400, height: 300 }, { x: 500, y: 700 }, 9);
+  assert.deepEqual(ROOM.cutoutPositionForDrag(drag, { x: 540, y: 740 }), { x: 1040, y: 2040 });
+  // The second event is still measured from the original pointer, not added
+  // to the first event's already-updated cutout position.
+  assert.deepEqual(ROOM.cutoutPositionForDrag(drag, { x: 560, y: 750 }), { x: 1060, y: 2050 });
+});
+
+test('wall dimensions use full cutout geometry even with no room intersection', () => {
+  const geometry = ROOM.wallDimensionGeometry(
+    { x: 0, y: 0, width: 9000, height: 6000 },
+    { id: 'outside', x: 9000, y: -1000, width: 2000, height: 3000 }
+  );
+  assert.deepEqual(geometry.bounds, { left: 9000, top: -1000, right: 11000, bottom: 2000 });
+  assert.deepEqual(geometry.distances, { left: 9000, right: -2000, top: -1000, bottom: 4000 });
+  assert.equal(ROOM.visibleCutoutIntersections({ width: 9000, height: 6000 }, [{ id: 'outside', x: 9000, y: -1000, width: 2000, height: 3000 }]).length, 0);
+});
+
 test('cutouts normalize invalid shape and rotation, deduplicate ids, move and duplicate safely', () => {
   const cutouts = ROOM.normalizeRoomCutouts([{ id: 'a', shape: 'ellipse', rotation: 40 }, { id: 'a', width: 20, height: 30 }]);
   assert.deepEqual(cutouts.map(item => [item.id, item.shape, item.rotation]), [['a', 'rectangle', 0], ['a-2', 'rectangle', 0]]);
@@ -86,4 +113,9 @@ test('CAD model is loaded before app code and persisted field names remain addit
   assert.match(app, /if \(els\.courseCanvas\.height !== nextHeight\)/);
   assert.match(app, /renderScheduler\.request\(drawFrame\)/);
   assert.doesNotMatch(app, /cancelAnimationFrame\(raf\)/);
+  assert.match(app, /beginCutoutDrag\(hit, point, e\.pointerId\)/);
+  assert.match(app, /cutoutPositionForDrag\(drag, point\)/);
+  assert.match(app, /els\.courseCanvas\.setPointerCapture\(e\.pointerId\)/);
+  assert.match(app, /if \(state\.mode === 'cutout'\) cancelCadDrag\(\)/);
+  assert.match(app, /cutoutDimensionOverlay/);
 });

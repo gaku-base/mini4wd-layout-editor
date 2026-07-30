@@ -63,7 +63,7 @@
     field: { originX: 0, originY: 0, widthCm: 600, heightCm: 400, gridCm: 10 },
     siteBoundary: ROOM_BOUNDARY.defaultSiteBoundary({ originX: 0, originY: 0, widthCm: 600, heightCm: 400 }),
     roomCutouts: [],
-    cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, moveBase: null, dragSnapshotTaken: false },
+    cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null },
     parts: [],
     start: null,
     startPhase: 'position',
@@ -162,7 +162,7 @@
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
       'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
-      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances'
+      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -456,7 +456,7 @@
       state.rotation = 0;
       state.mode = 'start';
       state.roomCutouts = [];
-      state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, moveBase: null, dragSnapshotTaken: false };
+      state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null };
       resetCornerVariantSession();
       resetFastPathSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
@@ -515,12 +515,14 @@
     els.courseCanvas.focus();
   }
 
-  function snapshot() {
-    state.history.push(JSON.stringify(serializeState()));
+  function snapshotSerialized(serialized) {
+    state.history.push(serialized);
     if (state.history.length > HISTORY_LIMIT) state.history.shift();
     state.future = [];
     state.dirty = true;
   }
+
+  function snapshot() { snapshotSerialized(JSON.stringify(serializeState())); }
 
   function undo() {
     if (!state.history.length) return toast('戻せる操作がありません');
@@ -567,7 +569,7 @@
     state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary(data.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(state.field));
     state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(state.siteBoundary, state.field));
     state.roomCutouts = ROOM_BOUNDARY.normalizeRoomCutouts(data.roomCutouts || []);
-    state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, moveBase: null, dragSnapshotTaken: false };
+    state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
@@ -1059,8 +1061,10 @@
   }
 
   function drawCadDimensions(c, cutout) {
-    const box = cutoutBoundsWorld(cutout);
-    const distances = ROOM_BOUNDARY.distancesToBoundary(state.siteBoundary, cutout);
+    const geometry = ROOM_BOUNDARY.wallDimensionGeometry(state.siteBoundary, cutout);
+    const bounds = geometry.bounds;
+    const box = { x: bounds.left / 10, y: bounds.top / 10, w: (bounds.right - bounds.left) / 10, h: (bounds.bottom - bounds.top) / 10 };
+    const distances = geometry.distances;
     const scale = state.view.scale;
     c.save();
     c.strokeStyle = '#68e7d5'; c.fillStyle = '#153d43'; c.lineWidth = 1 / scale;
@@ -1119,9 +1123,7 @@
     return FAST_PATH.isFastPathType(type);
   }
 
-  function worldToScreen(x, y) {
-    return { x: x * state.view.scale + state.view.offsetX, y: y * state.view.scale + state.view.offsetY };
-  }
+  function worldToScreen(x, y) { return ROOM_BOUNDARY.worldToScreen({ x, y }, state.view); }
 
   function resetFastPathSession() {
     state.fastPath = {
@@ -2617,53 +2619,72 @@
     }) || null;
   }
 
+  function clearCadDrag() {
+    state.cad.dragStartMm = null;
+    state.cad.dragCurrentMm = null;
+    state.cad.drag = null;
+  }
+
+  function cancelCadDrag() {
+    const drag = state.cad.drag;
+    if (drag?.kind === 'move') {
+      const selected = state.roomCutouts.find(cutout => cutout.id === drag.cutoutId);
+      if (selected) replaceCutout({ ...selected, x: drag.startCutoutX, y: drag.startCutoutY }, false);
+    }
+    clearCadDrag();
+  }
+
   function onCadPointerDown(e, world) {
     const point = cadWorldToMm(world);
     if (state.mode === 'boundary') return;
+    cancelCadDrag();
     const hit = cutoutHitTest(world);
     if (hit) {
       state.cad.selectedCutoutId = hit.id;
       state.cad.tool = 'select';
       if (!hit.locked) {
-        state.cad.moveBase = { x: hit.x, y: hit.y, pointer: point };
-        state.cad.dragSnapshotTaken = false;
+        state.cad.drag = { ...ROOM_BOUNDARY.beginCutoutDrag(hit, point, e.pointerId), historyState: JSON.stringify(serializeState()), moved: false };
       }
     } else {
       state.cad.selectedCutoutId = null;
       state.cad.tool = 'create';
       state.cad.dragStartMm = point;
       state.cad.dragCurrentMm = point;
-      state.cad.dragSnapshotTaken = false;
+      state.cad.drag = { kind: 'create', pointerId: e.pointerId };
     }
     updateUI(); render();
   }
 
-  function onCadPointerMove(world) {
+  function onCadPointerMove(e, world) {
     if (state.mode !== 'cutout' || !state.pointer.down) return;
     const point = cadWorldToMm(world);
-    if (state.cad.dragStartMm) state.cad.dragCurrentMm = point;
-    const selected = selectedCutout();
-    if (selected && state.cad.moveBase && !selected.locked) {
-      const next = ROOM_BOUNDARY.moveCutout(selected, { x: point.x - state.cad.moveBase.pointer.x, y: point.y - state.cad.moveBase.pointer.y });
-      if ((next.x !== selected.x || next.y !== selected.y) && !state.cad.dragSnapshotTaken) { snapshot(); state.cad.dragSnapshotTaken = true; }
-      if (state.cad.dragSnapshotTaken) replaceCutout(next, false);
+    const drag = state.cad.drag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (drag.kind === 'create' && state.cad.dragStartMm) state.cad.dragCurrentMm = point;
+    const selected = drag.kind === 'move' ? state.roomCutouts.find(cutout => cutout.id === drag.cutoutId) : null;
+    if (selected && !selected.locked) {
+      const position = ROOM_BOUNDARY.cutoutPositionForDrag(drag, point);
+      if (position.x !== selected.x || position.y !== selected.y) {
+        drag.moved = true;
+        replaceCutout({ ...selected, ...position }, false);
+      }
     }
     updateUI(); render();
   }
 
-  function onCadPointerUp() {
+  function onCadPointerUp(e) {
     if (state.mode !== 'cutout') return;
-    if (state.cad.dragStartMm && state.cad.dragCurrentMm) {
+    const drag = state.cad.drag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (drag.kind === 'create' && state.cad.dragStartMm && state.cad.dragCurrentMm) {
       snapshot();
       const cutout = ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: ROOM_BOUNDARY.nextCutoutId(state.roomCutouts) });
       state.roomCutouts.push(cutout);
       state.cad.selectedCutoutId = cutout.id;
       toast('部屋形状用切り抜きを作成しました');
     }
-    state.cad.dragStartMm = null;
-    state.cad.dragCurrentMm = null;
-    state.cad.moveBase = null;
-    state.cad.dragSnapshotTaken = false;
+    if (drag.kind === 'move' && drag.moved) snapshotSerialized(drag.historyState);
+    clearCadDrag();
     persistLocal(); updateUI(); render();
   }
 
@@ -2733,9 +2754,7 @@
   function onPointerDown(e) {
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
-    const rect = els.courseCanvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { x: sx, y: sy } = canvasScreenPoint(e);
     const world = screenToWorld(sx, sy);
     const snappedWorld = { x: snap(world.x), y: snap(world.y) };
     const physicalPointer = { x: sx, y: sy };
@@ -2839,9 +2858,7 @@
   }
 
   function onPointerMove(e) {
-    const rect = els.courseCanvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { x: sx, y: sy } = canvasScreenPoint(e);
     const world = screenToWorld(sx, sy);
     state.pointer.x = world.x;
     state.pointer.y = world.y;
@@ -2871,7 +2888,7 @@
     }
 
     if (state.mode === 'boundary' || state.mode === 'cutout') {
-      onCadPointerMove(world);
+      onCadPointerMove(e, world);
       return;
     }
 
@@ -2987,7 +3004,7 @@
 
   function onPointerUp(e) {
     if (state.mode === 'boundary' || state.mode === 'cutout') {
-      onCadPointerUp();
+      onCadPointerUp(e);
       state.pointer.down = false;
       state.pointer.panning = false;
       try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
@@ -3091,6 +3108,7 @@
   function onPointerCancel(e) {
     // Cancellation is not a click.  Discard its captured proposal so touch
     // cancellation cannot later become a second placement.
+    if (state.mode === 'cutout') cancelCadDrag();
     state.pointer.down = false;
     state.pointer.panning = false;
     state.pointer.pendingPlacement = false;
@@ -3549,6 +3567,7 @@
   }
 
   function resetPointerInteraction() {
+    cancelCadDrag();
     state.pointer.down = false;
     state.pointer.panning = false;
     state.pointer.draggingParts = false;
@@ -3952,7 +3971,42 @@
   function snap(v) { return Math.round(v / state.field.gridCm) * state.field.gridCm; }
   function normalizeRotation(v) { return ((Math.round(v / 45) * 45) % 360 + 360) % 360; }
   function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
-  function screenToWorld(x, y) { return { x: (x - state.view.offsetX) / state.view.scale, y: (y - state.view.offsetY) / state.view.scale }; }
+  function screenToWorld(x, y) { return ROOM_BOUNDARY.screenToWorld({ x, y }, state.view); }
+  function canvasScreenPoint(event) {
+    const rect = els.courseCanvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function updateCutoutDimensionOverlay() {
+    const overlay = els.cutoutDimensionOverlay;
+    const preview = state.cad.dragStartMm && state.cad.dragCurrentMm
+      ? ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: 'preview' })
+      : null;
+    const cutout = state.mode === 'cutout' ? (preview || selectedCutout()) : null;
+    if (!overlay || !cutout) { if (overlay) overlay.hidden = true; return; }
+    const geometry = ROOM_BOUNDARY.wallDimensionGeometry(state.siteBoundary, cutout);
+    const boundary = geometry.boundary;
+    const bounds = geometry.bounds;
+    const width = Math.max(1, els.canvasWrap.clientWidth);
+    const height = Math.max(1, els.canvasWrap.clientHeight);
+    const keepVisible = (point) => ({ x: clamp(point.x, 42, width - 42), y: clamp(point.y, 20, height - 20) });
+    const point = (x, y) => worldToScreen(x / 10, y / 10);
+    const labels = {
+      left: { value: geometry.distances.left, from: point(boundary.left, (bounds.top + bounds.bottom) / 2), to: point(bounds.left, (bounds.top + bounds.bottom) / 2) },
+      right: { value: geometry.distances.right, from: point(bounds.right, (bounds.top + bounds.bottom) / 2), to: point(bounds.right, (bounds.top + bounds.bottom) / 2) },
+      top: { value: geometry.distances.top, from: point((bounds.left + bounds.right) / 2, boundary.top), to: point((bounds.left + bounds.right) / 2, bounds.top) },
+      bottom: { value: geometry.distances.bottom, from: point((bounds.left + bounds.right) / 2, bounds.bottom), to: point((bounds.left + bounds.right) / 2, boundary.bottom) }
+    };
+    Object.entries(labels).forEach(([side, value]) => {
+      const element = overlay.querySelector(`[data-cutout-dimension="${side}"]`);
+      if (!element) return;
+      const midpoint = keepVisible({ x: (value.from.x + value.to.x) / 2, y: (value.from.y + value.to.y) / 2 });
+      element.textContent = `${side === 'left' ? '左' : side === 'right' ? '右' : side === 'top' ? '上' : '下'} ${value.value}mm`;
+      element.style.left = `${midpoint.x}px`;
+      element.style.top = `${midpoint.y}px`;
+    });
+    overlay.hidden = false;
+  }
   function makeId() { return globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
   function updateUI() {
@@ -4059,6 +4113,7 @@
         els.deleteCutoutBtn.disabled = cutout.locked;
       }
     }
+    updateCutoutDimensionOverlay();
     updateFastPathGuide();
     updateSnapCandidatePanel(proposal);
 

@@ -183,6 +183,8 @@ kbd {
 .toolbar-button.accent { color: var(--primary); border-color: #554817; }
 .canvas-wrap { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 #courseCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+.cutout-dimension-overlay { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.cutout-dimension-overlay span { position: absolute; transform: translate(-50%, -50%); padding: 2px 5px; border: 1px solid rgba(104, 231, 213, .78); border-radius: 4px; color: #d8fffa; background: rgba(12, 43, 47, .92); box-shadow: 0 1px 4px rgba(0,0,0,.28); font: 700 11px/1.2 system-ui, sans-serif; white-space: nowrap; }
 .fast-path-guide {
   --guide-color: #53c6ff;
   position: absolute;

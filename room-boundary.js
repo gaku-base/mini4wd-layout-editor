@@ -189,6 +189,49 @@
     };
   }
 
+  // This geometry intentionally uses the full cutout bounds, not its
+  // intersection with the site boundary. Negative distances communicate how
+  // far a wall extends outside the room.
+  function wallDimensionGeometry(siteBoundary, cutout) {
+    const boundary = rectFrom(normalizeSiteBoundary(siteBoundary));
+    const bounds = rotatedBounds(cutout);
+    return { boundary, bounds, distances: distancesToBoundary(siteBoundary, cutout) };
+  }
+
+  // Canvas pointer coordinates are CSS pixels relative to the canvas. They
+  // must not be multiplied by DPR: the view transform is also in CSS pixels.
+  function screenToWorld(point = {}, view = {}) {
+    const scale = number(view.scale, 1) || 1;
+    return {
+      x: (number(point.x) - number(view.offsetX)) / scale,
+      y: (number(point.y) - number(view.offsetY)) / scale
+    };
+  }
+
+  function worldToScreen(point = {}, view = {}) {
+    const scale = number(view.scale, 1) || 1;
+    return {
+      x: number(point.x) * scale + number(view.offsetX),
+      y: number(point.y) * scale + number(view.offsetY)
+    };
+  }
+
+  function beginCutoutDrag(cutout, pointerMm = {}, pointerId = null) {
+    const item = normalizeCutout(cutout, { id: cutout?.id || 'cutout-1' });
+    return {
+      kind: 'move', pointerId, cutoutId: item.id,
+      startPointerMm: { x: round10mm(pointerMm.x), y: round10mm(pointerMm.y) },
+      startCutoutX: item.x, startCutoutY: item.y
+    };
+  }
+
+  function cutoutPositionForDrag(drag = {}, pointerMm = {}) {
+    return {
+      x: round10mm(number(drag.startCutoutX) + round10mm(pointerMm.x) - number(drag.startPointerMm?.x)),
+      y: round10mm(number(drag.startCutoutY) + round10mm(pointerMm.y) - number(drag.startPointerMm?.y))
+    };
+  }
+
   function cutoutFromDrag(start, end, options = {}) {
     const startX = round10mm(start?.x);
     const startY = round10mm(start?.y);
@@ -222,7 +265,8 @@
     GRID_MM, MIN_SIZE_MM, RECTANGLE, CUTOUT_TYPE,
     round10mm, normalizeRotation, defaultSiteBoundary, normalizeSiteBoundary,
     normalizeCutout, normalizeRoomCutouts, nextCutoutId, rotatedBounds,
-    intersection, unionArea, visibleCutoutIntersections, effectiveRoomMetrics, distancesToBoundary,
+    intersection, unionArea, visibleCutoutIntersections, effectiveRoomMetrics, distancesToBoundary, wallDimensionGeometry,
+    screenToWorld, worldToScreen, beginCutoutDrag, cutoutPositionForDrag,
     cutoutFromDrag, moveCutout, duplicateCutout, fieldFromSiteBoundary
   });
 });
