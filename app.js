@@ -76,6 +76,7 @@
       physicalPointerCurrent: null,
       lateralPx: 0,
       forwardPx: 0,
+      distancePx: 0,
       zone: 'manual'
     },
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
@@ -974,6 +975,7 @@
       physicalPointerCurrent: null,
       lateralPx: 0,
       forwardPx: 0,
+      distancePx: 0,
       zone: 'manual'
     };
   }
@@ -1002,6 +1004,7 @@
     state.fastPath.physicalPointerCurrent = { ...pointer };
     state.fastPath.lateralPx = 0;
     state.fastPath.forwardPx = 0;
+    state.fastPath.distancePx = 0;
     state.fastPath.zone = 'repeat';
     state.cursor = { x: anchor.x, y: anchor.y };
     setFastPathType(type);
@@ -1010,17 +1013,43 @@
     state.ghostProposalKey = null;
   }
 
+  function fastPathGhostExitScreen() {
+    const proposal = currentGhostProposal();
+    const exit = proposal?.exit;
+    if (!exit) return null;
+    return { ...worldToScreen(exit.x, exit.y), heading: exit.heading };
+  }
+
+  function refreshFastPathGhostProposal() {
+    const proposal = getPlacementProposal();
+    if (!proposal) {
+      state.ghostProposal = null;
+      state.ghostProposalKey = null;
+      return null;
+    }
+    return cacheGhostProposal(proposal);
+  }
+
   function updateFastPathTypeForPointer(pointerScreen) {
     const fast = state.fastPath;
-    const anchor = fast.activePlacementAnchor;
-    if (!anchor || fast.phase !== FAST_PATH.SELECT || !isFastPathType(fast.lastPlacedPartType)) return false;
+    if (!fast.activePlacementAnchor || fast.phase !== FAST_PATH.SELECT || !isFastPathType(fast.lastPlacedPartType)) return false;
+    const ghostExitScreen = fastPathGhostExitScreen();
+    if (!ghostExitScreen) return false;
+    const components = FAST_PATH.pointerComponents(ghostExitScreen, pointerScreen, ghostExitScreen.heading);
+    fast.forwardPx = components.forwardPx;
+    fast.lateralPx = components.lateralPx;
+    if (!FAST_PATH.isInForwardSelectionZone(components.forwardPx)) {
+      fast.zone = 'behind';
+      return false;
+    }
     const decision = FAST_PATH.typeForPointer({
       currentType: state.selectedType,
       fallbackType: fast.lastPlacedPartType,
-      anchorScreen: worldToScreen(anchor.x, anchor.y),
+      anchorScreen: ghostExitScreen,
       pointerScreen,
-      headingDeg: anchor.heading
+      headingDeg: ghostExitScreen.heading
     });
+    fast.forwardPx = decision.forwardPx;
     fast.lateralPx = decision.lateralPx;
     fast.zone = decision.zone;
     return setFastPathType(decision.type);
@@ -1034,22 +1063,21 @@
     const result = FAST_PATH.transitionForPointer(fast, pointerScreen);
     fast.physicalPointerCurrent = result.physicalPointerCurrent;
     fast.phase = result.phase;
+    fast.distancePx = result.distancePx;
     fast.activePlacementAnchor = result.activePlacementAnchor;
     if (result.phase === FAST_PATH.FREE) {
       fast.lastPlacedPartType = null;
       fast.physicalPointerOrigin = null;
       fast.lateralPx = 0;
       fast.forwardPx = 0;
+      fast.distancePx = 0;
       fast.zone = 'free';
       return result;
     }
-    const heading = Number(fast.activePlacementAnchor.heading || 0) * Math.PI / 180;
-    const deltaX = pointerScreen.x - fast.physicalPointerOrigin.x;
-    const deltaY = pointerScreen.y - fast.physicalPointerOrigin.y;
-    fast.forwardPx = deltaX * Math.cos(heading) + deltaY * Math.sin(heading);
     if (result.phase === FAST_PATH.SELECT) updateFastPathTypeForPointer(pointerScreen);
     else {
       fast.lateralPx = 0;
+      fast.forwardPx = 0;
       fast.zone = 'repeat';
     }
     return result;
@@ -2898,12 +2926,11 @@
     state.selectedIds = [];
     state.lastPlacementHeightMm = part.zMm;
     clearSnapTargetChoice();
-    // The next ghost must be a fresh proposal. It cannot share objects with
-    // the part just committed from the captured proposal above.
-    state.ghostProposal = null;
-    state.ghostProposalKey = null;
     recalculateBankStates();
     recalculateLayoutWarnings();
+    // The next ghost must be a fresh proposal. It cannot share objects with
+    // the part just committed from the captured proposal above.
+    refreshFastPathGhostProposal();
     toast(proposal.snapped
       ? `${partDisplayName(part)}を${proposal.used ? '使用済み' : ''}接続点へ配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`
       : `${partDisplayName(part)}を自由配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`);
@@ -3007,8 +3034,9 @@
       resetFastPathSession();
       state.selectedType = removed.type;
     }
-    state.ghostProposal = null;
-    state.ghostProposalKey = null;
+    // R must create a new visible proposal synchronously; waiting for a
+    // pointermove here leaves the restored fast-path ghost invisible.
+    refreshFastPathGhostProposal();
     toast(`${PARTS[removed.type].name}を1つ戻しました`);
     persistLocal(); updateUI(); render();
   }
