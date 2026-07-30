@@ -4,14 +4,14 @@
 
 - Fast repeated placement is part of the normal placement workflow, not a
   separate editing mode. A confirmed Straight, `corner-45-right`, or
-  `corner-45-left` advances an in-memory virtual placement cursor to its exit.
+  `corner-45-left` advances an in-memory fast-path placement anchor to its exit.
 - The OS pointer is never moved. Until it travels more than 10px from the
-  confirmation point, the already visible virtual proposal is committed again.
+  confirmation point, the already visible anchored proposal is committed again.
 - After meaningful movement, the next type is selected in screen pixels
   relative to the exit tangent: centre within 20px is Straight, at least 30px
   to the right is right corner, and at least 30px to the left is left corner.
   The 20–30px band preserves the current type to prevent flicker.
-- The virtual cursor and automatic type-selection state are session-only and
+- The fast-path anchor and automatic type-selection state are session-only and
   are excluded from JSON, localStorage, Undo/Redo, and layout data.
 
 ### Concrete left/right corner part types (2026-07-29)
@@ -194,6 +194,18 @@
 - ゴースト更新ごとに45度コーナーの入口connector `a` と `b` を両方生成し、接線・pitch・bank・高さ候補を満たすものだけの画面距離を比較する。`right`／`left`は各候補へ同じ意味値として適用し、入口の事前フィルタには使わない。
 - 同一接続先へ複数の入口が届く場合は距離が最短の入口を採用する。距離が同じ場合は接続先endpointキー、次にconnector順で安定的に決定する。24px外なら自由配置とする。
 - 入口A/Bは通常UIの選択項目にしない。高さが異なる接続先だけは従来どおり高さ候補を選べるが、選んだ接続先での入口は常に最短のものを自動採用する。ポインタ移動時は高さ候補の一時選択も解除し、前回配置した入口を次のゴーストへ引き継がない。
+
+### 高速連続配置の実ポインタ操作とスタート出口（2026-07-30）
+
+- 高速連続配置は実ポインタだけで操作する。OSポインタの移動・非表示、HTMLの仮想ポインタ、ガイド、フェード、ポインタロックは実装しない。`repeat`／`select`は接続アンカーを保ち、70pxを超えたときだけ`free`へ移行する。
+- Startは通常Straightと同じ形状・寸法を使うが、後方入口`a`と前方出口`b`を意味的なconnector roleとして明示する。スタート配置直後の初期アンカーは配列順・画面距離ではなく前方出口roleを必ず選ぶ。後方入口は通常の未接続コネクタとして残す。
+
+### 高速配置の復旧・Start欠落・作成範囲判定（2026-07-30）
+
+- 高速配置の`repeat`は0〜10px、`select`は10px超〜70px、`free`は70px超とする。70pxの解除距離は24pxの接続吸着半径とは別の`FAST_PATH_RELEASE_PX`で管理する。
+- Rで最後のパーツを戻す場合は、削除したパーツの接続相手を優先して新しい開放コネクタをactive anchorにし、カーソル・ゴースト種別・高速配置の物理ポインタ起点を同時に再構築する。Startだけが残る場合はStartの意味的な前方出口へ戻す。
+- Startは通常のhit test、選択、範囲選択、移動、削除の対象にする。削除後は編集を止めず、canvasとwarning summaryへStart欠落を表示する。欠落中のStraightは右クリックのアプリ内メニューまたは選択パネルからStartへ変換でき、位置・回転・高さ・色・既存connector IDを保持する。
+- 作成範囲外の最終判定は衝突判定と同じ`occupancyPolygon`を用いる。AABBは補助情報だけとし、曲線コーナーの中空部や回転矩形の余白を範囲外として警告しない。境界接触と1mm程度以下の数値誤差は範囲内とする。
 
 ### 45度コーナーの方向固定吸着（2026-07-28）
 

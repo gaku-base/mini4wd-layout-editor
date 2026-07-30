@@ -10,8 +10,14 @@
   const RIGHT = 'corner-45-right';
   const LEFT = 'corner-45-left';
   const MOVE_TOLERANCE_PX = 10;
+  // This is intentionally independent from the 24px connector snap radius.
+  // It controls when a fast-path anchor yields to ordinary pointer placement.
+  const FAST_PATH_RELEASE_PX = 70;
   const CENTER_PX = 20;
   const TURN_PX = 30;
+  const REPEAT = 'repeat';
+  const SELECT = 'select';
+  const FREE = 'free';
 
   function isFastPathType(type) {
     return type === STRAIGHT || type === RIGHT || type === LEFT;
@@ -23,6 +29,27 @@
 
   function hasMeaningfulPointerMove(origin, point, tolerancePx = MOVE_TOLERANCE_PX) {
     return distancePx(origin, point) > tolerancePx;
+  }
+
+  // The first 10px distinguish an unchanged repeat click from an intentional
+  // part selection.  They do not release the anchored placement cursor.
+  function phaseForPointer(origin, point) {
+    const distance = distancePx(origin, point);
+    if (distance <= MOVE_TOLERANCE_PX) return { phase: REPEAT, distancePx: distance };
+    if (distance <= FAST_PATH_RELEASE_PX) return { phase: SELECT, distancePx: distance };
+    return { phase: FREE, distancePx: distance };
+  }
+
+  function transitionForPointer(state, point) {
+    const anchor = state?.activePlacementAnchor || null;
+    const origin = state?.physicalPointerOrigin || null;
+    if (!anchor || !origin) return { phase: FREE, activePlacementAnchor: null, physicalPointerCurrent: { ...point } };
+    const result = phaseForPointer(origin, point);
+    return {
+      ...result,
+      activePlacementAnchor: result.phase === FREE ? null : anchor,
+      physicalPointerCurrent: { ...point }
+    };
   }
 
   function lateralOffsetPx(anchorScreen, pointerScreen, headingDeg) {
@@ -45,7 +72,8 @@
   }
 
   return Object.freeze({
-    STRAIGHT, RIGHT, LEFT, MOVE_TOLERANCE_PX, CENTER_PX, TURN_PX,
-    isFastPathType, distancePx, hasMeaningfulPointerMove, lateralOffsetPx, typeForPointer
+    STRAIGHT, RIGHT, LEFT, MOVE_TOLERANCE_PX, FAST_PATH_RELEASE_PX, CENTER_PX, TURN_PX,
+    REPEAT, SELECT, FREE,
+    isFastPathType, distancePx, hasMeaningfulPointerMove, phaseForPointer, transitionForPointer, lateralOffsetPx, typeForPointer
   });
 });

@@ -127,6 +127,7 @@
         <section class="panel selection-panel">
           <div class="panel-heading"><h2>選択中</h2><button id="clearSelectionBtn" class="text-button" type="button">解除</button></div>
           <div id="selectionInfo" class="selection-info empty-summary">選択なし</div>
+          <button id="convertStartBtn" class="button full-button" type="button" hidden>スタートに変更</button>
           <button id="deleteSelectionBtn" class="button danger-button full-button" type="button">選択パーツを削除</button>
           <button id="colorSelectionBtn" class="button full-button" type="button">選択パーツの色を変更</button>
         </section>
@@ -226,6 +227,11 @@
       </div>
     </form>
   </dialog>
+
+  <div id="canvasContextMenu" class="canvas-context-menu" hidden>
+    <button type="button" data-action="convert-start">スタートに変更</button>
+    <button type="button" data-action="cancel-context">キャンセル</button>
+  </div>
 
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
