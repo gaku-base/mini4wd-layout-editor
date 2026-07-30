@@ -846,6 +846,11 @@
     c.strokeStyle = '#2b3440';
     c.lineWidth = 1.2;
     c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
+    // The exported frame already includes the legacy field border, so retain
+    // the visible room cutouts as part of that same room-boundary output.
+    // CAD-only dimensions, handles, previews, and selection frames are drawn
+    // separately and never reach this export path.
+    drawRoomShape(c);
     if (state.start) drawStartLane(c, state.start, true);
     drawPartsInLayerOrder(c, { exportMode: true });
   }
