@@ -18,6 +18,28 @@ test('pointer movement at or below 10px retains the visible virtual proposal', (
   assert.equal(FAST.hasMeaningfulPointerMove(origin, { x: 111, y: 100 }), true);
 });
 
+test('fast path separates repeat, anchored selection, and free placement at the exact boundaries', () => {
+  const origin = { x: 100, y: 100 };
+  const phaseAt = x => FAST.phaseForPointer(origin, { x, y: 100 }).phase;
+  assert.equal(phaseAt(100), FAST.REPEAT);
+  assert.equal(phaseAt(110), FAST.REPEAT);
+  assert.equal(phaseAt(111), FAST.SELECT);
+  assert.equal(phaseAt(150), FAST.SELECT);
+  assert.equal(phaseAt(220), FAST.SELECT);
+  assert.equal(phaseAt(221), FAST.FREE);
+});
+
+test('repeat and select retain the same anchor; only free placement releases it', () => {
+  const anchor = { x: 540, y: 115, heading: 45 };
+  const state = { activePlacementAnchor: anchor, physicalPointerOrigin: { x: 100, y: 100 } };
+  for (const point of [{ x: 110, y: 100 }, { x: 220, y: 100 }]) {
+    const next = FAST.transitionForPointer(state, point);
+    assert.notEqual(next.phase, FAST.FREE);
+    assert.equal(next.activePlacementAnchor, anchor);
+  }
+  assert.equal(FAST.transitionForPointer(state, { x: 221, y: 100 }).activePlacementAnchor, null);
+});
+
 for (const heading of [0, 45, 90, 180, 270]) {
   test(`relative center/right/left selection is screen-pixel stable at ${heading} degrees`, () => {
     const anchor = { x: 400, y: 300 };

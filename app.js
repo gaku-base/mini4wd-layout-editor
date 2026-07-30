@@ -69,13 +69,13 @@
     connections: [],
     activeCornerVariant: 'right',
     fastPath: {
-      virtualCursorActive: false,
+      phase: FAST_PATH.FREE,
       activePlacementAnchor: null,
       lastPlacedPartType: null,
-      lastPhysicalPointerPosition: null,
-      virtualPointerOrigin: null,
-      automaticTypeSelection: false,
+      physicalPointerOrigin: null,
+      physicalPointerCurrent: null,
       lateralPx: 0,
+      forwardPx: 0,
       zone: 'manual'
     },
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
@@ -929,7 +929,8 @@
       state.selectedType, state.cursor.x, state.cursor.y, state.rotation,
       state.snapEnabled, state.placementHeightMode, state.placementHeightMm,
       state.snapTargetChoiceKey, state.snapTargetChoiceConfirmed,
-      state.activeCornerVariant, state.view.scale, state.connections.length, state.parts.length
+      state.activeCornerVariant, state.view.scale, state.connections.length, state.parts.length,
+      state.fastPath.phase, state.fastPath.activePlacementAnchor
     ]);
   }
 
@@ -961,13 +962,13 @@
 
   function resetFastPathSession() {
     state.fastPath = {
-      virtualCursorActive: false,
+      phase: FAST_PATH.FREE,
       activePlacementAnchor: null,
       lastPlacedPartType: null,
-      lastPhysicalPointerPosition: null,
-      virtualPointerOrigin: null,
-      automaticTypeSelection: false,
+      physicalPointerOrigin: null,
+      physicalPointerCurrent: null,
       lateralPx: 0,
+      forwardPx: 0,
       zone: 'manual'
     };
   }
@@ -989,13 +990,13 @@
   function activateVirtualPlacementCursor(anchor, type, physicalPointerPosition) {
     if (!isFastPathType(type)) return;
     const pointer = physicalPointerPosition || worldToScreen(state.cursor.x, state.cursor.y);
-    state.fastPath.virtualCursorActive = true;
+    state.fastPath.phase = FAST_PATH.REPEAT;
     state.fastPath.activePlacementAnchor = { ...anchor };
     state.fastPath.lastPlacedPartType = type;
-    state.fastPath.lastPhysicalPointerPosition = { ...pointer };
-    state.fastPath.virtualPointerOrigin = { ...pointer };
-    state.fastPath.automaticTypeSelection = false;
+    state.fastPath.physicalPointerOrigin = { ...pointer };
+    state.fastPath.physicalPointerCurrent = { ...pointer };
     state.fastPath.lateralPx = 0;
+    state.fastPath.forwardPx = 0;
     state.fastPath.zone = 'repeat';
     state.cursor = { x: anchor.x, y: anchor.y };
     setFastPathType(type);
@@ -1007,7 +1008,7 @@
   function updateFastPathTypeForPointer(pointerScreen) {
     const fast = state.fastPath;
     const anchor = fast.activePlacementAnchor;
-    if (!anchor || !fast.automaticTypeSelection || !isFastPathType(fast.lastPlacedPartType)) return false;
+    if (!anchor || fast.phase !== FAST_PATH.SELECT || !isFastPathType(fast.lastPlacedPartType)) return false;
     const decision = FAST_PATH.typeForPointer({
       currentType: state.selectedType,
       fallbackType: fast.lastPlacedPartType,
@@ -1020,16 +1021,33 @@
     return setFastPathType(decision.type);
   }
 
-  // Returns true only while the untouched virtual ghost must remain on screen.
-  function keepVirtualPlacementCursor(pointerScreen) {
+  // repeat and select both keep the proposal anchored. Only free placement
+  // releases the anchor and lets the real cursor position drive the ghost.
+  function updateFastPathPointer(pointerScreen) {
     const fast = state.fastPath;
-    if (!fast.virtualCursorActive) return false;
-    fast.lastPhysicalPointerPosition = { ...pointerScreen };
-    if (!FAST_PATH.hasMeaningfulPointerMove(fast.virtualPointerOrigin, pointerScreen)) return true;
-    fast.virtualCursorActive = false;
-    fast.automaticTypeSelection = true;
-    updateFastPathTypeForPointer(pointerScreen);
-    return false;
+    if (!fast.activePlacementAnchor || !fast.physicalPointerOrigin) return { phase: FAST_PATH.FREE };
+    const result = FAST_PATH.transitionForPointer(fast, pointerScreen);
+    fast.physicalPointerCurrent = result.physicalPointerCurrent;
+    fast.phase = result.phase;
+    fast.activePlacementAnchor = result.activePlacementAnchor;
+    if (result.phase === FAST_PATH.FREE) {
+      fast.lastPlacedPartType = null;
+      fast.physicalPointerOrigin = null;
+      fast.lateralPx = 0;
+      fast.forwardPx = 0;
+      fast.zone = 'free';
+      return result;
+    }
+    const heading = Number(fast.activePlacementAnchor.heading || 0) * Math.PI / 180;
+    const deltaX = pointerScreen.x - fast.physicalPointerOrigin.x;
+    const deltaY = pointerScreen.y - fast.physicalPointerOrigin.y;
+    fast.forwardPx = deltaX * Math.cos(heading) + deltaY * Math.sin(heading);
+    if (result.phase === FAST_PATH.SELECT) updateFastPathTypeForPointer(pointerScreen);
+    else {
+      fast.lateralPx = 0;
+      fast.zone = 'repeat';
+    }
+    return result;
   }
 
   function captureVisiblePlacementProposal(reason) {
@@ -1946,8 +1964,82 @@
     return proposal;
   }
 
+  function fastPathExitTurnDegrees(type) {
+    if (type === FAST_PATH.RIGHT) return 45;
+    if (type === FAST_PATH.LEFT) return -45;
+    return 0;
+  }
+
+  // Build the repeat/select ghost from the active connection only. The real
+  // pointer selects its type; it never supplies this proposal's world pose.
+  function buildAnchoredFastPathProposal({ anchor, type }) {
+    if (!anchor || !PARTS[type]) return null;
+    const target = {
+      ...anchor,
+      partId: anchor.partId || anchor.sourceId,
+      connectorId: anchor.connectorId,
+      directionDeg: anchor.heading,
+      bankAngleDeg: Number(anchor.bankAngleDeg ?? anchor.connectionState?.bankAngle) || 0
+    };
+    const free = freePlacement(type, anchor.x, anchor.y);
+    const rawCandidates = LAYOUT_GRAPH.snapCandidates(free, PARTS, [target], {
+      scale: 1,
+      radiusPx: Infinity,
+      snapEnabled: true,
+      edges: state.connections,
+      // Measure the solved pose rather than a free ghost so both reversible
+      // entries are evaluated at the fixed anchor.
+      partForSnapDistanceCandidate: (local, _index, snapTarget, part) => LAYOUT_GRAPH.solveSnapPose(part, local, snapTarget)
+    });
+    if (!rawCandidates.length) return null;
+    const expectedExitHeading = normalizeRotation(anchor.heading + fastPathExitTurnDegrees(type));
+    const selected = [...rawCandidates].sort((left, right) => {
+      const leftExit = partEndpoints({ ...left.pose, type })[left.localConnectorIndex === 0 ? 1 : 0];
+      const rightExit = partEndpoints({ ...right.pose, type })[right.localConnectorIndex === 0 ? 1 : 0];
+      return angularDistance(leftExit.heading, expectedExitHeading) - angularDistance(rightExit.heading, expectedExitHeading)
+        || left.localConnectorIndex - right.localConnectorIndex;
+    })[0];
+    const attachedIndex = selected.localConnectorIndex;
+    const otherIndex = attachedIndex === 0 ? 1 : 0;
+    const bank = connectionStateForPlacement(type, target.connectionState, attachedIndex);
+    const candidate = {
+      ...free,
+      ...selected.pose,
+      ...bank,
+      routeIndex: attachedIndex,
+      entryConnectorId: selected.entryConnectorId
+    };
+    const endpoints = partEndpoints(candidate);
+    return {
+      ...candidate,
+      endpoints,
+      entry: { ...target },
+      exit: { ...endpoints[otherIndex] },
+      anchor: { ...target },
+      attachedIndex,
+      otherIndex,
+      endpointDistance: 0,
+      distancePx: 0,
+      snapped: true,
+      valid: true,
+      requiresHeightChoice: false,
+      candidates: [],
+      rawCandidates: [],
+      selectedTargetKey: LAYOUT_GRAPH.snapTargetKey(selected),
+      used: selected.used,
+      outOfBounds: !isPartInsideField(candidate),
+      edge: { partAId: target.partId, connectorAId: target.connectorId, partBId: 'pending', connectorBId: selected.localConnector.id }
+    };
+  }
+
   function getPlacementProposal() {
     if (!PARTS[state.selectedType] || state.selectedType === 'start') return null;
+    if (state.fastPath.phase !== FAST_PATH.FREE && state.fastPath.activePlacementAnchor) {
+      return buildAnchoredFastPathProposal({
+        anchor: state.fastPath.activePlacementAnchor,
+        type: state.selectedType
+      });
+    }
     const free = freePlacement(state.selectedType, state.cursor.x, state.cursor.y);
     const targets = getAllEndpoints().map(endpoint => ({
       ...endpoint, partId: endpoint.sourceId, directionDeg: endpoint.heading,
@@ -2245,8 +2337,10 @@
     }
 
     if (e.button !== 0) return;
-    const keepVirtualProposal = state.mode === 'place' && keepVirtualPlacementCursor(physicalPointer);
-    if (!keepVirtualProposal) state.cursor = snappedWorld;
+    const fastPathResult = state.mode === 'place'
+      ? updateFastPathPointer(physicalPointer)
+      : { phase: FAST_PATH.FREE };
+    if (fastPathResult.phase === FAST_PATH.FREE) state.cursor = snappedWorld;
 
     if (state.mode === 'start') {
       state.pointer.pendingPlacement = true;
@@ -2256,12 +2350,11 @@
     }
 
     if (state.mode === 'place') {
-      // A pointer that has not meaningfully moved since confirmation commits
-      // exactly the virtual ghost already shown. Otherwise create one fresh
-      // proposal for the current real pointer position.
-      const visibleProposal = keepVirtualProposal
-        ? currentGhostProposal()
-        : cacheGhostProposal(getPlacementProposal());
+      // repeat/select confirm the proposal currently anchored at the active
+      // exit. Free placement alone evaluates the real pointer position.
+      const visibleProposal = fastPathResult.phase === FAST_PATH.FREE
+        ? cacheGhostProposal(getPlacementProposal())
+        : currentGhostProposal();
       updateSnapCandidatePanel(visibleProposal);
       updatePlacementInstruction(visibleProposal);
       state.pointer.pendingPlacement = true;
@@ -2349,12 +2442,25 @@
     }
 
     const physicalPointer = { x: sx, y: sy };
-    if (state.mode === 'place' && keepVirtualPlacementCursor(physicalPointer)) {
-      // Keep the anchored proposal immutable until the real pointer has moved
-      // beyond the intentional-movement threshold.
-      updateStatusOnly();
-      render();
-      return;
+    if (state.mode === 'place') {
+      if (state.pointer.pendingPlacement && state.fastPath.phase !== FAST_PATH.FREE) {
+        // A click captures the rendered anchored proposal. Do not let a small
+        // drag before pointerup replace that captured proposal.
+        updateStatusOnly();
+        render();
+        return;
+      }
+      const fastPathResult = updateFastPathPointer(physicalPointer);
+      if (fastPathResult.phase !== FAST_PATH.FREE) {
+        // The anchor remains the placement basis during both repeat and
+        // select. Rebuild only when selection changed the part type.
+        const anchoredProposal = currentGhostProposal();
+        updateSnapCandidatePanel(anchoredProposal);
+        updatePlacementInstruction(anchoredProposal);
+        updateStatusOnly();
+        render();
+        return;
+      }
     }
 
     const nextCursor = { x: snap(world.x), y: snap(world.y) };
@@ -2418,11 +2524,7 @@
     if (state.mode === 'place') {
       const liveProposal = getPlacementProposal();
       cacheGhostProposal(liveProposal);
-      if (state.pointer.pendingPlacement) {
-        // A drag between pointerdown and pointerup updates the visible ghost,
-        // so commit the newest rendered proposal rather than a stale one.
-        state.pointer.pendingPlacementProposal = captureVisiblePlacementProposal('pointermove');
-      }
+      if (state.pointer.pendingPlacement) state.pointer.pendingPlacementProposal = captureVisiblePlacementProposal('pointermove');
       updateSnapCandidatePanel(liveProposal);
       updatePlacementInstruction(liveProposal);
     }
@@ -2441,8 +2543,8 @@
       if (state.mode === 'start') placeStartLane();
       else if (state.mode === 'place') {
         const pointerRect = els.courseCanvas.getBoundingClientRect();
-        state.fastPath.lastPhysicalPointerPosition = { x: e.clientX - pointerRect.left, y: e.clientY - pointerRect.top };
-        placePartAtCursor(pendingPlacementProposal, { source: 'pointerup', reevaluated: false });
+        const physicalPointerPosition = { x: e.clientX - pointerRect.left, y: e.clientY - pointerRect.top };
+        placePartAtCursor(pendingPlacementProposal, { source: 'pointerup', reevaluated: false, physicalPointerPosition });
       }
     }
     const movedIds = state.pointer.dragSnapshotTaken && state.pointer.dragBase
@@ -2723,7 +2825,7 @@
     if (isFastPathType(part.type)) {
       // Advance only the in-app placement basis. The operating system pointer
       // is never moved; an untouched repeat click commits this visible ghost.
-      activateVirtualPlacementCursor(newOpen, part.type, placementMeta.physicalPointerPosition || state.fastPath.lastPhysicalPointerPosition);
+      activateVirtualPlacementCursor(newOpen, part.type, placementMeta.physicalPointerPosition || state.fastPath.physicalPointerCurrent);
     } else {
       resetFastPathSession();
     }

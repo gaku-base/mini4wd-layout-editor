@@ -54,7 +54,7 @@ test('the next ghost can change without mutating an already captured placement',
 test('pointer confirmation commits the captured visible proposal exactly once without snap reevaluation', () => {
   const source = fs.readFileSync('./app.js', 'utf8');
   assert.match(source, /pendingPlacementProposal = captureVisiblePlacementProposal\('pointerdown'\)/);
-  assert.match(source, /placePartAtCursor\(pendingPlacementProposal, \{ source: 'pointerup', reevaluated: false \}\)/);
+  assert.match(source, /placePartAtCursor\(pendingPlacementProposal, \{ source: 'pointerup', reevaluated: false, physicalPointerPosition \}\)/);
   assert.match(source, /function onPointerCancel\(e\)[\s\S]*pendingPlacementProposal = null/);
   const commitStart = source.indexOf('function placePartAtCursor(proposalOverride = null, placementMeta = {})');
   const commitEnd = source.indexOf('function recalculateBankStates', commitStart);
