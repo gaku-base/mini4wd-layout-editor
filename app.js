@@ -987,7 +987,7 @@
     return type === FAST_PATH.RIGHT ? '右コーナー' : type === FAST_PATH.LEFT ? '左コーナー' : 'ストレート';
   }
 
-  function activateVirtualPlacementCursor(anchor, type, physicalPointerPosition) {
+  function activateFastPathPlacement(anchor, type, physicalPointerPosition) {
     if (!isFastPathType(type)) return;
     const pointer = physicalPointerPosition || worldToScreen(state.cursor.x, state.cursor.y);
     state.fastPath.phase = FAST_PATH.REPEAT;
@@ -1745,7 +1745,7 @@
     return FIELD_BOUNDARY.containsBounds(state.field, startBounds(start));
   }
 
-  function placeStartLane() {
+  function placeStartLane(placementMeta = {}) {
     const candidate = { id: 'start', type: 'start', x: state.cursor.x, y: state.cursor.y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
     const outside = !startInsideField(candidate);
     snapshot();
@@ -1754,7 +1754,14 @@
     state.selectedType = 'straight';
     state.mode = 'place';
     const ends = startEndpoints(state.start);
-    setActiveConnection({ ...ends[1], sourceId: 'start', endpointIndex: 1 });
+    const forwardExit = ends.find(endpoint => endpoint.connectorRole === 'exit');
+    if (!forwardExit) throw new Error('スタートの前方出口コネクタが定義されていません');
+    setActiveConnection({ ...forwardExit, sourceId: 'start', endpointIndex: forwardExit.endpointIndex });
+    activateFastPathPlacement(
+      forwardExit,
+      FAST_PATH.STRAIGHT,
+      placementMeta.physicalPointerPosition || worldToScreen(state.cursor.x, state.cursor.y)
+    );
     state.rotation = state.start.rotation;
     toast(outside ? 'スタートを作成範囲外へ配置しました（オレンジ枠で表示）' : 'スタートの前後どちら側からでも配置できます');
     persistLocal();
@@ -2152,6 +2159,7 @@
       sourceId: String(connection.sourceId || 'manual'),
       sourceType: connection.sourceType || '',
       endpointIndex: Number.isFinite(Number(connection.endpointIndex)) ? Number(connection.endpointIndex) : 0,
+      connectorRole: connection.connectorRole || null,
       label: connection.label || ''
     };
   }
@@ -2163,7 +2171,9 @@
   function rebuildActiveConnectionFromTail() {
     const opens = getOpenConnections();
     const tail = state.parts[state.parts.length - 1];
-    const preferred = tail ? opens.find(ep => ep.sourceId === tail.id) : opens.find(ep => ep.sourceId === 'start' && ep.endpointIndex === 1);
+    const preferred = tail
+      ? opens.find(ep => ep.sourceId === tail.id)
+      : opens.find(ep => ep.sourceId === 'start' && ep.connectorRole === 'exit');
     setActiveConnection(preferred || opens[0] || null);
   }
 
@@ -2540,7 +2550,10 @@
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
     if (pendingPlacement) {
-      if (state.mode === 'start') placeStartLane();
+      if (state.mode === 'start') {
+        const pointerRect = els.courseCanvas.getBoundingClientRect();
+        placeStartLane({ physicalPointerPosition: { x: e.clientX - pointerRect.left, y: e.clientY - pointerRect.top } });
+      }
       else if (state.mode === 'place') {
         const pointerRect = els.courseCanvas.getBoundingClientRect();
         const physicalPointerPosition = { x: e.clientX - pointerRect.left, y: e.clientY - pointerRect.top };
@@ -2825,7 +2838,7 @@
     if (isFastPathType(part.type)) {
       // Advance only the in-app placement basis. The operating system pointer
       // is never moved; an untouched repeat click commits this visible ghost.
-      activateVirtualPlacementCursor(newOpen, part.type, placementMeta.physicalPointerPosition || state.fastPath.physicalPointerCurrent);
+      activateFastPathPlacement(newOpen, part.type, placementMeta.physicalPointerPosition || state.fastPath.physicalPointerCurrent);
     } else {
       resetFastPathSession();
     }

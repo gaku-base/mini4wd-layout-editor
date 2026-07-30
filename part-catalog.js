@@ -22,6 +22,19 @@
     bounds: Object.freeze({ minX: -27, maxX: 27, minY: -18, maxY: 18 })
   });
 
+  // The start lane is straight-shaped, but its two ends have explicit traffic
+  // roles.  Fast placement must use this semantic exit instead of relying on
+  // connector array order or screen-space proximity.
+  const START_GEOMETRY = Object.freeze({
+    width: 54,
+    height: 36,
+    connectors: Object.freeze([
+      Object.freeze({ id: 'a', label: '入口（後方）', role: 'entry', x: -27, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }),
+      Object.freeze({ id: 'b', label: '出口（前方）', role: 'exit', x: 27, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 })
+    ]),
+    bounds: Object.freeze({ minX: -27, maxX: 27, minY: -18, maxY: 18 })
+  });
+
   // geometry: 接続・当たり判定に使う実寸情報
   // visual: 表示画像／Canvas描画の登録枠。将来Canva画像へ差し替えてもgeometryは不変。
   const PARTS = {
@@ -71,7 +84,7 @@
     start: {
       key: '5', name: 'スタート', short: 'START', renderKind: 'start', special: 'start',
       w: 54, h: 36,
-      geometry: STRAIGHT_GEOMETRY,
+      geometry: START_GEOMETRY,
       visual: { file: 'assets/parts/start.png', canvasWidth: 54, canvasHeight: 36, originX: 27, originY: 18 },
       ...palette, accent: '#e52f38'
     },

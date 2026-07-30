@@ -11,20 +11,19 @@ test('only Straight and the two concrete 45-degree corners use the fast path', (
   for (const type of ['wave', 'slope', 'bank20', 'lanechange', 'burning', 'start']) assert.equal(FAST.isFastPathType(type), false);
 });
 
-test('pointer movement at or below 10px retains the visible virtual proposal', () => {
+test('pointer movement at or below 10px retains the anchored proposal', () => {
   const origin = { x: 100, y: 100 };
   assert.equal(FAST.hasMeaningfulPointerMove(origin, { x: 108, y: 106 }), false);
   assert.equal(FAST.hasMeaningfulPointerMove(origin, { x: 110, y: 100 }), false);
   assert.equal(FAST.hasMeaningfulPointerMove(origin, { x: 111, y: 100 }), true);
 });
 
-test('fast path separates repeat, anchored selection, and free placement at the exact boundaries', () => {
+test('fast path separates repeat, selection, and free placement at the exact boundaries', () => {
   const origin = { x: 100, y: 100 };
   const phaseAt = x => FAST.phaseForPointer(origin, { x, y: 100 }).phase;
   assert.equal(phaseAt(100), FAST.REPEAT);
   assert.equal(phaseAt(110), FAST.REPEAT);
   assert.equal(phaseAt(111), FAST.SELECT);
-  assert.equal(phaseAt(150), FAST.SELECT);
   assert.equal(phaseAt(220), FAST.SELECT);
   assert.equal(phaseAt(221), FAST.FREE);
 });

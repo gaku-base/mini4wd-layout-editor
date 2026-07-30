@@ -12,6 +12,10 @@
   const XY_EPSILON_CM = 1.75;
   const ANGLE_EPSILON_DEG = 0.1;
   const Z_EPSILON_MM = 0.01;
+  // Screen-plane coordinates are centimetres.  A 1 mm occupancy tolerance
+  // prevents connector seams and polygon sampling noise from becoming errors.
+  const OCCUPANCY_EPSILON_CM = 0.1;
+  const OCCUPANCY_AREA_EPSILON_CM2 = OCCUPANCY_EPSILON_CM ** 2;
 
   function finite(value, fallback = 0) {
     const number = Number(value);
@@ -43,6 +47,9 @@
     return {
       id: connectorId(value, index),
       label: String(value?.label || (index === 0 ? 'A' : index === 1 ? 'B' : `C${index + 1}`)),
+      connectorRole: value?.role == null
+        ? (value?.connectorRole == null ? null : String(value.connectorRole))
+        : String(value.role),
       localX: finite(value?.localX ?? value?.x),
       localY: finite(value?.localY ?? value?.y),
       localZMm: finite(value?.localZMm),
@@ -358,6 +365,168 @@
     return left.minZ < right.maxZ - epsilon && left.maxZ > right.minZ + epsilon;
   }
 
+  function polygonSignedArea(points) {
+    return points.reduce((area, point, index) => {
+      const next = points[(index + 1) % points.length];
+      return area + point.x * next.y - next.x * point.y;
+    }, 0) / 2;
+  }
+
+  function polygonArea(points) {
+    return Math.abs(polygonSignedArea(points));
+  }
+
+  function polygonBounds(points) {
+    if (!points.length) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    return {
+      minX: Math.min(...points.map(point => point.x)), maxX: Math.max(...points.map(point => point.x)),
+      minY: Math.min(...points.map(point => point.y)), maxY: Math.max(...points.map(point => point.y))
+    };
+  }
+
+  function rectanglePolygon(bounds) {
+    return [
+      { x: bounds.minX, y: bounds.minY }, { x: bounds.maxX, y: bounds.minY },
+      { x: bounds.maxX, y: bounds.maxY }, { x: bounds.minX, y: bounds.maxY }
+    ];
+  }
+
+  function cornerOccupancyLocal(definition, samples = 24) {
+    const geometry = definition?.geometry || {};
+    const r = finite(geometry.centerlineRadius, finite(definition?.radius, 54));
+    const inferredTrackWidth = finite(geometry.outerRadius) - finite(geometry.innerRadius);
+    const trackWidth = inferredTrackWidth > 0 ? inferredTrackWidth : finite(definition?.trackWidth, 36);
+    const ri = finite(geometry.innerRadius, r - trackWidth / 2);
+    const ro = finite(geometry.outerRadius, r + trackWidth / 2);
+    if (!(ri > 0 && ro > ri)) return [];
+    const angle = Math.PI / 4;
+    const radialCentroid = (4 * Math.sin(angle / 2) / (3 * angle)) * ((ro ** 3 - ri ** 3) / (ro ** 2 - ri ** 2));
+    const bisector = -3 * Math.PI / 8;
+    const center = { x: -radialCentroid * Math.cos(bisector), y: -radialCentroid * Math.sin(bisector) };
+    const startAngle = -Math.PI / 2;
+    const endAngle = -Math.PI / 4;
+    const cornerY = value => geometry.pathOrientation === 'left' ? -value : value;
+    const count = Math.max(4, Math.round(samples));
+    const points = [];
+    for (let index = 0; index <= count; index += 1) {
+      const theta = startAngle + (endAngle - startAngle) * index / count;
+      points.push({ x: center.x + ro * Math.cos(theta), y: cornerY(center.y + ro * Math.sin(theta)) });
+    }
+    for (let index = count; index >= 0; index -= 1) {
+      const theta = startAngle + (endAngle - startAngle) * index / count;
+      points.push({ x: center.x + ri * Math.cos(theta), y: cornerY(center.y + ri * Math.sin(theta)) });
+    }
+    return points;
+  }
+
+  function occupancyPolygon(partValue, definition, fallbackBounds = null) {
+    const part = normalizePart(partValue);
+    const geometry = definition?.geometry || {};
+    let local = definition?.corner45 ? cornerOccupancyLocal(definition) : [];
+    if (!local.length) {
+      const width = finite(geometry.width, finite(definition?.w));
+      const height = finite(geometry.height, finite(definition?.h));
+      const bounds = geometry.bounds || (width > 0 && height > 0
+        ? { minX: -width / 2, maxX: width / 2, minY: -height / 2, maxY: height / 2 }
+        : null);
+      if (!bounds) return fallbackBounds ? rectanglePolygon(fallbackBounds) : [];
+      local = rectanglePolygon(bounds);
+    }
+    return local.map(point => {
+      const offset = rotate(point, part.rotation);
+      return { x: part.x + offset.x, y: part.y + offset.y };
+    });
+  }
+
+  function cross(origin, left, right) {
+    return (left.x - origin.x) * (right.y - origin.y) - (left.y - origin.y) * (right.x - origin.x);
+  }
+
+  function pointInTriangle(point, a, b, c, epsilon = OCCUPANCY_EPSILON_CM) {
+    const ab = cross(a, b, point);
+    const bc = cross(b, c, point);
+    const ca = cross(c, a, point);
+    return (ab >= -epsilon && bc >= -epsilon && ca >= -epsilon)
+      || (ab <= epsilon && bc <= epsilon && ca <= epsilon);
+  }
+
+  function triangulatePolygon(points, epsilon = OCCUPANCY_EPSILON_CM) {
+    const vertices = points.filter((point, index) => index === 0 || Math.hypot(point.x - points[index - 1].x, point.y - points[index - 1].y) > epsilon / 10);
+    if (vertices.length > 1 && Math.hypot(vertices[0].x - vertices.at(-1).x, vertices[0].y - vertices.at(-1).y) <= epsilon / 10) vertices.pop();
+    if (vertices.length < 3 || polygonArea(vertices) <= epsilon ** 2) return [];
+    const orientation = Math.sign(polygonSignedArea(vertices)) || 1;
+    const remaining = vertices.map((_, index) => index);
+    const triangles = [];
+    let guard = remaining.length ** 2;
+    while (remaining.length > 3 && guard-- > 0) {
+      let clipped = false;
+      for (let cursor = 0; cursor < remaining.length; cursor += 1) {
+        const before = vertices[remaining[(cursor - 1 + remaining.length) % remaining.length]];
+        const current = vertices[remaining[cursor]];
+        const after = vertices[remaining[(cursor + 1) % remaining.length]];
+        if (orientation * cross(before, current, after) <= epsilon / 100) continue;
+        const containsVertex = remaining.some((index, candidate) => candidate !== cursor
+          && candidate !== (cursor - 1 + remaining.length) % remaining.length
+          && candidate !== (cursor + 1) % remaining.length
+          && pointInTriangle(vertices[index], before, current, after, epsilon / 100));
+        if (containsVertex) continue;
+        triangles.push(orientation > 0 ? [before, current, after] : [before, after, current]);
+        remaining.splice(cursor, 1);
+        clipped = true;
+        break;
+      }
+      if (!clipped) return [];
+    }
+    if (remaining.length === 3) {
+      const triangle = remaining.map(index => vertices[index]);
+      triangles.push(orientation > 0 ? triangle : [triangle[0], triangle[2], triangle[1]]);
+    }
+    return triangles;
+  }
+
+  function lineIntersection(start, end, clipStart, clipEnd) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const ex = clipEnd.x - clipStart.x;
+    const ey = clipEnd.y - clipStart.y;
+    const denominator = dx * ey - dy * ex;
+    if (Math.abs(denominator) < 1e-12) return end;
+    const t = ((clipStart.x - start.x) * ey - (clipStart.y - start.y) * ex) / denominator;
+    return { x: start.x + t * dx, y: start.y + t * dy };
+  }
+
+  function clipConvexPolygon(subject, clip, epsilon = OCCUPANCY_EPSILON_CM) {
+    let output = subject;
+    for (let index = 0; index < clip.length && output.length; index += 1) {
+      const clipStart = clip[index];
+      const clipEnd = clip[(index + 1) % clip.length];
+      const input = output;
+      output = [];
+      for (let cursor = 0; cursor < input.length; cursor += 1) {
+        const start = input[cursor];
+        const end = input[(cursor + 1) % input.length];
+        const startInside = cross(clipStart, clipEnd, start) >= -epsilon;
+        const endInside = cross(clipStart, clipEnd, end) >= -epsilon;
+        if (startInside && endInside) output.push(end);
+        else if (startInside && !endInside) output.push(lineIntersection(start, end, clipStart, clipEnd));
+        else if (!startInside && endInside) {
+          output.push(lineIntersection(start, end, clipStart, clipEnd));
+          output.push(end);
+        }
+      }
+    }
+    return output;
+  }
+
+  function polygonIntersectionArea(left, right, epsilon = OCCUPANCY_EPSILON_CM) {
+    const leftTriangles = triangulatePolygon(left, epsilon);
+    const rightTriangles = triangulatePolygon(right, epsilon);
+    return leftTriangles.reduce((total, leftTriangle) => total + rightTriangles.reduce((area, rightTriangle) => {
+      const clipped = clipConvexPolygon(leftTriangle, rightTriangle, epsilon);
+      return area + (clipped.length >= 3 ? polygonArea(clipped) : 0);
+    }, 0), 0);
+  }
+
   function interferenceWarnings(parts, catalog, boundsForPart, options = {}) {
     const warnings = [];
     const connectedPairs = new Set(dedupeEdges(options.edges || []).map(edge => [edge.partAId, edge.partBId].sort().join('\u0000')));
@@ -366,11 +535,17 @@
         const left = parts[leftIndex];
         const right = parts[rightIndex];
         if (connectedPairs.has([left.id, right.id].sort().join('\u0000'))) continue;
-        if (!boundsOverlap(boundsForPart(left), boundsForPart(right))) continue;
+        const leftBounds = boundsForPart(left);
+        const rightBounds = boundsForPart(right);
+        if (!boundsOverlap(leftBounds, rightBounds, OCCUPANCY_EPSILON_CM)) continue;
         const leftEnvelope = verticalEnvelope(left, catalog[left.type], options.courseBodyHeightMm);
         const rightEnvelope = verticalEnvelope(right, catalog[right.type], options.courseBodyHeightMm);
         if (!verticalOverlap(leftEnvelope, rightEnvelope)) continue;
-        warnings.push({ type: 'interference', partIds: [left.id, right.id], leftEnvelope, rightEnvelope });
+        const leftPolygon = occupancyPolygon(left, catalog[left.type], leftBounds);
+        const rightPolygon = occupancyPolygon(right, catalog[right.type], rightBounds);
+        const overlapAreaCm2 = polygonIntersectionArea(leftPolygon, rightPolygon, OCCUPANCY_EPSILON_CM);
+        if (overlapAreaCm2 <= OCCUPANCY_AREA_EPSILON_CM2) continue;
+        warnings.push({ type: 'interference', partIds: [left.id, right.id], leftEnvelope, rightEnvelope, overlapAreaCm2 });
       }
     }
     return warnings;
@@ -418,11 +593,11 @@
   }
 
   return Object.freeze({
-    LEVEL_HEIGHT_MM, COURSE_BODY_HEIGHT_MM, SNAP_RADIUS_PX, XY_EPSILON_CM, ANGLE_EPSILON_DEG, Z_EPSILON_MM,
+    LEVEL_HEIGHT_MM, COURSE_BODY_HEIGHT_MM, SNAP_RADIUS_PX, XY_EPSILON_CM, ANGLE_EPSILON_DEG, Z_EPSILON_MM, OCCUPANCY_EPSILON_CM, OCCUPANCY_AREA_EPSILON_CM2,
     normalizeAngle, angleDistance, rotate, normalizeConnector, connectorsForDefinition, normalizePart,
     worldConnector, allWorldConnectors, endpointKey, normalizeEdge, edgeKey, dedupeEdges, addEdge,
     removeEdgesForParts, connectorUsage, duplicateConnectorWarnings, connectedComponent,
     connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, mirroredConnector, solveSnapPose, snapCandidates, snapTargetKey, nearestCandidateForEachTarget, choosePlacement, verticalEnvelope,
-    boundsOverlap, verticalOverlap, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
+    boundsOverlap, verticalOverlap, polygonBounds, occupancyPolygon, polygonIntersectionArea, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
   });
 });

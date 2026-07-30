@@ -4,14 +4,14 @@
 
 - Fast repeated placement is part of the normal placement workflow, not a
   separate editing mode. A confirmed Straight, `corner-45-right`, or
-  `corner-45-left` advances an in-memory virtual placement cursor to its exit.
+  `corner-45-left` advances an in-memory fast-path placement anchor to its exit.
 - The OS pointer is never moved. Until it travels more than 10px from the
-  confirmation point, the already visible virtual proposal is committed again.
+  confirmation point, the already visible anchored proposal is committed again.
 - After meaningful movement, the next type is selected in screen pixels
   relative to the exit tangent: centre within 20px is Straight, at least 30px
   to the right is right corner, and at least 30px to the left is left corner.
   The 20–30px band preserves the current type to prevent flicker.
-- The virtual cursor and automatic type-selection state are session-only and
+- The fast-path anchor and automatic type-selection state are session-only and
   are excluded from JSON, localStorage, Undo/Redo, and layout data.
 
 ### Concrete left/right corner part types (2026-07-29)
@@ -194,6 +194,11 @@
 - ゴースト更新ごとに45度コーナーの入口connector `a` と `b` を両方生成し、接線・pitch・bank・高さ候補を満たすものだけの画面距離を比較する。`right`／`left`は各候補へ同じ意味値として適用し、入口の事前フィルタには使わない。
 - 同一接続先へ複数の入口が届く場合は距離が最短の入口を採用する。距離が同じ場合は接続先endpointキー、次にconnector順で安定的に決定する。24px外なら自由配置とする。
 - 入口A/Bは通常UIの選択項目にしない。高さが異なる接続先だけは従来どおり高さ候補を選べるが、選んだ接続先での入口は常に最短のものを自動採用する。ポインタ移動時は高さ候補の一時選択も解除し、前回配置した入口を次のゴーストへ引き継がない。
+
+### 高速連続配置の実ポインタ操作とスタート出口（2026-07-30）
+
+- 高速連続配置は実ポインタだけで操作する。OSポインタの移動・非表示、HTMLの仮想ポインタ、ガイド、フェード、ポインタロックは実装しない。`repeat`／`select`は接続アンカーを保ち、120pxを超えたときだけ`free`へ移行する。
+- Startは通常Straightと同じ形状・寸法を使うが、後方入口`a`と前方出口`b`を意味的なconnector roleとして明示する。スタート配置直後の初期アンカーは配列順・画面距離ではなく前方出口roleを必ず選ぶ。後方入口は通常の未接続コネクタとして残す。
 
 ### 45度コーナーの方向固定吸着（2026-07-28）
 
