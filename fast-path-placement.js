@@ -18,7 +18,10 @@
   // Ignore side-to-side movement until the physical pointer is in front of
   // the current ghost exit. This keeps a pointer left behind by a placement
   // from accidentally changing the next part type.
-  const MIN_FORWARD_PX = 6;
+  // Selecting a side at the exact exit is valid.  Only a point behind the
+  // displayed ghost is excluded; requiring an additional 6px made the
+  // browser path needlessly hard to enter at ordinary zoom levels.
+  const MIN_FORWARD_PX = 0;
   const REPEAT = 'repeat';
   const SELECT = 'select';
   const FREE = 'free';
@@ -89,10 +92,42 @@
     return { type: current, ...components, zone: 'hysteresis' };
   }
 
+  // This is the state transition used by the canvas pointermove handler.
+  // Keep the physical release distance separate from the displayed ghost's
+  // exit geometry: the former decides repeat/select/free, while the latter
+  // decides Straight/Right/Left during select.
+  function runtimeTransitionForPointer({ fastPath, pointerScreen, physicalPointerScreen = pointerScreen, selectionPointerScreen = pointerScreen, ghostExitScreen, currentType, fallbackType = STRAIGHT }) {
+    const transition = transitionForPointer(fastPath, physicalPointerScreen);
+    const result = {
+      ...transition,
+      type: isFastPathType(currentType) ? currentType : fallbackType,
+      forwardPx: 0,
+      lateralPx: 0,
+      zone: transition.phase === FREE ? 'free' : transition.phase === REPEAT ? 'repeat' : 'pending'
+    };
+    if (transition.phase !== SELECT || !ghostExitScreen) return result;
+
+    const components = pointerComponents(ghostExitScreen, selectionPointerScreen, ghostExitScreen.heading);
+    result.forwardPx = components.forwardPx;
+    result.lateralPx = components.lateralPx;
+    if (!isInForwardSelectionZone(components.forwardPx)) {
+      result.zone = 'behind';
+      return result;
+    }
+    const decision = typeForPointer({
+      currentType: result.type,
+      fallbackType,
+      anchorScreen: ghostExitScreen,
+      pointerScreen: selectionPointerScreen,
+      headingDeg: ghostExitScreen.heading
+    });
+    return { ...result, ...decision, activePlacementAnchor: transition.activePlacementAnchor };
+  }
+
   return Object.freeze({
     STRAIGHT, RIGHT, LEFT, MOVE_TOLERANCE_PX, FAST_PATH_RELEASE_PX, CENTER_PX, TURN_PX, MIN_FORWARD_PX,
     REPEAT, SELECT, FREE,
     isFastPathType, distancePx, hasMeaningfulPointerMove, phaseForPointer, transitionForPointer,
-    pointerComponents, lateralOffsetPx, isInForwardSelectionZone, typeForPointer
+    pointerComponents, lateralOffsetPx, isInForwardSelectionZone, typeForPointer, runtimeTransitionForPointer
   });
 });
