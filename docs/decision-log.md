@@ -224,3 +224,10 @@
 - 入口A/Bは既存コースへ接続する端だけを表す。候補生成では、選択中の右／左を固定したまま、各入口について鏡像あり／なしの物理変換を接続先endpointの接線方向ごとに評価する。
 - 候補の回転角は、変換後の入口接線が接続先接線の反対向きになるよう毎回算出する。入口IDから固定のrotationやcornerMirrorを返さず、古い候補rotationは接線互換でない限り再利用しない。
 - 入口A/B、targetTangent、candidateRotation、cornerMirrorは候補の別々の値として扱う。利用者が選んだhandednessは候補比較・配置確定の間、読み取り専用で維持する。
+
+### Fast path leading-pointer selection and snap reactivation (2026-07-31)
+
+- The OS pointer remains the real pointer. While an auto-placement anchor is active, forward movement is interpreted from the ghost exit for straight/right/left selection instead of being treated as a radial release.
+- `FAST_PATH_RELEASE_PX` remains `90` as the compatibility constant. Runtime release now uses directional limits: unlimited forward distance, retained lateral movement through 90px, lateral release beyond 110px, and backward release beyond 50px. The retained bands keep the current mode stable while the pointer crosses a boundary.
+- A free-placement proposal that snaps to an open connector re-enters the same fast-path activation flow used after placement. The first subsequent pointer update uses that anchor and does not require a special or virtual cursor.
+- `repeat` and `select` render a dashed, heading-aligned guide arrow in the HTML overlay. It is presentation-only and is hidden in `free` mode, during modal/edit modes, and whenever no active anchor exists; it is excluded from persistence, undo/redo, export, and collision state.

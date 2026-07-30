@@ -74,12 +74,14 @@
       lastPlacedPartType: null,
       physicalPointerOrigin: null,
       physicalPointerCurrent: null,
+      releasePointerOrigin: null,
       selectionPointerOrigin: null,
       selectionPointerCurrent: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
-      zone: 'manual'
+      zone: 'manual',
+      guideVisible: false
     },
     snapEnabled: SNAP_TOGGLE.initialState().enabled,
     // Only a height/target choice may be remembered while the pointer is still.
@@ -145,7 +147,7 @@
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
-      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart'
+      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -975,12 +977,14 @@
       lastPlacedPartType: null,
       physicalPointerOrigin: null,
       physicalPointerCurrent: null,
+      releasePointerOrigin: null,
       selectionPointerOrigin: null,
       selectionPointerCurrent: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
-      zone: 'manual'
+      zone: 'manual',
+      guideVisible: false
     };
   }
 
@@ -1006,12 +1010,14 @@
     state.fastPath.lastPlacedPartType = type;
     state.fastPath.physicalPointerOrigin = { ...pointer };
     state.fastPath.physicalPointerCurrent = { ...pointer };
+    state.fastPath.releasePointerOrigin = { ...pointer };
     state.fastPath.selectionPointerOrigin = null;
     state.fastPath.selectionPointerCurrent = null;
     state.fastPath.lateralPx = 0;
     state.fastPath.forwardPx = 0;
     state.fastPath.distancePx = 0;
     state.fastPath.zone = 'repeat';
+    state.fastPath.guideVisible = true;
     state.cursor = { x: anchor.x, y: anchor.y };
     setFastPathType(type);
     state.rotation = normalizeRotation(anchor.heading);
@@ -1036,11 +1042,9 @@
     return cacheGhostProposal(proposal);
   }
 
-  // The OS cursor remains where the user clicked, while the next ghost is an
-  // entire part-length ahead.  Preserve the 90px release distance as a real
-  // pointer delta, but apply that delta from the *displayed ghost exit* for
-  // side selection.  Thus the selection geometry never compares an anchor
-  // world point or an old placement origin against a screen pointer.
+  // The selection origin describes the displayed ghost exit, but the actual
+  // pointer remains the selection point.  It leads an anchored ghost instead
+  // of being translated into virtual coordinates.
   function rebaseFastPathSelectionPointer() {
     const fast = state.fastPath;
     const exit = fastPathGhostExitScreen();
@@ -1049,12 +1053,20 @@
   }
 
   function selectionPointerForPhysicalPointer(pointerScreen) {
+    return { ...pointerScreen };
+  }
+
+  function applyFastPathSelectionResult(result) {
     const fast = state.fastPath;
-    if (!fast.selectionPointerOrigin || !fast.physicalPointerOrigin) return { ...pointerScreen };
-    return {
-      x: fast.selectionPointerOrigin.x + pointerScreen.x - fast.physicalPointerOrigin.x,
-      y: fast.selectionPointerOrigin.y + pointerScreen.y - fast.physicalPointerOrigin.y
-    };
+    fast.forwardPx = result.forwardPx;
+    fast.lateralPx = result.lateralPx;
+    fast.zone = result.zone;
+    const changed = setFastPathType(result.type);
+    if (changed) {
+      refreshFastPathGhostProposal();
+      rebaseFastPathSelectionPointer();
+    }
+    return changed;
   }
 
   function updateFastPathTypeForPointer(pointerScreen) {
@@ -1070,17 +1082,7 @@
       currentType: state.selectedType,
       fallbackType: fast.lastPlacedPartType
     });
-    fast.forwardPx = result.forwardPx;
-    fast.lateralPx = result.lateralPx;
-    fast.zone = result.zone;
-    const changed = setFastPathType(result.type);
-    // The browser event must update the visible proposal immediately.  Do not
-    // wait for pointerdown or a later render cache miss after a side change.
-    if (changed) {
-      refreshFastPathGhostProposal();
-      rebaseFastPathSelectionPointer();
-    }
-    return changed;
+    return applyFastPathSelectionResult(result);
   }
 
   // repeat and select both keep the proposal anchored. Only free placement
@@ -1088,7 +1090,16 @@
   function updateFastPathPointer(pointerScreen) {
     const fast = state.fastPath;
     if (!fast.activePlacementAnchor || !fast.physicalPointerOrigin) return { phase: FAST_PATH.FREE };
-    const result = FAST_PATH.transitionForPointer(fast, pointerScreen);
+    const selectionPointerScreen = selectionPointerForPhysicalPointer(pointerScreen);
+    fast.selectionPointerCurrent = { ...selectionPointerScreen };
+    const result = FAST_PATH.runtimeTransitionForPointer({
+      fastPath: fast,
+      physicalPointerScreen: pointerScreen,
+      selectionPointerScreen,
+      ghostExitScreen: fastPathGhostExitScreen(),
+      currentType: state.selectedType,
+      fallbackType: fast.lastPlacedPartType
+    });
     fast.physicalPointerCurrent = result.physicalPointerCurrent;
     fast.phase = result.phase;
     fast.distancePx = result.distancePx;
@@ -1096,21 +1107,35 @@
     if (result.phase === FAST_PATH.FREE) {
       fast.lastPlacedPartType = null;
       fast.physicalPointerOrigin = null;
+      fast.releasePointerOrigin = null;
       fast.selectionPointerOrigin = null;
       fast.selectionPointerCurrent = null;
       fast.lateralPx = 0;
       fast.forwardPx = 0;
       fast.distancePx = 0;
       fast.zone = 'free';
+      fast.guideVisible = false;
       return result;
     }
-    if (result.phase === FAST_PATH.SELECT) updateFastPathTypeForPointer(pointerScreen);
+    fast.guideVisible = true;
+    if (result.phase === FAST_PATH.SELECT) applyFastPathSelectionResult(result);
     else {
       fast.lateralPx = 0;
       fast.forwardPx = 0;
       fast.zone = 'repeat';
     }
     return result;
+  }
+
+  function tryReactivateFastPathFromSnappedProposal(proposal, physicalPointerScreen) {
+    if (state.fastPath.phase !== FAST_PATH.FREE || !proposal?.snapped || !isFastPathType(state.selectedType)) return false;
+    const anchor = proposal.anchor;
+    if (!anchor || !Number.isFinite(anchor.x) || !Number.isFinite(anchor.y)) return false;
+    activateFastPathPlacement(anchor, state.selectedType, physicalPointerScreen);
+    refreshFastPathGhostProposal();
+    rebaseFastPathSelectionPointer();
+    state.fastPath.guideVisible = true;
+    return true;
   }
 
   function captureVisiblePlacementProposal(reason) {
@@ -2580,10 +2605,26 @@
       }
     }
 
+    // A directional fast-path release continues through the ordinary free
+    // placement branch below. Hide the presentation-only guide before that
+    // branch updates the ghost so it cannot remain visible for one event.
+    updateFastPathGuide();
     const nextCursor = { x: snap(world.x), y: snap(world.y) };
     if (nextCursor.x !== state.cursor.x || nextCursor.y !== state.cursor.y) clearSnapTargetChoice();
     state.cursor = nextCursor;
-    if (state.mode === 'place') updateFastPathTypeForPointer(physicalPointer);
+    if (state.mode === 'place') {
+      const freeProposal = getPlacementProposal();
+      if (tryReactivateFastPathFromSnappedProposal(freeProposal, physicalPointer)) {
+        const anchoredProposal = refreshFastPathGhostProposal();
+        updateSnapCandidatePanel(anchoredProposal);
+        updatePlacementInstruction(anchoredProposal);
+        updateUI();
+        updateStatusOnly();
+        render();
+        return;
+      }
+      updateFastPathTypeForPointer(physicalPointer);
+    }
 
     const canHover = ['move','delete','color'].includes(state.mode) && !state.pointer.draggingParts && !state.pointer.marquee;
     const hovered = canHover ? hitTest(world.x, world.y) : null;
@@ -2724,7 +2765,9 @@
   function onPointerLeave() {
     if (state.pointer.down || state.layoutMove.active) return;
     state.hoveredPartId = null;
+    state.fastPath.guideVisible = false;
     els.courseCanvas.classList.remove('is-hovering-part');
+    updateFastPathGuide();
     render();
   }
 
@@ -3664,6 +3707,7 @@
       els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
       if (document.activeElement !== els.placementHeightCustom) els.placementHeightCustom.value = String(state.placementHeightMm);
     }
+    updateFastPathGuide();
     updateSnapCandidatePanel(proposal);
 
     const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color'].includes(state.mode);
@@ -3720,6 +3764,27 @@
 
   function updateStatusOnly() {
     els.statusCursor.textContent = `${(state.cursor.x / 100).toFixed(2)}m / ${(state.cursor.y / 100).toFixed(2)}m`;
+  }
+
+  function updateFastPathGuide() {
+    const guide = els.fastPathGuide;
+    if (!guide) return;
+    const fast = state.fastPath;
+    const anchor = fast.activePlacementAnchor;
+    const visible = state.mode === 'place'
+      && fast.phase !== FAST_PATH.FREE
+      && !!anchor
+      && !!fast.guideVisible
+      && isFastPathType(state.selectedType);
+    guide.hidden = !visible;
+    if (!visible) return;
+    const point = worldToScreen(anchor.x, anchor.y);
+    const heading = normalizeRotation(anchor.heading || 0);
+    guide.style.transform = `translate(${point.x}px, ${point.y}px) rotate(${heading}deg)`;
+    guide.dataset.type = state.selectedType;
+    const label = state.selectedType === FAST_PATH.RIGHT ? 'RIGHT'
+      : state.selectedType === FAST_PATH.LEFT ? 'LEFT' : 'STRAIGHT';
+    guide.querySelector('[data-fast-path-guide-label]').textContent = label;
   }
 
   function updateSnapCandidatePanel(proposal) {
