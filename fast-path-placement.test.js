@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const FAST = require('./fast-path-placement.js');
 
 test('only Straight and the two concrete 45-degree corners use the fast path', () => {
@@ -106,20 +107,22 @@ for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
   });
 }
 
-test('runtime pointer flow keeps an anchored ghost through 90px and releases at 91px', () => {
+test('runtime pointer flow keeps an anchored ghost beyond 90px while the pointer leads forward', () => {
   const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin: { x: 0, y: 0 } };
   const exit = { x: 0, y: 0, heading: 0 };
   assert.equal(FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: { x: 90, y: 0 }, ghostExitScreen: exit, currentType: FAST.STRAIGHT }).phase, FAST.SELECT);
-  const free = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: { x: 91, y: 0 }, ghostExitScreen: exit, currentType: FAST.STRAIGHT });
-  assert.equal(free.phase, FAST.FREE);
-  assert.equal(free.activePlacementAnchor, null);
+  for (const forwardPx of [91, 150, 200]) {
+    const leading = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: { x: forwardPx, y: 0 }, ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    assert.equal(leading.phase, FAST.SELECT);
+    assert.equal(leading.activePlacementAnchor, fastPath.activePlacementAnchor);
+  }
 });
 
-test('runtime flow uses the physical pointer for release and the ghost-relative pointer for side selection', () => {
+test('runtime flow uses the actual leading pointer for both release and side selection', () => {
   const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin: { x: 10, y: 10 } };
   const result = FAST.runtimeTransitionForPointer({
     fastPath,
-    physicalPointerScreen: { x: 26, y: 10 },
+    physicalPointerScreen: { x: 500, y: 535 },
     selectionPointerScreen: { x: 500, y: 535 },
     ghostExitScreen: { x: 500, y: 500, heading: 0 },
     currentType: FAST.STRAIGHT
@@ -134,4 +137,47 @@ test('the 20-30px transition band keeps the current ghost type', () => {
   const anchor = { x: 0, y: 0 };
   assert.equal(FAST.typeForPointer({ currentType: FAST.LEFT, anchorScreen: anchor, pointerScreen: { x: 0, y: -25 }, headingDeg: 0 }).type, FAST.LEFT);
   assert.equal(FAST.typeForPointer({ currentType: FAST.RIGHT, anchorScreen: anchor, pointerScreen: { x: 0, y: 25 }, headingDeg: 0 }).type, FAST.RIGHT);
+});
+
+test('leading-pointer release is directional and has lateral/backward hysteresis', () => {
+  const anchor = { x: 1, y: 1, heading: 0 };
+  const fastPath = { phase: FAST.SELECT, activePlacementAnchor: anchor, physicalPointerOrigin: { x: 0, y: 0 } };
+  const exit = { x: 0, y: 0, heading: 0 };
+  const runtime = point => FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point, ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+  assert.equal(runtime({ x: 200, y: 0 }).phase, FAST.SELECT);
+  assert.equal(runtime({ x: 200, y: 90 }).phase, FAST.SELECT);
+  assert.equal(runtime({ x: 200, y: 100 }).phase, FAST.SELECT);
+  assert.equal(runtime({ x: 200, y: 111 }).phase, FAST.FREE);
+  assert.equal(runtime({ x: -40, y: 0 }).phase, FAST.SELECT);
+  assert.equal(runtime({ x: -51, y: 0 }).phase, FAST.FREE);
+});
+
+for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
+  test(`leading pointer stays anchored and selects left/center/right at ${heading} degrees`, () => {
+    const radians = heading * Math.PI / 180;
+    const forward = { x: Math.cos(radians), y: Math.sin(radians) };
+    const right = { x: -Math.sin(radians), y: Math.cos(radians) };
+    const exit = { x: 400, y: 300, heading };
+    const fastPath = { phase: FAST.SELECT, activePlacementAnchor: { x: 1, y: 1, heading }, physicalPointerOrigin: { x: 0, y: 0 } };
+    const pointerAt = lateral => ({ x: exit.x + forward.x * 200 + right.x * lateral, y: exit.y + forward.y * 200 + right.y * lateral });
+    const center = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: pointerAt(0), ghostExitScreen: exit, currentType: FAST.RIGHT });
+    const rightTurn = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: pointerAt(35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    const leftTurn = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: pointerAt(-35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    for (const result of [center, rightTurn, leftTurn]) assert.equal(result.phase, FAST.SELECT);
+    assert.equal(center.type, FAST.STRAIGHT);
+    assert.equal(rightTurn.type, FAST.RIGHT);
+    assert.equal(leftTurn.type, FAST.LEFT);
+  });
+}
+
+test('the fast-path guide is an HTML overlay and hides outside anchored placement', () => {
+  const index = fs.readFileSync('index.html', 'utf8');
+  const app = fs.readFileSync('app.js', 'utf8');
+  const styles = fs.readFileSync('styles.css', 'utf8');
+  assert.match(index, /id="fastPathGuide"/);
+  assert.match(styles, /\.fast-path-guide/);
+  assert.match(app, /fast\.phase !== FAST_PATH\.FREE/);
+  assert.match(app, /state\.mode === 'place'/);
+  assert.match(app, /guide\.hidden = !visible/);
+  assert.match(app, /fast\.guideVisible = false/);
 });

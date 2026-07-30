@@ -13,6 +13,13 @@
   // This is intentionally independent from the 24px connector snap radius.
   // It controls when a fast-path anchor yields to ordinary pointer placement.
   const FAST_PATH_RELEASE_PX = 90;
+  // Fast-path release is directional.  A leading pointer may travel forward
+  // indefinitely; only a deliberate step behind the selection origin or a
+  // wide lateral departure returns to ordinary free placement.
+  const AUTO_SELECT_LATERAL_RETAIN_PX = 90;
+  const AUTO_SELECT_LATERAL_EXIT_PX = 110;
+  const AUTO_SELECT_BACKWARD_RETAIN_PX = 30;
+  const AUTO_SELECT_BACKWARD_EXIT_PX = 50;
   const CENTER_PX = 20;
   const TURN_PX = 30;
   // Ignore side-to-side movement until the physical pointer is in front of
@@ -59,6 +66,46 @@
     };
   }
 
+  function directionalPhaseForPointer({ state, physicalPointerScreen, selectionOriginScreen, headingDeg }) {
+    const anchor = state?.activePlacementAnchor || null;
+    const releaseOrigin = state?.releasePointerOrigin || state?.physicalPointerOrigin || null;
+    if (!anchor || !releaseOrigin || !selectionOriginScreen) {
+      return { phase: FREE, activePlacementAnchor: null, physicalPointerCurrent: { ...physicalPointerScreen } };
+    }
+    const releaseDistancePx = distancePx(releaseOrigin, physicalPointerScreen);
+    if (releaseDistancePx <= MOVE_TOLERANCE_PX) {
+      return {
+        phase: REPEAT,
+        distancePx: releaseDistancePx,
+        activePlacementAnchor: anchor,
+        physicalPointerCurrent: { ...physicalPointerScreen },
+        releaseReason: null
+      };
+    }
+
+    const components = pointerComponents(selectionOriginScreen, physicalPointerScreen, headingDeg);
+    const previousPhase = state?.phase;
+    const lateralMagnitude = Math.abs(components.lateralPx);
+    const backwardExit = components.forwardPx < -AUTO_SELECT_BACKWARD_EXIT_PX;
+    const lateralExit = lateralMagnitude > AUTO_SELECT_LATERAL_EXIT_PX;
+    // The retain bands prevent a pointer near an exit edge from oscillating
+    // between select and free.  A session already anchored remains active in
+    // the 90-110px lateral and 30-50px backward transition bands.
+    const backwardReenter = components.forwardPx >= -AUTO_SELECT_BACKWARD_RETAIN_PX;
+    const lateralReenter = lateralMagnitude <= AUTO_SELECT_LATERAL_RETAIN_PX;
+    const inTransitionBand = (!backwardReenter && !backwardExit) || (!lateralReenter && !lateralExit);
+    const release = backwardExit || lateralExit || (previousPhase === FREE && !inTransitionBand && (!backwardReenter || !lateralReenter));
+    return {
+      phase: release ? FREE : SELECT,
+      distancePx: releaseDistancePx,
+      activePlacementAnchor: release ? null : anchor,
+      physicalPointerCurrent: { ...physicalPointerScreen },
+      forwardPx: components.forwardPx,
+      lateralPx: components.lateralPx,
+      releaseReason: release ? (backwardExit ? 'backward' : 'lateral') : null
+    };
+  }
+
   function pointerComponents(anchorScreen, pointerScreen, headingDeg) {
     const radians = Number(headingDeg || 0) * Math.PI / 180;
     const forward = { x: Math.cos(radians), y: Math.sin(radians) };
@@ -97,7 +144,12 @@
   // exit geometry: the former decides repeat/select/free, while the latter
   // decides Straight/Right/Left during select.
   function runtimeTransitionForPointer({ fastPath, pointerScreen, physicalPointerScreen = pointerScreen, selectionPointerScreen = pointerScreen, ghostExitScreen, currentType, fallbackType = STRAIGHT }) {
-    const transition = transitionForPointer(fastPath, physicalPointerScreen);
+    const transition = directionalPhaseForPointer({
+      state: fastPath,
+      physicalPointerScreen,
+      selectionOriginScreen: ghostExitScreen,
+      headingDeg: ghostExitScreen?.heading
+    });
     const result = {
       ...transition,
       type: isFastPathType(currentType) ? currentType : fallbackType,
@@ -110,10 +162,10 @@
     const components = pointerComponents(ghostExitScreen, selectionPointerScreen, ghostExitScreen.heading);
     result.forwardPx = components.forwardPx;
     result.lateralPx = components.lateralPx;
-    if (!isInForwardSelectionZone(components.forwardPx)) {
-      result.zone = 'behind';
-      return result;
-    }
+    // A pointer in the small backward hysteresis band remains attached but
+    // keeps its existing type; side selection resumes on the next forward
+    // pointermove.
+    if (!isInForwardSelectionZone(components.forwardPx)) return { ...result, zone: 'behind' };
     const decision = typeForPointer({
       currentType: result.type,
       fallbackType,
@@ -126,8 +178,10 @@
 
   return Object.freeze({
     STRAIGHT, RIGHT, LEFT, MOVE_TOLERANCE_PX, FAST_PATH_RELEASE_PX, CENTER_PX, TURN_PX, MIN_FORWARD_PX,
+    AUTO_SELECT_LATERAL_RETAIN_PX, AUTO_SELECT_LATERAL_EXIT_PX,
+    AUTO_SELECT_BACKWARD_RETAIN_PX, AUTO_SELECT_BACKWARD_EXIT_PX,
     REPEAT, SELECT, FREE,
-    isFastPathType, distancePx, hasMeaningfulPointerMove, phaseForPointer, transitionForPointer,
+    isFastPathType, distancePx, hasMeaningfulPointerMove, phaseForPointer, transitionForPointer, directionalPhaseForPointer,
     pointerComponents, lateralOffsetPx, isInForwardSelectionZone, typeForPointer, runtimeTransitionForPointer
   });
 });
