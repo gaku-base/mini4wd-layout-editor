@@ -16,6 +16,8 @@
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const ROOM_BOUNDARY = window.M4WD_ROOM_BOUNDARY;
   if (!ROOM_BOUNDARY) throw new Error('room-boundary.jsが読み込まれていません');
+  const RENDER_SCHEDULER = window.M4WD_RENDER_SCHEDULER;
+  if (!RENDER_SCHEDULER) throw new Error('render-scheduler.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
@@ -124,7 +126,7 @@
 
   let ctx;
   let dpr = 1;
-  let raf = 0;
+  let renderScheduler;
   let toastTimer = 0;
   let layoutStore;
 
@@ -168,6 +170,7 @@
   function init() {
     cacheElements();
     ctx = els.courseCanvas.getContext('2d');
+    renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
     initializePartAssets();
     buildPartsList();
     buildColorLegend();
@@ -870,11 +873,18 @@
 
   function resizeCanvas() {
     const rect = els.canvasWrap.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    els.courseCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    els.courseCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    els.courseCanvas.style.width = `${rect.width}px`;
-    els.courseCanvas.style.height = `${rect.height}px`;
+    const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const nextWidth = Math.max(1, Math.floor(rect.width * nextDpr));
+    const nextHeight = Math.max(1, Math.floor(rect.height * nextDpr));
+    const nextStyleWidth = `${rect.width}px`;
+    const nextStyleHeight = `${rect.height}px`;
+    dpr = nextDpr;
+    // Assigning canvas.width/height clears its bitmap.  Only do that when the
+    // physical drawing size has actually changed, never during pointer input.
+    if (els.courseCanvas.width !== nextWidth) els.courseCanvas.width = nextWidth;
+    if (els.courseCanvas.height !== nextHeight) els.courseCanvas.height = nextHeight;
+    if (els.courseCanvas.style.width !== nextStyleWidth) els.courseCanvas.style.width = nextStyleWidth;
+    if (els.courseCanvas.style.height !== nextStyleHeight) els.courseCanvas.style.height = nextStyleHeight;
     render();
   }
 
@@ -891,28 +901,30 @@
   }
 
   function render() {
-    cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      const canvas = els.courseCanvas;
-      const w = canvas.width / dpr;
-      const h = canvas.height / dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      drawBackground(w, h);
-      ctx.save();
-      ctx.translate(state.view.offsetX, state.view.offsetY);
-      ctx.scale(state.view.scale, state.view.scale);
-      drawField(ctx);
-      drawRoomShape(ctx);
-      if (state.start) drawStartLane(ctx, state.start, false);
-      drawPartsInLayerOrder(ctx, { selected: true });
-      drawMissingStartWarning(ctx);
-      if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
-      drawCursorAndGhost(ctx);
-      drawMarquee(ctx);
-      drawCadInteraction(ctx);
-      ctx.restore();
-    });
+    renderScheduler.request(drawFrame);
+  }
+
+  function drawFrame() {
+    const canvas = els.courseCanvas;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, w, h);
+    drawBackground(w, h);
+    ctx.save();
+    ctx.translate(state.view.offsetX, state.view.offsetY);
+    ctx.scale(state.view.scale, state.view.scale);
+    drawField(ctx);
+    drawRoomShape(ctx);
+    if (state.start) drawStartLane(ctx, state.start, false);
+    drawPartsInLayerOrder(ctx, { selected: true });
+    drawMissingStartWarning(ctx);
+    if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
+    drawCursorAndGhost(ctx);
+    drawMarquee(ctx);
+    drawCadInteraction(ctx);
+    ctx.restore();
   }
 
   function drawBackground(w, h) {
@@ -977,21 +989,51 @@
 
   function drawRoomShape(c) {
     if (!state.siteBoundary.visible) return;
-    state.roomCutouts.filter(cutout => cutout.visible).forEach(cutout => {
-      const box = cutoutBoundsWorld(cutout);
-      c.save();
-      c.fillStyle = 'rgba(27, 48, 60, .38)';
-      c.fillRect(box.x, box.y, box.w, box.h);
-      c.strokeStyle = 'rgba(39, 121, 133, .9)';
-      c.lineWidth = 1.4 / state.view.scale;
-      c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
-      c.strokeRect(box.x, box.y, box.w, box.h);
-      c.setLineDash([]);
-      for (let x = box.x - box.h; x < box.x + box.w; x += 16 / state.view.scale) {
-        c.beginPath(); c.moveTo(x, box.y); c.lineTo(x + box.h, box.y + box.h); c.stroke();
-      }
-      c.restore();
+    const boxes = ROOM_BOUNDARY.visibleCutoutIntersections(state.siteBoundary, state.roomCutouts)
+      .map(rect => ({ x: rect.left / 10, y: rect.top / 10, w: (rect.right - rect.left) / 10, h: (rect.bottom - rect.top) / 10 }));
+    if (!boxes.length) return;
+
+    c.save();
+    c.globalCompositeOperation = 'source-over';
+    // Add each rectangle as its own closed subpath.  rect() never connects
+    // separate cutouts, unlike a reused moveTo/lineTo path can.
+    c.beginPath();
+    boxes.forEach(box => { c.rect(box.x, box.y, box.w, box.h); c.closePath(); });
+    c.fillStyle = 'rgba(27, 48, 60, .38)';
+    c.fill('nonzero');
+    // The hatch has a separate path and is clipped to the union mask, so a
+    // diagonal can neither join cutouts nor escape a partial intersection.
+    c.clip('nonzero');
+    c.strokeStyle = 'rgba(39, 121, 133, .9)';
+    c.lineWidth = 1.4 / state.view.scale;
+    c.setLineDash([]);
+    const minX = Math.min(...boxes.map(box => box.x));
+    const minY = Math.min(...boxes.map(box => box.y));
+    const maxX = Math.max(...boxes.map(box => box.x + box.w));
+    const maxY = Math.max(...boxes.map(box => box.y + box.h));
+    const span = Math.max(maxX - minX, maxY - minY);
+    c.beginPath();
+    for (let x = minX - span; x <= maxX; x += 16 / state.view.scale) {
+      c.moveTo(x, minY);
+      c.lineTo(x + span, maxY);
+    }
+    c.stroke();
+    c.restore();
+
+    // Keep borders separate from the fill/hatch path.  This also ensures the
+    // active composite mode is restored before subsequent course rendering.
+    c.save();
+    c.globalCompositeOperation = 'source-over';
+    c.strokeStyle = 'rgba(39, 121, 133, .9)';
+    c.lineWidth = 1.4 / state.view.scale;
+    c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
+    boxes.forEach(box => {
+      c.beginPath();
+      c.rect(box.x, box.y, box.w, box.h);
+      c.closePath();
+      c.stroke();
     });
+    c.restore();
   }
 
   function drawCadInteraction(c) {

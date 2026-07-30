@@ -28,6 +28,30 @@ test('outside cutouts are allowed and only their overlap removes room area', () 
   assert.equal(ROOM.effectiveRoomMetrics(boundary, [{ id: 'outside', x: 10000, y: 0, width: 100, height: 100 }]).cutoutArea, 0);
 });
 
+test('visible cutout paint rectangles are independently clipped to the site boundary', () => {
+  const boundary = { x: 0, y: 0, width: 9000, height: 6000 };
+  const rects = ROOM.visibleCutoutIntersections(boundary, [
+    { id: 'upper', x: 6000, y: -1000, width: 5000, height: 3500 },
+    { id: 'lower', x: 1000, y: 4000, width: 2000, height: 2500 },
+    { id: 'outside', x: 10000, y: 0, width: 100, height: 100 }
+  ]);
+  assert.deepEqual(rects, [
+    { left: 6000, top: 0, right: 9000, bottom: 2500 },
+    { left: 1000, top: 4000, right: 3000, bottom: 6000 }
+  ]);
+  assert.equal(ROOM.unionArea(rects), 11500000);
+});
+
+test('overlapping cutout mask remains a union while disconnected rectangles stay disconnected', () => {
+  const boundary = { width: 1000, height: 1000 };
+  const rects = ROOM.visibleCutoutIntersections(boundary, [
+    { id: 'a', x: 0, y: 0, width: 600, height: 600 },
+    { id: 'b', x: 400, y: 400, width: 600, height: 600 }
+  ]);
+  assert.equal(rects.length, 2);
+  assert.equal(ROOM.unionArea(rects), 680000);
+});
+
 test('overlapping cutouts are unioned once and invisible cutouts do not exclude space', () => {
   const boundary = { width: 1000, height: 1000 };
   const base = [{ id: 'a', x: 0, y: 0, width: 600, height: 600 }, { id: 'b', x: 400, y: 400, width: 600, height: 600 }];
@@ -50,6 +74,16 @@ test('cutouts normalize invalid shape and rotation, deduplicate ids, move and du
 test('CAD model is loaded before app code and persisted field names remain additive', () => {
   const index = fs.readFileSync('index.html', 'utf8');
   const persistence = fs.readFileSync('persistence.js', 'utf8');
+  const app = fs.readFileSync('app.js', 'utf8');
   assert.ok(index.indexOf('src="room-boundary.js"') < index.indexOf('src="app.js"'));
+  assert.ok(index.indexOf('src="render-scheduler.js"') < index.indexOf('src="app.js"'));
   assert.match(persistence, /'siteBoundary', 'roomCutouts'/);
+  assert.match(app, /visibleCutoutIntersections\(state\.siteBoundary, state\.roomCutouts\)/);
+  assert.match(app, /c\.rect\(box\.x, box\.y, box\.w, box\.h\); c\.closePath\(\);/);
+  assert.match(app, /ctx\.globalCompositeOperation = 'source-over';/);
+  assert.match(app, /c\.clip\('nonzero'\)/);
+  assert.match(app, /if \(els\.courseCanvas\.width !== nextWidth\)/);
+  assert.match(app, /if \(els\.courseCanvas\.height !== nextHeight\)/);
+  assert.match(app, /renderScheduler\.request\(drawFrame\)/);
+  assert.doesNotMatch(app, /cancelAnimationFrame\(raf\)/);
 });

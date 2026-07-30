@@ -158,13 +158,21 @@
     return area;
   }
 
-  function effectiveRoomMetrics(siteBoundary, cutouts = []) {
+  // Keep paint geometry independent from Canvas state.  Each returned item is
+  // an axis-aligned, closed rectangle inside the site boundary; callers must
+  // not join their vertices with lineTo().
+  function visibleCutoutIntersections(siteBoundary, cutouts = []) {
     const boundary = rectFrom(normalizeSiteBoundary(siteBoundary));
-    const overlaps = normalizeRoomCutouts(cutouts)
+    return normalizeRoomCutouts(cutouts)
       .filter(cutout => cutout.visible)
       .map(rotatedBounds)
       .map(bounds => intersection(boundary, bounds))
       .filter(Boolean);
+  }
+
+  function effectiveRoomMetrics(siteBoundary, cutouts = []) {
+    const boundary = rectFrom(normalizeSiteBoundary(siteBoundary));
+    const overlaps = visibleCutoutIntersections(siteBoundary, cutouts);
     const cutoutArea = unionArea(overlaps);
     const boundaryArea = rectArea(boundary);
     return { boundary, boundaryArea, cutoutArea, effectiveArea: Math.max(0, boundaryArea - cutoutArea), overlaps };
@@ -214,7 +222,7 @@
     GRID_MM, MIN_SIZE_MM, RECTANGLE, CUTOUT_TYPE,
     round10mm, normalizeRotation, defaultSiteBoundary, normalizeSiteBoundary,
     normalizeCutout, normalizeRoomCutouts, nextCutoutId, rotatedBounds,
-    intersection, unionArea, effectiveRoomMetrics, distancesToBoundary,
+    intersection, unionArea, visibleCutoutIntersections, effectiveRoomMetrics, distancesToBoundary,
     cutoutFromDrag, moveCutout, duplicateCutout, fieldFromSiteBoundary
   });
 });
