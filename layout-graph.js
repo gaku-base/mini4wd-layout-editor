@@ -598,6 +598,6 @@
     worldConnector, allWorldConnectors, endpointKey, normalizeEdge, edgeKey, dedupeEdges, addEdge,
     removeEdgesForParts, connectorUsage, duplicateConnectorWarnings, connectedComponent,
     connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, mirroredConnector, solveSnapPose, snapCandidates, snapTargetKey, nearestCandidateForEachTarget, choosePlacement, verticalEnvelope,
-    boundsOverlap, verticalOverlap, polygonBounds, occupancyPolygon, polygonIntersectionArea, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
+    boundsOverlap, verticalOverlap, polygonArea, polygonBounds, occupancyPolygon, polygonIntersectionArea, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
   });
 });

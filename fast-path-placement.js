@@ -10,7 +10,9 @@
   const RIGHT = 'corner-45-right';
   const LEFT = 'corner-45-left';
   const MOVE_TOLERANCE_PX = 10;
-  const FREE_PLACEMENT_DISTANCE_PX = 120;
+  // This is intentionally independent from the 24px connector snap radius.
+  // It controls when a fast-path anchor yields to ordinary pointer placement.
+  const FAST_PATH_RELEASE_PX = 70;
   const CENTER_PX = 20;
   const TURN_PX = 30;
   const REPEAT = 'repeat';
@@ -34,7 +36,7 @@
   function phaseForPointer(origin, point) {
     const distance = distancePx(origin, point);
     if (distance <= MOVE_TOLERANCE_PX) return { phase: REPEAT, distancePx: distance };
-    if (distance <= FREE_PLACEMENT_DISTANCE_PX) return { phase: SELECT, distancePx: distance };
+    if (distance <= FAST_PATH_RELEASE_PX) return { phase: SELECT, distancePx: distance };
     return { phase: FREE, distancePx: distance };
   }
 
@@ -70,7 +72,7 @@
   }
 
   return Object.freeze({
-    STRAIGHT, RIGHT, LEFT, MOVE_TOLERANCE_PX, FREE_PLACEMENT_DISTANCE_PX, CENTER_PX, TURN_PX,
+    STRAIGHT, RIGHT, LEFT, MOVE_TOLERANCE_PX, FAST_PATH_RELEASE_PX, CENTER_PX, TURN_PX,
     REPEAT, SELECT, FREE,
     isFastPathType, distancePx, hasMeaningfulPointerMove, phaseForPointer, transitionForPointer, lateralOffsetPx, typeForPointer
   });

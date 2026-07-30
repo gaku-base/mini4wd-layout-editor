@@ -24,19 +24,21 @@ test('fast path separates repeat, selection, and free placement at the exact bou
   assert.equal(phaseAt(100), FAST.REPEAT);
   assert.equal(phaseAt(110), FAST.REPEAT);
   assert.equal(phaseAt(111), FAST.SELECT);
-  assert.equal(phaseAt(220), FAST.SELECT);
-  assert.equal(phaseAt(221), FAST.FREE);
+  assert.equal(FAST.FAST_PATH_RELEASE_PX, 70);
+  assert.equal(phaseAt(169), FAST.SELECT);
+  assert.equal(phaseAt(170), FAST.SELECT);
+  assert.equal(phaseAt(171), FAST.FREE);
 });
 
 test('repeat and select retain the same anchor; only free placement releases it', () => {
   const anchor = { x: 540, y: 115, heading: 45 };
   const state = { activePlacementAnchor: anchor, physicalPointerOrigin: { x: 100, y: 100 } };
-  for (const point of [{ x: 110, y: 100 }, { x: 220, y: 100 }]) {
+  for (const point of [{ x: 110, y: 100 }, { x: 170, y: 100 }]) {
     const next = FAST.transitionForPointer(state, point);
     assert.notEqual(next.phase, FAST.FREE);
     assert.equal(next.activePlacementAnchor, anchor);
   }
-  assert.equal(FAST.transitionForPointer(state, { x: 221, y: 100 }).activePlacementAnchor, null);
+  assert.equal(FAST.transitionForPointer(state, { x: 171, y: 100 }).activePlacementAnchor, null);
 });
 
 for (const heading of [0, 45, 90, 180, 270]) {

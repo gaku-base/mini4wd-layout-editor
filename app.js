@@ -141,7 +141,7 @@
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
-      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect',
+      'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
@@ -339,6 +339,7 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.convertStartBtn?.addEventListener('click', () => convertStraightToStart(state.selectedIds[0]));
     els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerVariant);
     document.addEventListener('click', e => {
       const target = e.target instanceof Element
@@ -370,7 +371,10 @@
     canvas.addEventListener('pointercancel', onPointerCancel);
     canvas.addEventListener('pointerleave', onPointerLeave);
     canvas.addEventListener('wheel', onWheel, { passive: false });
-    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    canvas.addEventListener('contextmenu', onCanvasContextMenu);
+    document.addEventListener('pointerdown', event => {
+      if (!els.canvasContextMenu?.contains(event.target)) closeCanvasContextMenu();
+    });
   }
 
   function openSetup(reset) {
@@ -437,7 +441,6 @@
   function setMode(mode) {
     if (state.layoutMove.active) cancelManualLayoutMove();
     if (!['place','move','delete','color'].includes(mode)) return;
-    if (!state.start) return toast('先にスタートレーンを配置してください');
     state.mode = state.mode === mode && mode !== 'place' ? 'place' : mode;
     state.hoveredPartId = null;
     resetPointerInteraction();
@@ -464,7 +467,6 @@
       els.courseCanvas.focus();
       return;
     }
-    if (!state.start) return toast('最初に「5 スタート」を配置してください');
     if (isCornerType(type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(type);
     state.selectedType = isCornerType(type) ? activeCornerType() : type;
     state.mode = 'place';
@@ -571,11 +573,13 @@
 
     state.startPhase = 'position';
     const restoredSelectedType = migratedPartType({ type: data.selectedType });
-    state.selectedType = state.start ? (PARTS[restoredSelectedType] ? restoredSelectedType : 'straight') : 'start';
+    state.selectedType = PARTS[restoredSelectedType]
+      ? restoredSelectedType
+      : (state.start || state.parts.length ? 'straight' : 'start');
     if (isCornerType(state.selectedType)) state.activeCornerVariant = CORNER_VARIANT.variantForType(state.selectedType);
     state.rotation = normalizeRotation(Number(data.rotation) || 0);
     state.selectedIds = [];
-    state.mode = state.start ? 'place' : 'start';
+    state.mode = state.start || state.parts.length ? 'place' : 'start';
     state.layoutMove = { active: false, anchor: null, base: null, previousMode: 'place', pointer: null };
     resetFastPathSession();
     resetPointerInteraction();
@@ -856,6 +860,7 @@
       drawField(ctx);
       if (state.start) drawStartLane(ctx, state.start, false);
       drawPartsInLayerOrder(ctx, { selected: true });
+      drawMissingStartWarning(ctx);
       if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
       drawCursorAndGhost(ctx);
       drawMarquee(ctx);
@@ -1742,7 +1747,7 @@
 
 
   function startInsideField(start) {
-    return FIELD_BOUNDARY.containsBounds(state.field, startBounds(start));
+    return isPartInsideField({ ...start, id: 'start', type: 'start' });
   }
 
   function placeStartLane(placementMeta = {}) {
@@ -1797,7 +1802,7 @@
         heading: normalizeRotation(ep.heading + start.rotation),
         zMm: (Number(start.zMm) || 0) + (Number(ep.localZMm) || 0), pitchDeg: Number(ep.pitchDeg) || 0,
         bankAngleDeg: Number(ep.bankAngleDeg) || 0, shape: ep.shape, laneCount: ep.laneCount,
-        connectorId: ep.id, sourceId: 'start', partId: 'start', sourceType: 'start', endpointIndex, label: ep.label,
+        connectorId: ep.id, connectorRole: ep.connectorRole || null, sourceId: 'start', partId: 'start', sourceType: 'start', endpointIndex, label: ep.label,
         connectionState: endpointState()
       };
     });
@@ -1814,7 +1819,7 @@
         heading: world.directionDeg,
         zMm: world.zMm, pitchDeg: world.pitchDeg,
         bankAngleDeg: world.bankAngleDeg, shape: ep.shape, laneCount: ep.laneCount,
-        connectorId: ep.id, sourceId: part.id, partId: part.id,
+        connectorId: ep.id, connectorRole: ep.connectorRole || null, sourceId: part.id, partId: part.id,
         sourceType: part.type,
         endpointIndex,
         label: ep.label,
@@ -1840,6 +1845,14 @@
 
   function allLayoutParts() {
     return [...(state.start ? [{ ...state.start, id: 'start', type: 'start' }] : []), ...state.parts];
+  }
+
+  function findLayoutPartById(id) {
+    return id === 'start' ? state.start : state.parts.find(part => part.id === id);
+  }
+
+  function endpointsForLayoutPart(part) {
+    return part?.id === 'start' ? startEndpoints(part) : partEndpoints(part);
   }
 
   function inferLegacyConnections() {
@@ -1870,7 +1883,8 @@
     const edgeWarnings = LAYOUT_GRAPH.validateEdges(parts, PARTS, state.connections);
     const interference = LAYOUT_GRAPH.interferenceWarnings(parts, PARTS, part => part.id === 'start' ? startBounds(part) : partBounds(part), { edges: state.connections });
     const negative = parts.filter(part => Number(part.zMm) < 0).map(part => ({ type: 'negative-height', partIds: [part.id] }));
-    state.layoutWarnings = [...duplicate, ...edgeWarnings, ...interference, ...negative];
+    const missingStart = state.start ? [] : [{ type: 'missing-start' }];
+    state.layoutWarnings = [...missingStart, ...duplicate, ...edgeWarnings, ...interference, ...negative];
     return state.layoutWarnings;
   }
 
@@ -1889,9 +1903,9 @@
   function groupMoveSnapProposal(movingParts, movingIds) {
     if (!state.snapEnabled) return null;
     const movingSet = new Set(movingIds);
-    const movingOpen = movingParts.flatMap(part => partEndpoints(part));
+    const movingOpen = movingParts.flatMap(part => endpointsForLayoutPart(part));
     const stationaryEndpoints = [];
-    if (state.start) stationaryEndpoints.push(...startEndpoints(state.start));
+    if (state.start && !movingSet.has('start')) stationaryEndpoints.push(...startEndpoints(state.start));
     state.parts.forEach(part => {
       if (!movingSet.has(part.id)) stationaryEndpoints.push(...partEndpoints(part));
     });
@@ -2090,41 +2104,61 @@
   }
 
 
+  function partOccupancyPolygon(part) {
+    return LAYOUT_GRAPH.occupancyPolygon(part, PARTS[part.type]);
+  }
+
+  function partPreciseBounds(part) {
+    return LAYOUT_GRAPH.polygonBounds(partOccupancyPolygon(part));
+  }
+
   function isPartInsideField(part) {
-    return FIELD_BOUNDARY.containsBounds(state.field, partBounds(part));
+    const polygon = partOccupancyPolygon(part);
+    const totalArea = LAYOUT_GRAPH.polygonArea(polygon);
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
+    const fieldPolygon = [
+      { x: frame.minX, y: frame.minY }, { x: frame.maxX, y: frame.minY },
+      { x: frame.maxX, y: frame.maxY }, { x: frame.minX, y: frame.maxY }
+    ];
+    const insideArea = LAYOUT_GRAPH.polygonIntersectionArea(polygon, fieldPolygon, LAYOUT_GRAPH.OCCUPANCY_EPSILON_CM);
+    return totalArea - insideArea <= LAYOUT_GRAPH.OCCUPANCY_AREA_EPSILON_CM2;
   }
 
   function isStartInsideField(start = state.start) {
-    return !!start && FIELD_BOUNDARY.containsBounds(state.field, startBounds(start));
+    return !!start && isPartInsideField({ ...start, id: 'start', type: 'start' });
   }
 
   function outOfBoundsItems() {
     const items = [];
-    if (state.start && !isStartInsideField(state.start)) items.push({ id: 'start', type: 'start', bounds: startBounds(state.start) });
+    if (state.start && !isStartInsideField(state.start)) items.push({ id: 'start', type: 'start', polygon: partOccupancyPolygon(state.start), bounds: partPreciseBounds(state.start) });
     state.parts.forEach(part => {
-      if (!isPartInsideField(part)) items.push({ id: part.id, type: part.type, bounds: partBounds(part) });
+      if (!isPartInsideField(part)) items.push({ id: part.id, type: part.type, polygon: partOccupancyPolygon(part), bounds: partPreciseBounds(part) });
     });
     return items;
   }
 
-  function drawOutOfBoundsMarker(c, bounds) {
+  function drawOutOfBoundsMarker(c, item) {
+    const polygon = item.polygon || [];
+    if (polygon.length < 3) return;
     c.save();
     c.fillStyle = 'rgba(244,142,33,.12)';
     c.strokeStyle = '#f07818';
     c.lineWidth = 3 / state.view.scale;
     c.setLineDash([9 / state.view.scale, 5 / state.view.scale]);
-    c.fillRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
-    c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
+    c.beginPath();
+    c.moveTo(polygon[0].x, polygon[0].y);
+    polygon.slice(1).forEach(point => c.lineTo(point.x, point.y));
+    c.closePath(); c.fill(); c.stroke();
     c.setLineDash([]);
     c.fillStyle = '#9a3e00';
     c.font = `700 ${12 / state.view.scale}px sans-serif`;
     c.textBaseline = 'bottom';
-    c.fillText('作成範囲外', bounds.minX, bounds.minY - 5 / state.view.scale);
+    c.fillText('作成範囲外', item.bounds.minX, item.bounds.minY - 5 / state.view.scale);
     c.restore();
   }
 
   function drawOutOfBoundsWarnings(c) {
-    outOfBoundsItems().forEach(item => drawOutOfBoundsMarker(c, item.bounds));
+    outOfBoundsItems().forEach(item => drawOutOfBoundsMarker(c, item));
   }
 
   function drawLayoutWarnings(c) {
@@ -2169,6 +2203,10 @@
   }
 
   function rebuildActiveConnectionFromTail() {
+    if (!state.start) {
+      setActiveConnection(null);
+      return;
+    }
     const opens = getOpenConnections();
     const tail = state.parts[state.parts.length - 1];
     const preferred = tail
@@ -2499,7 +2537,7 @@
       if (state.pointer.dragSnapshotTaken) {
         const movingIds = state.pointer.dragBase.map(base => base.id);
         const proposedParts = state.pointer.dragBase.map(base => {
-          const original = state.parts.find(part => part.id === base.id);
+          const original = findLayoutPartById(base.id);
           return original ? {
             ...original,
             x: base.x + dx,
@@ -2516,7 +2554,7 @@
         state.pointer.groupSnap = snapInfo;
 
         state.pointer.dragBase.forEach(base => {
-          const p = state.parts.find(part => part.id === base.id);
+          const p = findLayoutPartById(base.id);
           if (!p) return;
           p.x = base.x + dx + correctionX;
           p.y = base.y + dy + correctionY;
@@ -2619,6 +2657,21 @@
     state.hoveredPartId = null;
     els.courseCanvas.classList.remove('is-hovering-part');
     render();
+  }
+
+  function drawMissingStartWarning(c) {
+    if (state.start) return;
+    const frame = FIELD_BOUNDARY.fieldBounds(state.field);
+    const unit = Math.max(state.view.scale, .15);
+    c.save();
+    c.translate(frame.minX + 14 / unit, frame.minY + 16 / unit);
+    c.fillStyle = 'rgba(108,29,35,.94)';
+    c.strokeStyle = '#ff6f78';
+    c.lineWidth = 1.5 / unit;
+    c.beginPath(); c.roundRect(0, 0, 285 / unit, 54 / unit, 7 / unit); c.fill(); c.stroke();
+    c.fillStyle = '#fff0f1'; c.font = `800 ${13 / unit}px sans-serif`; c.fillText('スタート位置不明！', 12 / unit, 21 / unit);
+    c.font = `600 ${10 / unit}px sans-serif`; c.fillText('ストレートを選択し「スタートに変更」で復旧できます。', 12 / unit, 40 / unit);
+    c.restore();
   }
 
   function onPointerCancel(e) {
@@ -2781,7 +2834,6 @@
   }
 
   function placePartAtCursor(proposalOverride = null, placementMeta = {}) {
-    if (!state.start) return toast('先にスタートレーンを配置してください');
     // The pointer path supplies a deep clone of the exact proposal that was
     // rendered. Keyboard/debug placement may capture the currently visible
     // proposal, but confirmation never recomputes snapping here.
@@ -2929,43 +2981,71 @@
     if (!state.parts.length) return toast('スタート位置まで戻っています');
     snapshot();
     const removed = state.parts.pop();
+    const removedEdge = state.connections.find(edge => edge.partAId === removed.id || edge.partBId === removed.id) || null;
     state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, [removed.id]);
     state.selectedIds = state.selectedIds.filter(id => id !== removed.id);
     recalculateBankStates();
     recalculateLayoutWarnings();
-    rebuildActiveConnectionFromTail();
-    if (state.activeConnection) state.rotation = state.activeConnection.heading;
+    const predecessor = removedEdge
+      ? getAllEndpoints().find(endpoint => endpoint.sourceId === (removedEdge.partAId === removed.id ? removedEdge.partBId : removedEdge.partAId)
+        && endpoint.connectorId === (removedEdge.partAId === removed.id ? removedEdge.connectorBId : removedEdge.connectorAId))
+      : null;
+    if (predecessor) setActiveConnection(predecessor);
+    else rebuildActiveConnectionFromTail();
+    if (state.activeConnection) {
+      state.cursor = { x: state.activeConnection.x, y: state.activeConnection.y };
+      state.rotation = state.activeConnection.heading;
+    }
     state.mode = 'place';
+    if (isFastPathType(removed.type) && state.activeConnection) {
+      state.selectedType = removed.type;
+      if (isCornerType(removed.type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(removed.type);
+      const pointerScreen = state.fastPath.physicalPointerCurrent
+        || worldToScreen(state.pointer.x, state.pointer.y);
+      activateFastPathPlacement(state.activeConnection, removed.type, pointerScreen);
+    } else {
+      resetFastPathSession();
+      state.selectedType = removed.type;
+    }
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
     toast(`${PARTS[removed.type].name}を1つ戻しました`);
     persistLocal(); updateUI(); render();
   }
 
   function deleteParts(ids) {
-    const unique = [...new Set(ids)].filter(id => state.parts.some(p => p.id === id));
+    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
     if (!unique.length) return toast('削除するパーツが選択されていません');
     snapshot();
     const count = unique.length;
+    const deletesStart = unique.includes('start');
     state.parts = state.parts.filter(p => !unique.includes(p.id));
+    if (deletesStart) state.start = null;
     state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, unique);
     state.selectedIds = state.selectedIds.filter(id => !unique.includes(id));
     recalculateBankStates();
     recalculateLayoutWarnings();
     rebuildActiveConnectionFromTail();
     if (state.activeConnection) state.rotation = state.activeConnection.heading;
-    toast(`${count}個のパーツを削除しました`);
+    if (deletesStart) {
+      resetFastPathSession();
+      state.mode = 'place';
+      state.selectedType = 'straight';
+      toast('スタートパーツを削除しました。開始位置が未設定です');
+    } else toast(`${count}個のパーツを削除しました`);
     persistLocal(); updateUI(); render();
   }
 
   function cyclePartsColor(ids) {
-    const unique = [...new Set(ids)].filter(id => state.parts.some(p => p.id === id));
+    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
     if (!unique.length) return toast('カラー変更するパーツを選択してください');
     snapshot();
     unique.forEach(id => {
-      const p = state.parts.find(part => part.id === id);
+      const p = findLayoutPartById(id);
       const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (p.colorKey || 'default')));
       p.colorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
     });
-    const first = state.parts.find(p => p.id === unique[0]);
+    const first = findLayoutPartById(unique[0]);
     const color = COLORS.find(c => c.key === first?.colorKey)?.name || '標準（グレー）';
     toast(`${unique.length}個のカラーを「${color}」へ変更しました`);
     persistLocal(); updateUI(); render();
@@ -2999,10 +3079,10 @@
   }
 
   function isSelected(id) { return state.selectedIds.includes(id); }
-  function selectedParts() { return state.parts.filter(p => isSelected(p.id)); }
+  function selectedParts() { return state.selectedIds.map(findLayoutPartById).filter(Boolean); }
 
   function setSelection(ids) {
-    state.selectedIds = [...new Set(ids)].filter(id => state.parts.some(p => p.id === id));
+    state.selectedIds = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
   }
 
   function toggleSelection(id) {
@@ -3294,16 +3374,77 @@
       const p = ordered[i];
       if (pointInPartShape(x, y, p)) return p;
     }
+    if (state.start && pointInPartShape(x, y, state.start)) return state.start;
     return null;
   }
 
 
   function partsInRect(rect) {
-    return state.parts.filter(p => {
+    const matches = state.parts.filter(p => {
       if (isCornerType(p.type)) return polygonIntersectsRect(corner45PolygonWorld(p), rect);
       const b = partBounds(p);
       return b.maxX >= rect.minX && b.minX <= rect.maxX && b.maxY >= rect.minY && b.minY <= rect.maxY;
     });
+    if (state.start && polygonIntersectsRect(LAYOUT_GRAPH.occupancyPolygon(state.start, PARTS.start), rect)) matches.push(state.start);
+    return matches;
+  }
+
+  function canConvertStraightToStart(part) {
+    return !state.start && !!part && part.id !== 'start' && part.type === 'straight';
+  }
+
+  function closeCanvasContextMenu() {
+    if (!els.canvasContextMenu) return;
+    els.canvasContextMenu.hidden = true;
+    els.canvasContextMenu.dataset.partId = '';
+  }
+
+  function convertStraightToStart(partId) {
+    const straight = state.parts.find(part => part.id === partId);
+    if (!canConvertStraightToStart(straight)) return toast(state.start ? 'スタートパーツはすでに設定されています' : 'ストレートだけをスタートに変更できます');
+    snapshot();
+    state.parts = state.parts.filter(part => part.id !== straight.id);
+    state.start = { ...straight, id: 'start', type: 'start', zOrder: 0, zIndex: 0 };
+    state.connections = state.connections.map(edge => ({
+      ...edge,
+      partAId: edge.partAId === straight.id ? 'start' : edge.partAId,
+      partBId: edge.partBId === straight.id ? 'start' : edge.partBId
+    }));
+    state.selectedIds = ['start'];
+    state.mode = 'place';
+    recalculateBankStates();
+    rebuildActiveConnectionFromTail();
+    if (!state.activeConnection) {
+      const forwardExit = startEndpoints(state.start).find(endpoint => endpoint.connectorRole === 'exit');
+      if (forwardExit) setActiveConnection(forwardExit);
+    }
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
+    closeCanvasContextMenu();
+    recalculateLayoutWarnings();
+    toast('ストレートをスタートに変更しました');
+    persistLocal(); updateUI(); render();
+  }
+
+  function onCanvasContextMenu(event) {
+    const rect = els.courseCanvas.getBoundingClientRect();
+    const world = screenToWorld(event.clientX - rect.left, event.clientY - rect.top);
+    const target = hitTest(world.x, world.y);
+    if (!canConvertStraightToStart(target)) {
+      closeCanvasContextMenu();
+      return;
+    }
+    event.preventDefault();
+    state.pointer.panning = false;
+    els.courseCanvas.classList.remove('is-panning');
+    els.canvasContextMenu.style.left = `${event.clientX}px`;
+    els.canvasContextMenu.style.top = `${event.clientY}px`;
+    els.canvasContextMenu.dataset.partId = target.id;
+    els.canvasContextMenu.hidden = false;
+    const convert = els.canvasContextMenu.querySelector('[data-action="convert-start"]');
+    const cancel = els.canvasContextMenu.querySelector('[data-action="cancel-context"]');
+    convert.onclick = () => convertStraightToStart(target.id);
+    cancel.onclick = closeCanvasContextMenu;
   }
 
   function normalizedRect(a, b) {
@@ -3403,7 +3544,7 @@
     if (els.statusWarnings) els.statusWarnings.textContent = String(state.layoutWarnings.length);
     if (els.layoutWarningSummary) {
       const counts = state.layoutWarnings.reduce((result, warning) => { result[warning.type] = (result[warning.type] || 0) + 1; return result; }, {});
-      const labels = { interference: '干渉の可能性', 'duplicate-connector': '接続口重複', 'height-mismatch': '高さが閉合していません', 'disconnected-edge': '接続ずれ', 'negative-height': '負の高さ', 'missing-connector': '不正接続' };
+      const labels = { interference: '干渉の可能性', 'duplicate-connector': '接続口重複', 'height-mismatch': '高さが閉合していません', 'disconnected-edge': '接続ずれ', 'negative-height': '負の高さ', 'missing-connector': '不正接続', 'missing-start': 'スタート位置不明' };
       els.layoutWarningSummary.classList.toggle('has-warning', !!state.layoutWarnings.length);
       els.layoutWarningSummary.textContent = state.layoutWarnings.length
         ? Object.entries(counts).map(([type, count]) => `${labels[type] || type} ${count}件`).join(' / ')
@@ -3468,11 +3609,15 @@
       els.selectionInfo.className = 'selection-info';
       const selectedOutside = selectedParts().filter(part => !isPartInsideField(part)).length;
       const firstSelected = selectedParts()[0];
-      const endpointHeights = firstSelected ? partEndpoints(firstSelected).map(endpoint => `${endpoint.label}:${endpoint.zMm}mm`).join(' / ') : '';
+      const endpointHeights = firstSelected ? endpointsForLayoutPart(firstSelected).map(endpoint => `${endpoint.label}:${endpoint.zMm}mm`).join(' / ') : '';
       els.selectionInfo.innerHTML = `<strong>${state.selectedIds.length}個選択</strong><br>${Object.entries(names).map(([name, n]) => `${name} ${n}`).join(' / ')}${firstSelected ? `<br>基準高さ ${firstSelected.zMm || 0}mm（${((firstSelected.zMm || 0) / 115).toFixed(2)}段）<br>${endpointHeights}<br>pitch ${firstSelected.pitchDeg || 0}° / bank ${firstSelected.bankAngleDeg || 0}° / zOrder ${firstSelected.zOrder ?? firstSelected.zIndex}` : ''}${selectedOutside ? `<br><span class="selection-overflow">作成範囲外 ${selectedOutside}個</span>` : ''}`;
     } else {
       els.selectionInfo.className = 'selection-info empty-summary';
       els.selectionInfo.textContent = '選択なし';
+    }
+    if (els.convertStartBtn) {
+      const target = state.selectedIds.length === 1 ? findLayoutPartById(state.selectedIds[0]) : null;
+      els.convertStartBtn.hidden = !canConvertStraightToStart(target);
     }
 
     els.courseCanvas.classList.toggle('mode-place', state.mode === 'place');
@@ -3580,6 +3725,8 @@
       loadState: data => applySerialized(data, false),
       setMode,
       rewindLastPart,
+      deleteParts,
+      convertStraightToStart,
       rotateCurrent,
       autoAlignLayoutTopLeft,
       autoFitFieldToLayout,
@@ -3609,6 +3756,7 @@
       setRotation: value => { state.rotation = normalizeRotation(Number(value)); updateUI(); render(); },
       setSelectedIds: ids => {
         const available = new Set(state.parts.map(part => part.id));
+        if (state.start) available.add('start');
         state.selectedIds = Array.isArray(ids) ? ids.filter(id => available.has(id)) : [];
         updateUI();
         render();
