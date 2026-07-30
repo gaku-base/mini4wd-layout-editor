@@ -79,6 +79,57 @@ test('a pointer behind the ghost exit never qualifies for automatic side selecti
   assert.equal(FAST.isInForwardSelectionZone(FAST.MIN_FORWARD_PX), true);
 });
 
+for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
+  test(`runtime pointer flow updates the rendered fast-path type at ${heading} degrees`, () => {
+    const radians = heading * Math.PI / 180;
+    const forward = { x: Math.cos(radians), y: Math.sin(radians) };
+    const right = { x: -Math.sin(radians), y: Math.cos(radians) };
+    const exit = { x: 100, y: 100, heading };
+    const point = lateral => ({
+      x: exit.x + forward.x * 4 + right.x * lateral,
+      y: exit.y + forward.y * 4 + right.y * lateral
+    });
+    const fastPath = {
+      activePlacementAnchor: { x: 1, y: 1, heading },
+      // The physical movement must first leave the 10px repeat zone, while
+      // the selection itself remains measured from the ghost exit.
+      physicalPointerOrigin: { x: exit.x - forward.x * 16, y: exit.y - forward.y * 16 }
+    };
+    const rightMove = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point(35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    const centerMove = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point(0), ghostExitScreen: exit, currentType: FAST.RIGHT });
+    const leftMove = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point(-35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    assert.equal(rightMove.phase, FAST.SELECT);
+    assert.equal(rightMove.type, FAST.RIGHT);
+    assert.equal(centerMove.type, FAST.STRAIGHT);
+    assert.equal(leftMove.type, FAST.LEFT);
+    assert.equal(rightMove.activePlacementAnchor, fastPath.activePlacementAnchor);
+  });
+}
+
+test('runtime pointer flow keeps an anchored ghost through 90px and releases at 91px', () => {
+  const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin: { x: 0, y: 0 } };
+  const exit = { x: 0, y: 0, heading: 0 };
+  assert.equal(FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: { x: 90, y: 0 }, ghostExitScreen: exit, currentType: FAST.STRAIGHT }).phase, FAST.SELECT);
+  const free = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: { x: 91, y: 0 }, ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+  assert.equal(free.phase, FAST.FREE);
+  assert.equal(free.activePlacementAnchor, null);
+});
+
+test('runtime flow uses the physical pointer for release and the ghost-relative pointer for side selection', () => {
+  const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin: { x: 10, y: 10 } };
+  const result = FAST.runtimeTransitionForPointer({
+    fastPath,
+    physicalPointerScreen: { x: 26, y: 10 },
+    selectionPointerScreen: { x: 500, y: 535 },
+    ghostExitScreen: { x: 500, y: 500, heading: 0 },
+    currentType: FAST.STRAIGHT
+  });
+  assert.equal(result.phase, FAST.SELECT);
+  assert.equal(result.type, FAST.RIGHT);
+  assert.equal(result.forwardPx, 0);
+  assert.equal(result.lateralPx, 35);
+});
+
 test('the 20-30px transition band keeps the current ghost type', () => {
   const anchor = { x: 0, y: 0 };
   assert.equal(FAST.typeForPointer({ currentType: FAST.LEFT, anchorScreen: anchor, pointerScreen: { x: 0, y: -25 }, headingDeg: 0 }).type, FAST.LEFT);

@@ -17,6 +17,9 @@ function functionSource(name, nextName) {
 test('R restores the removed part type and rebuilds the fast-path anchor from its predecessor', () => {
   const source = functionSource('rewindLastPart', 'deleteParts');
   assert.match(source, /removedEdge/);
+  assert.match(source, /removedEntryConnectorId/);
+  assert.match(source, /edge\.connectorAId === removedEntryConnectorId/);
+  assert.match(source, /edge\.connectorBId === removedEntryConnectorId/);
   assert.match(source, /const predecessor = removedEdge/);
   assert.match(source, /state\.cursor = \{ x: state\.activeConnection\.x, y: state\.activeConnection\.y \}/);
   assert.match(source, /state\.selectedType = removed\.type/);
@@ -29,6 +32,20 @@ test('R recovery rebuilds a visible proposal without waiting for pointer movemen
   assert.match(source, /activateFastPathPlacement\(state\.activeConnection, removed\.type, pointerScreen\)/);
   assert.match(source, /refreshFastPathGhostProposal\(\)/);
   assert.doesNotMatch(source, /state\.ghostProposal = null/);
+});
+
+test('active connection normalization retains the connector data required to rebuild an anchored ghost', () => {
+  const source = functionSource('normalizeConnection', 'setActiveConnection');
+  for (const field of ['partId', 'connectorId', 'zMm', 'pitchDeg', 'bankAngleDeg', 'shape', 'laneCount', 'connectionState']) {
+    assert.match(source, new RegExp(`${field}:`), `${field} is retained`);
+  }
+});
+
+test('confirmed parts derive their next fast-path anchor from the proposal entry connector', () => {
+  const source = functionSource('placePartAtCursor', 'recalculateBankStates');
+  assert.match(source, /const entryConnectorId = proposal\.entryConnectorId/);
+  assert.match(source, /ends\.find\(endpoint => endpoint\.connectorId !== connectedEntry\?\.connectorId\)/);
+  assert.match(source, /setActiveConnection\(\{ \.\.\.newOpen, sourceId: id \}\)/);
 });
 
 test('Start participates in hit testing, selection, drag, and deletion', () => {

@@ -209,8 +209,9 @@
 
 ### 高速配置の前方基準とRゴースト即時復旧（2026-07-30）
 
+前方判定はゴースト出口のscreen座標を基準にし、出口と同位置からの左右選択も有効とする。後方（forwardが負）の入力だけを除外する。OSポインタの移動量は表示中ghost出口へ移して選択ポインタとし、解除距離には実ポインタ移動量、左右判定にはghost出口基準の選択ポインタを用いる。canvasのpointermoveで型が変化した場合は、そのイベント内で新しいghost proposalを生成して右パネルと描画へ同じstateを渡す。Rは削除対象のentry connectorに接続していたedgeを優先して前段anchorを復元する。Corner確定後の次anchorは、確定proposalのentry connector以外のworld connector（未接続出口）の位置・headingから取得する。
 - 高速配置の解除距離は接続吸着半径・左右選択閾値から独立した`FAST_PATH_RELEASE_PX = 90`とする。90pxちょうどまでは高速配置を維持し、90pxを超えたときだけ`free`へ移行する。
-- `select`の左右判定は接続アンカーや画面の絶対方向ではなく、現在表示中のゴーストの未接続側出口を基準にする。出口headingからforward/right軸を作り、前方6px以上でのみlateralによる左・中央・右選択を有効にする。
+- `select`の左右判定は接続アンカーや画面の絶対方向ではなく、現在表示中のゴーストの未接続側出口を基準にする。出口headingからforward/right軸を作り、出口と同位置または前方でlateralによる左・中央・右選択を有効にする。
 - R復旧では、残存側connectorをactive anchorに設定した後、復元typeのfresh ghost proposalを同期的に生成する。描画や次のpointermoveに依存せず、R直後の再配置と連打復旧を可能にする。
 
 ### 45度コーナーの方向固定吸着（2026-07-28）

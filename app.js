@@ -74,6 +74,8 @@
       lastPlacedPartType: null,
       physicalPointerOrigin: null,
       physicalPointerCurrent: null,
+      selectionPointerOrigin: null,
+      selectionPointerCurrent: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
@@ -973,6 +975,8 @@
       lastPlacedPartType: null,
       physicalPointerOrigin: null,
       physicalPointerCurrent: null,
+      selectionPointerOrigin: null,
+      selectionPointerCurrent: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
@@ -1002,6 +1006,8 @@
     state.fastPath.lastPlacedPartType = type;
     state.fastPath.physicalPointerOrigin = { ...pointer };
     state.fastPath.physicalPointerCurrent = { ...pointer };
+    state.fastPath.selectionPointerOrigin = null;
+    state.fastPath.selectionPointerCurrent = null;
     state.fastPath.lateralPx = 0;
     state.fastPath.forwardPx = 0;
     state.fastPath.distancePx = 0;
@@ -1030,29 +1036,51 @@
     return cacheGhostProposal(proposal);
   }
 
+  // The OS cursor remains where the user clicked, while the next ghost is an
+  // entire part-length ahead.  Preserve the 90px release distance as a real
+  // pointer delta, but apply that delta from the *displayed ghost exit* for
+  // side selection.  Thus the selection geometry never compares an anchor
+  // world point or an old placement origin against a screen pointer.
+  function rebaseFastPathSelectionPointer() {
+    const fast = state.fastPath;
+    const exit = fastPathGhostExitScreen();
+    fast.selectionPointerOrigin = exit ? { x: exit.x, y: exit.y } : null;
+    fast.selectionPointerCurrent = exit ? { x: exit.x, y: exit.y } : null;
+  }
+
+  function selectionPointerForPhysicalPointer(pointerScreen) {
+    const fast = state.fastPath;
+    if (!fast.selectionPointerOrigin || !fast.physicalPointerOrigin) return { ...pointerScreen };
+    return {
+      x: fast.selectionPointerOrigin.x + pointerScreen.x - fast.physicalPointerOrigin.x,
+      y: fast.selectionPointerOrigin.y + pointerScreen.y - fast.physicalPointerOrigin.y
+    };
+  }
+
   function updateFastPathTypeForPointer(pointerScreen) {
     const fast = state.fastPath;
     if (!fast.activePlacementAnchor || fast.phase !== FAST_PATH.SELECT || !isFastPathType(fast.lastPlacedPartType)) return false;
-    const ghostExitScreen = fastPathGhostExitScreen();
-    if (!ghostExitScreen) return false;
-    const components = FAST_PATH.pointerComponents(ghostExitScreen, pointerScreen, ghostExitScreen.heading);
-    fast.forwardPx = components.forwardPx;
-    fast.lateralPx = components.lateralPx;
-    if (!FAST_PATH.isInForwardSelectionZone(components.forwardPx)) {
-      fast.zone = 'behind';
-      return false;
-    }
-    const decision = FAST_PATH.typeForPointer({
+    const selectionPointerScreen = selectionPointerForPhysicalPointer(pointerScreen);
+    fast.selectionPointerCurrent = { ...selectionPointerScreen };
+    const result = FAST_PATH.runtimeTransitionForPointer({
+      fastPath: fast,
+      physicalPointerScreen: pointerScreen,
+      selectionPointerScreen,
+      ghostExitScreen: fastPathGhostExitScreen(),
       currentType: state.selectedType,
-      fallbackType: fast.lastPlacedPartType,
-      anchorScreen: ghostExitScreen,
-      pointerScreen,
-      headingDeg: ghostExitScreen.heading
+      fallbackType: fast.lastPlacedPartType
     });
-    fast.forwardPx = decision.forwardPx;
-    fast.lateralPx = decision.lateralPx;
-    fast.zone = decision.zone;
-    return setFastPathType(decision.type);
+    fast.forwardPx = result.forwardPx;
+    fast.lateralPx = result.lateralPx;
+    fast.zone = result.zone;
+    const changed = setFastPathType(result.type);
+    // The browser event must update the visible proposal immediately.  Do not
+    // wait for pointerdown or a later render cache miss after a side change.
+    if (changed) {
+      refreshFastPathGhostProposal();
+      rebaseFastPathSelectionPointer();
+    }
+    return changed;
   }
 
   // repeat and select both keep the proposal anchored. Only free placement
@@ -1068,6 +1096,8 @@
     if (result.phase === FAST_PATH.FREE) {
       fast.lastPlacedPartType = null;
       fast.physicalPointerOrigin = null;
+      fast.selectionPointerOrigin = null;
+      fast.selectionPointerCurrent = null;
       fast.lateralPx = 0;
       fast.forwardPx = 0;
       fast.distancePx = 0;
@@ -2220,9 +2250,17 @@
       heading: normalizeRotation(Number(connection.heading) || 0),
       sourceId: String(connection.sourceId || 'manual'),
       sourceType: connection.sourceType || '',
+      partId: String(connection.partId || connection.sourceId || 'manual'),
+      connectorId: connection.connectorId || null,
       endpointIndex: Number.isFinite(Number(connection.endpointIndex)) ? Number(connection.endpointIndex) : 0,
       connectorRole: connection.connectorRole || null,
-      label: connection.label || ''
+      label: connection.label || '',
+      zMm: Number(connection.zMm) || 0,
+      pitchDeg: Number(connection.pitchDeg) || 0,
+      bankAngleDeg: Number(connection.bankAngleDeg) || 0,
+      shape: connection.shape || null,
+      laneCount: Number(connection.laneCount) || 3,
+      connectionState: endpointState(connection.connectionState)
     };
   }
 
@@ -2530,9 +2568,12 @@
       if (fastPathResult.phase !== FAST_PATH.FREE) {
         // The anchor remains the placement basis during both repeat and
         // select. Rebuild only when selection changed the part type.
-        const anchoredProposal = currentGhostProposal();
+        // Re-cache on every anchored pointermove so the state consumed by the
+        // panel and renderer is the same proposal produced by this event.
+        const anchoredProposal = refreshFastPathGhostProposal();
         updateSnapCandidatePanel(anchoredProposal);
         updatePlacementInstruction(anchoredProposal);
+        updateUI();
         updateStatusOnly();
         render();
         return;
@@ -2912,7 +2953,15 @@
       state.connections = LAYOUT_GRAPH.addEdge(state.connections, { ...proposal.edge, partBId: id, createdOrder: state.connections.length + 1 });
     }
     const ends = partEndpoints(part);
-    const newOpen = ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1] || ends[0];
+    const entryConnectorId = proposal.entryConnectorId;
+    const connectedEntry = ends.find(endpoint => endpoint.connectorId === entryConnectorId)
+      || ends[Number.isInteger(proposal.attachedIndex) ? proposal.attachedIndex : 0];
+    // Connector IDs, not array order or the pre-placement rotation, identify
+    // the next anchor.  This preserves the actual outward heading of either
+    // concrete corner type after every confirmed placement.
+    const newOpen = ends.find(endpoint => endpoint.connectorId !== connectedEntry?.connectorId)
+      || ends[Number.isInteger(proposal.otherIndex) ? proposal.otherIndex : 1]
+      || ends[0];
     setActiveConnection({ ...newOpen, sourceId: id });
     if (isCornerType(part.type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(part.type);
     if (isFastPathType(part.type)) {
@@ -2931,6 +2980,7 @@
     // The next ghost must be a fresh proposal. It cannot share objects with
     // the part just committed from the captured proposal above.
     refreshFastPathGhostProposal();
+    rebaseFastPathSelectionPointer();
     toast(proposal.snapped
       ? `${partDisplayName(part)}を${proposal.used ? '使用済み' : ''}接続点へ配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`
       : `${partDisplayName(part)}を自由配置しました${proposal.outOfBounds ? '（作成範囲外）' : ''}`);
@@ -3008,7 +3058,17 @@
     if (!state.parts.length) return toast('スタート位置まで戻っています');
     snapshot();
     const removed = state.parts.pop();
-    const removedEdge = state.connections.find(edge => edge.partAId === removed.id || edge.partBId === removed.id) || null;
+    const removedEntryConnectorId = removed.entryConnectorId
+      || LAYOUT_GRAPH.connectorsForDefinition(PARTS[removed.type])[Number(removed.routeIndex) || 0]?.id
+      || null;
+    // A part can have more than one edge.  R must return to the edge through
+    // which the removed part was entered, not whichever edge happens to be
+    // first in the array.
+    const removedEdge = state.connections.find(edge => (
+      edge.partAId === removed.id && edge.connectorAId === removedEntryConnectorId
+    ) || (
+      edge.partBId === removed.id && edge.connectorBId === removedEntryConnectorId
+    )) || state.connections.find(edge => edge.partAId === removed.id || edge.partBId === removed.id) || null;
     state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, [removed.id]);
     state.selectedIds = state.selectedIds.filter(id => id !== removed.id);
     recalculateBankStates();
@@ -3037,6 +3097,7 @@
     // R must create a new visible proposal synchronously; waiting for a
     // pointermove here leaves the restored fast-path ghost invisible.
     refreshFastPathGhostProposal();
+    rebaseFastPathSelectionPointer();
     toast(`${PARTS[removed.type].name}を1つ戻しました`);
     persistLocal(); updateUI(); render();
   }
