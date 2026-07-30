@@ -232,7 +232,7 @@
   <script src="part-render-pose.js?visible-ghost-pose-v1"></script>
   <script src="placement-proposal.js?visible-ghost-pose-v1"></script>
   <script src="corner-variant.js?corner-variant-v1"></script>
-  <script src="fast-path-placement.js?leading-pointer-v2"></script>
+  <script src="fast-path-placement.js?relative-pointer-v1"></script>
   <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>
@@ -270,7 +270,7 @@
       setInterval(refresh, 250);
     });
   </script>
-  <script src="app.js?leading-pointer-v2"></script>
+  <script src="app.js?relative-pointer-v1"></script>
 
 <script>
 window.addEventListener('load', () => {
@@ -567,10 +567,10 @@ window.addEventListener('load', () => {
           };
         }
         const exit = runtime.proposal?.exit;
-        const origin = exit ? {
-          x: exit.x * runtime.view.scale + runtime.view.offsetX,
-          y: exit.y * runtime.view.scale + runtime.view.offsetY
-        } : runtime.fastPath?.selectionPointerOrigin;
+        // The QA pointer is an OS-pointer position, so derive it from the
+        // physical click origin rather than from the ghost exit. The app then
+        // maps this delta onto selectionPointerOrigin itself.
+        const origin = runtime.fastPath?.physicalPointerOrigin;
         const heading = exit?.heading ?? runtime.activeConnection?.heading ?? 0;
         if (!origin) return;
         const radians = heading * Math.PI / 180;

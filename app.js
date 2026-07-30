@@ -1023,6 +1023,11 @@
     state.rotation = normalizeRotation(anchor.heading);
     state.ghostProposal = null;
     state.ghostProposalKey = null;
+    // Every activation (including snapped free placement) owns a newly
+    // generated ghost exit.  Do not carry a selection origin over from the
+    // previous part.
+    refreshFastPathGhostProposal();
+    rebaseFastPathSelectionPointer();
   }
 
   function fastPathGhostExitScreen() {
@@ -1042,9 +1047,9 @@
     return cacheGhostProposal(proposal);
   }
 
-  // The selection origin describes the displayed ghost exit, but the actual
-  // pointer remains the selection point.  It leads an anchored ghost instead
-  // of being translated into virtual coordinates.
+  // The displayed ghost exit is the virtual selection origin. The OS pointer
+  // remains untouched; only its movement since the last confirmed placement
+  // is applied to this origin.
   function rebaseFastPathSelectionPointer() {
     const fast = state.fastPath;
     const exit = fastPathGhostExitScreen();
@@ -1053,7 +1058,11 @@
   }
 
   function selectionPointerForPhysicalPointer(pointerScreen) {
-    return { ...pointerScreen };
+    return FAST_PATH.selectionPointerFromPhysicalDelta({
+      physicalPointerOrigin: state.fastPath.physicalPointerOrigin,
+      selectionPointerOrigin: state.fastPath.selectionPointerOrigin,
+      physicalPointerCurrent: pointerScreen
+    }) || { ...pointerScreen };
   }
 
   function applyFastPathSelectionResult(result) {

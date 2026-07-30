@@ -231,3 +231,9 @@
 - `FAST_PATH_RELEASE_PX` remains `90` as the compatibility constant. Runtime release now uses directional limits: unlimited forward distance, retained lateral movement through 90px, lateral release beyond 110px, and backward release beyond 50px. The retained bands keep the current mode stable while the pointer crosses a boundary.
 - A free-placement proposal that snaps to an open connector re-enters the same fast-path activation flow used after placement. The first subsequent pointer update uses that anchor and does not require a special or virtual cursor.
 - `repeat` and `select` render a dashed, heading-aligned guide arrow in the HTML overlay. It is presentation-only and is hidden in `free` mode, during modal/edit modes, and whenever no active anchor exists; it is excluded from persistence, undo/redo, export, and collision state.
+
+### Fast path relative pointer selection correction (2026-07-31)
+
+- The OS pointer remains real, but it is not compared directly to the ghost exit. At each confirmed placement, `physicalPointerOrigin` records the click position and `selectionPointerOrigin` records the fresh ghost exit. Selection uses `selectionPointerOrigin + (physicalPointerCurrent - physicalPointerOrigin)`.
+- The virtual selection point is projected onto the current ghost-exit heading: forward is `dx*cos(h) + dy*sin(h)` and lateral is `-dx*sin(h) + dy*cos(h)`. Positive lateral selects the right 45-degree corner, negative lateral selects the left corner, and the 20–30px band retains the current type.
+- The physical pointer delta continues to determine repeat/select/free release. Re-activation from a snapped free proposal regenerates the ghost and both origins before the next pointermove, so a previous ghost exit cannot affect the new selection session.

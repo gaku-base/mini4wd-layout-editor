@@ -121,6 +121,17 @@
     };
   }
 
+  // Keep the operating-system cursor untouched while making the displayed
+  // ghost exit the selection origin.  Only the physical pointer delta since
+  // the last confirmed placement is translated into this virtual coordinate.
+  function selectionPointerFromPhysicalDelta({ physicalPointerOrigin, selectionPointerOrigin, physicalPointerCurrent }) {
+    if (!physicalPointerOrigin || !selectionPointerOrigin || !physicalPointerCurrent) return null;
+    return {
+      x: selectionPointerOrigin.x + physicalPointerCurrent.x - physicalPointerOrigin.x,
+      y: selectionPointerOrigin.y + physicalPointerCurrent.y - physicalPointerOrigin.y
+    };
+  }
+
   function lateralOffsetPx(anchorScreen, pointerScreen, headingDeg) {
     return pointerComponents(anchorScreen, pointerScreen, headingDeg).lateralPx;
   }
@@ -140,14 +151,15 @@
   }
 
   // This is the state transition used by the canvas pointermove handler.
-  // Keep the physical release distance separate from the displayed ghost's
-  // exit geometry: the former decides repeat/select/free, while the latter
-  // decides Straight/Right/Left during select.
+  // Physical movement from the last click decides repeat/select/free. The
+  // virtual selection coordinate at the displayed ghost exit decides
+  // Straight/Right/Left during select.
   function runtimeTransitionForPointer({ fastPath, pointerScreen, physicalPointerScreen = pointerScreen, selectionPointerScreen = pointerScreen, ghostExitScreen, currentType, fallbackType = STRAIGHT }) {
+    const releaseOriginScreen = fastPath?.releasePointerOrigin || fastPath?.physicalPointerOrigin || null;
     const transition = directionalPhaseForPointer({
       state: fastPath,
       physicalPointerScreen,
-      selectionOriginScreen: ghostExitScreen,
+      selectionOriginScreen: releaseOriginScreen,
       headingDeg: ghostExitScreen?.heading
     });
     const result = {
@@ -182,6 +194,6 @@
     AUTO_SELECT_BACKWARD_RETAIN_PX, AUTO_SELECT_BACKWARD_EXIT_PX,
     REPEAT, SELECT, FREE,
     isFastPathType, distancePx, hasMeaningfulPointerMove, phaseForPointer, transitionForPointer, directionalPhaseForPointer,
-    pointerComponents, lateralOffsetPx, isInForwardSelectionZone, typeForPointer, runtimeTransitionForPointer
+    pointerComponents, selectionPointerFromPhysicalDelta, lateralOffsetPx, isInForwardSelectionZone, typeForPointer, runtimeTransitionForPointer
   });
 });
