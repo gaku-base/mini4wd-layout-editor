@@ -21,7 +21,14 @@ test('R restores the removed part type and rebuilds the fast-path anchor from it
   assert.match(source, /state\.cursor = \{ x: state\.activeConnection\.x, y: state\.activeConnection\.y \}/);
   assert.match(source, /state\.selectedType = removed\.type/);
   assert.match(source, /activateFastPathPlacement\(state\.activeConnection, removed\.type/);
-  assert.match(source, /state\.ghostProposal = null/);
+  assert.match(source, /refreshFastPathGhostProposal\(\)/);
+});
+
+test('R recovery rebuilds a visible proposal without waiting for pointer movement', () => {
+  const source = functionSource('rewindLastPart', 'deleteParts');
+  assert.match(source, /activateFastPathPlacement\(state\.activeConnection, removed\.type, pointerScreen\)/);
+  assert.match(source, /refreshFastPathGhostProposal\(\)/);
+  assert.doesNotMatch(source, /state\.ghostProposal = null/);
 });
 
 test('Start participates in hit testing, selection, drag, and deletion', () => {

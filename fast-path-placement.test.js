@@ -24,24 +24,24 @@ test('fast path separates repeat, selection, and free placement at the exact bou
   assert.equal(phaseAt(100), FAST.REPEAT);
   assert.equal(phaseAt(110), FAST.REPEAT);
   assert.equal(phaseAt(111), FAST.SELECT);
-  assert.equal(FAST.FAST_PATH_RELEASE_PX, 70);
-  assert.equal(phaseAt(169), FAST.SELECT);
-  assert.equal(phaseAt(170), FAST.SELECT);
-  assert.equal(phaseAt(171), FAST.FREE);
+  assert.equal(FAST.FAST_PATH_RELEASE_PX, 90);
+  assert.equal(phaseAt(189), FAST.SELECT);
+  assert.equal(phaseAt(190), FAST.SELECT);
+  assert.equal(phaseAt(191), FAST.FREE);
 });
 
 test('repeat and select retain the same anchor; only free placement releases it', () => {
   const anchor = { x: 540, y: 115, heading: 45 };
   const state = { activePlacementAnchor: anchor, physicalPointerOrigin: { x: 100, y: 100 } };
-  for (const point of [{ x: 110, y: 100 }, { x: 170, y: 100 }]) {
+  for (const point of [{ x: 110, y: 100 }, { x: 190, y: 100 }]) {
     const next = FAST.transitionForPointer(state, point);
     assert.notEqual(next.phase, FAST.FREE);
     assert.equal(next.activePlacementAnchor, anchor);
   }
-  assert.equal(FAST.transitionForPointer(state, { x: 171, y: 100 }).activePlacementAnchor, null);
+  assert.equal(FAST.transitionForPointer(state, { x: 191, y: 100 }).activePlacementAnchor, null);
 });
 
-for (const heading of [0, 45, 90, 180, 270]) {
+for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
   test(`relative center/right/left selection is screen-pixel stable at ${heading} degrees`, () => {
     const anchor = { x: 400, y: 300 };
     const radians = heading * Math.PI / 180;
@@ -52,6 +52,32 @@ for (const heading of [0, 45, 90, 180, 270]) {
     assert.equal(FAST.typeForPointer({ currentType: FAST.STRAIGHT, anchorScreen: anchor, pointerScreen: point(-31), headingDeg: heading }).type, FAST.LEFT);
   });
 }
+
+test('pointer components use the ghost exit heading for forward and lateral selection', () => {
+  const exit = { x: 400, y: 300 };
+  for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
+    const radians = heading * Math.PI / 180;
+    const forward = { x: Math.cos(radians), y: Math.sin(radians) };
+    const right = { x: -Math.sin(radians), y: Math.cos(radians) };
+    const point = (forwardPx, lateralPx) => ({
+      x: exit.x + forward.x * forwardPx + right.x * lateralPx,
+      y: exit.y + forward.y * forwardPx + right.y * lateralPx
+    });
+    const center = FAST.pointerComponents(exit, point(12, 0), heading);
+    const rightSide = FAST.pointerComponents(exit, point(12, 31), heading);
+    const leftSide = FAST.pointerComponents(exit, point(12, -31), heading);
+    assert.ok(FAST.isInForwardSelectionZone(center.forwardPx));
+    assert.equal(FAST.typeForPointer({ currentType: FAST.RIGHT, anchorScreen: exit, pointerScreen: point(12, 0), headingDeg: heading }).type, FAST.STRAIGHT);
+    assert.equal(FAST.typeForPointer({ currentType: FAST.STRAIGHT, anchorScreen: exit, pointerScreen: point(12, 31), headingDeg: heading }).type, FAST.RIGHT);
+    assert.equal(FAST.typeForPointer({ currentType: FAST.STRAIGHT, anchorScreen: exit, pointerScreen: point(12, -31), headingDeg: heading }).type, FAST.LEFT);
+    assert.ok(rightSide.lateralPx > 30 && leftSide.lateralPx < -30);
+  }
+});
+
+test('a pointer behind the ghost exit never qualifies for automatic side selection', () => {
+  assert.equal(FAST.isInForwardSelectionZone(FAST.MIN_FORWARD_PX - .01), false);
+  assert.equal(FAST.isInForwardSelectionZone(FAST.MIN_FORWARD_PX), true);
+});
 
 test('the 20-30px transition band keeps the current ghost type', () => {
   const anchor = { x: 0, y: 0 };
