@@ -237,3 +237,9 @@
 - The OS pointer remains real, but it is not compared directly to the ghost exit. At each confirmed placement, `physicalPointerOrigin` records the click position and `selectionPointerOrigin` records the fresh ghost exit. Selection uses `selectionPointerOrigin + (physicalPointerCurrent - physicalPointerOrigin)`.
 - The virtual selection point is projected onto the current ghost-exit heading: forward is `dx*cos(h) + dy*sin(h)` and lateral is `-dx*sin(h) + dy*cos(h)`. Positive lateral selects the right 45-degree corner, negative lateral selects the left corner, and the 20–30px band retains the current type.
 - The physical pointer delta continues to determine repeat/select/free release. Re-activation from a snapped free proposal regenerates the ghost and both origins before the next pointermove, so a previous ghost exit cannot affect the new selection session.
+
+### Fast path stable selection frame (2026-07-31)
+
+- A single placement cycle captures `selectionFrameHeading` from `activePlacementAnchor.heading`. Ghost type changes may alter the next part's visual exit, but must not alter the left/right selection frame or the free-release frame.
+- `selectionPointerOrigin` is set only when a cycle starts (placement confirmation, Start activation, or snap reactivation). It remains fixed while Straight, Right Corner, and Left Corner are previewed, so a type change cannot move the virtual selection coordinate.
+- The dashed guide uses the same fixed frame. Only confirmation of a new part or reactivation from an open connector begins a new frame using that next active anchor's heading.

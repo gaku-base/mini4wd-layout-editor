@@ -77,6 +77,7 @@
       releasePointerOrigin: null,
       selectionPointerOrigin: null,
       selectionPointerCurrent: null,
+      selectionFrameHeading: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
@@ -980,6 +981,7 @@
       releasePointerOrigin: null,
       selectionPointerOrigin: null,
       selectionPointerCurrent: null,
+      selectionFrameHeading: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
@@ -1013,6 +1015,7 @@
     state.fastPath.releasePointerOrigin = { ...pointer };
     state.fastPath.selectionPointerOrigin = null;
     state.fastPath.selectionPointerCurrent = null;
+    state.fastPath.selectionFrameHeading = normalizeRotation(anchor.heading);
     state.fastPath.lateralPx = 0;
     state.fastPath.forwardPx = 0;
     state.fastPath.distancePx = 0;
@@ -1073,7 +1076,6 @@
     const changed = setFastPathType(result.type);
     if (changed) {
       refreshFastPathGhostProposal();
-      rebaseFastPathSelectionPointer();
     }
     return changed;
   }
@@ -1119,6 +1121,7 @@
       fast.releasePointerOrigin = null;
       fast.selectionPointerOrigin = null;
       fast.selectionPointerCurrent = null;
+      fast.selectionFrameHeading = null;
       fast.lateralPx = 0;
       fast.forwardPx = 0;
       fast.distancePx = 0;
@@ -3788,7 +3791,9 @@
     guide.hidden = !visible;
     if (!visible) return;
     const point = worldToScreen(anchor.x, anchor.y);
-    const heading = normalizeRotation(anchor.heading || 0);
+    const heading = normalizeRotation(Number.isFinite(fast.selectionFrameHeading)
+      ? fast.selectionFrameHeading
+      : anchor.heading || 0);
     guide.style.transform = `translate(${point.x}px, ${point.y}px) rotate(${heading}deg)`;
     guide.dataset.type = state.selectedType;
     const label = state.selectedType === FAST_PATH.RIGHT ? 'RIGHT'

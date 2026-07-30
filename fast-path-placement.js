@@ -156,11 +156,18 @@
   // Straight/Right/Left during select.
   function runtimeTransitionForPointer({ fastPath, pointerScreen, physicalPointerScreen = pointerScreen, selectionPointerScreen = pointerScreen, ghostExitScreen, currentType, fallbackType = STRAIGHT }) {
     const releaseOriginScreen = fastPath?.releasePointerOrigin || fastPath?.physicalPointerOrigin || null;
+    // A placement cycle keeps its original course heading while the ghost
+    // changes between Straight/Right/Left.  Falling back to the ghost exit
+    // preserves compatibility for callers that do not yet carry frame state.
+    const selectionFrameHeading = Number.isFinite(fastPath?.selectionFrameHeading)
+      ? fastPath.selectionFrameHeading
+      : ghostExitScreen?.heading;
+    const selectionFrameOriginScreen = fastPath?.selectionPointerOrigin || ghostExitScreen;
     const transition = directionalPhaseForPointer({
       state: fastPath,
       physicalPointerScreen,
       selectionOriginScreen: releaseOriginScreen,
-      headingDeg: ghostExitScreen?.heading
+      headingDeg: selectionFrameHeading
     });
     const result = {
       ...transition,
@@ -171,7 +178,7 @@
     };
     if (transition.phase !== SELECT || !ghostExitScreen) return result;
 
-    const components = pointerComponents(ghostExitScreen, selectionPointerScreen, ghostExitScreen.heading);
+    const components = pointerComponents(selectionFrameOriginScreen, selectionPointerScreen, selectionFrameHeading);
     result.forwardPx = components.forwardPx;
     result.lateralPx = components.lateralPx;
     // A pointer in the small backward hysteresis band remains attached but
@@ -181,9 +188,9 @@
     const decision = typeForPointer({
       currentType: result.type,
       fallbackType,
-      anchorScreen: ghostExitScreen,
+      anchorScreen: selectionFrameOriginScreen,
       pointerScreen: selectionPointerScreen,
-      headingDeg: ghostExitScreen.heading
+      headingDeg: selectionFrameHeading
     });
     return { ...result, ...decision, activePlacementAnchor: transition.activePlacementAnchor };
   }
