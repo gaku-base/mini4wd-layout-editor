@@ -1,5 +1,18 @@
 # 意思決定ログ
 
+### 設置範囲と部屋形状用切り抜き（2026-07-31）
+
+- CAD用の永続データは `siteBoundary` と `roomCutouts[]` に分離し、既存の
+  コース配置、接続、干渉判定は変更しない。値はすべてmmで保持し、既存canvasの
+  cm座標系との変換はアプリ境界に限定する。
+- 有効部屋範囲は `siteBoundary - union(visible roomCutouts ∩ siteBoundary)`
+  として描画・集計時に都度算出する。切り抜きを大外へクランプせず、重複も
+  unionで一度だけ除外する。`visible=false` は描画と除外効果の両方を無効化する。
+- 回転は将来の任意角度拡張に備えてデータとして保持し、この段階では0/90/180/270度
+  の矩形のみを許可する。90/270度の距離表示は回転後の外接矩形で計算する。
+- 旧JSONおよび旧localStorageには既存fieldからsiteBoundaryを補い、切り抜きは空配列
+  とする。元のfield項目は保存し続けるため、既存データを破壊的に変換しない。
+
 ### Default fast-path placement for Straight and 45-degree corners (2026-07-29)
 
 - Fast repeated placement is part of the normal placement workflow, not a

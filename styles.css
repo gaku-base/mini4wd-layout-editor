@@ -373,6 +373,19 @@ kbd {
 
 /* v0.5 mouse-flow additions */
 .mode-button.color-mode.active { border-color: #c888ff; background: #2b2035; }
+.mode-button.cad-mode { border-color: rgba(72, 199, 184, .42); }
+.mode-button.cad-mode.active { border-color: #56d7c5; color: #d8fffa; background: rgba(51, 163, 151, .2); }
+.mode-cad { cursor: crosshair; }
+
+.cad-panel { border-color: rgba(86, 215, 197, .4); }
+.cad-form { display: grid; gap: 9px; }
+.cad-form label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.cad-form input, .cad-form select { width: 100%; min-height: 34px; border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 6px 8px; color: var(--text); background: rgba(4,10,15,.55); font: inherit; }
+.cad-form .checkbox-row { display: flex; align-items: center; gap: 8px; }
+.cad-form .checkbox-row input { width: auto; min-height: 0; }
+.cad-help { margin: 0 0 10px; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.cad-distances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; padding: 8px; border-radius: 7px; background: rgba(86,215,197,.08); color: #c9fff7; font-size: 12px; }
+.cad-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .toolbar-button.warning { color: #ffd36a; border-color: #675420; }
 .danger-button { background: #3a1920; border-color: #75313e; color: #ff98a4; }
 .full-button { width: 100%; margin-top: 8px; }

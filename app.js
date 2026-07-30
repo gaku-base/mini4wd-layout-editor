@@ -14,6 +14,8 @@
   if (!BURNING_CHANGER_VISUAL) throw new Error('burning-changer-visual.jsが読み込まれていません');
   const FIELD_BOUNDARY = window.M4WD_FIELD_BOUNDARY;
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
+  const ROOM_BOUNDARY = window.M4WD_ROOM_BOUNDARY;
+  if (!ROOM_BOUNDARY) throw new Error('room-boundary.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
@@ -51,12 +53,15 @@
   ];
 
   const MODE_LABELS = {
-    start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', layoutMove: '全体移動'
+    start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', boundary: '設置範囲設定', cutout: '部屋形状作成', layoutMove: '全体移動'
   };
 
   const els = {};
   const state = {
     field: { originX: 0, originY: 0, widthCm: 600, heightCm: 400, gridCm: 10 },
+    siteBoundary: ROOM_BOUNDARY.defaultSiteBoundary({ originX: 0, originY: 0, widthCm: 600, heightCm: 400 }),
+    roomCutouts: [],
+    cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, moveBase: null, dragSnapshotTaken: false },
     parts: [],
     start: null,
     startPhase: 'position',
@@ -125,7 +130,7 @@
 
   function migrateLayoutCornerTypes(layout) {
     if (!layout || typeof layout !== 'object') return layout;
-    return {
+    const migrated = {
       ...layout,
       selectedType: migratedPartType({ type: layout.selectedType }),
       parts: Array.isArray(layout.parts)
@@ -135,6 +140,11 @@
           return { ...persistentPart, type };
         })
         : layout.parts
+    };
+    return {
+      ...migrated,
+      siteBoundary: ROOM_BOUNDARY.normalizeSiteBoundary(migrated.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(migrated.field || {})),
+      roomCutouts: ROOM_BOUNDARY.normalizeRoomCutouts(migrated.roomCutouts || [])
     };
   }
 
@@ -148,7 +158,9 @@
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
-      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide'
+      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
+      'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
+      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -369,6 +381,17 @@
       clearSnapTargetChoice();
       updateUI(); render();
     });
+    els.applySiteBoundaryBtn?.addEventListener('click', applySiteBoundaryFromInputs);
+    ['change', 'blur'].forEach(eventName => {
+      ['siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible'].forEach(id => on(els[id], eventName, previewSiteBoundaryInputs));
+    });
+    els.newCutoutBtn?.addEventListener('click', () => { state.cad.tool = 'create'; state.cad.selectedCutoutId = null; updateUI(); render(); els.courseCanvas.focus(); });
+    els.applyCutoutBtn?.addEventListener('click', applyCutoutFromInputs);
+    els.duplicateCutoutBtn?.addEventListener('click', duplicateSelectedCutout);
+    els.deleteCutoutBtn?.addEventListener('click', deleteSelectedCutout);
+    ['change', 'blur'].forEach(eventName => {
+      ['cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked'].forEach(id => on(els[id], eventName, previewCutoutInputs));
+    });
 
     const canvas = els.courseCanvas;
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -418,6 +441,7 @@
       heightCm: heightM * 100,
       gridCm
     };
+    state.siteBoundary = ROOM_BOUNDARY.defaultSiteBoundary(state.field);
     if (reset) {
       state.parts = [];
       state.start = null;
@@ -428,6 +452,8 @@
       state.selectedType = 'start';
       state.rotation = 0;
       state.mode = 'start';
+      state.roomCutouts = [];
+      state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, moveBase: null, dragSnapshotTaken: false };
       resetCornerVariantSession();
       resetFastPathSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
@@ -446,9 +472,11 @@
 
   function setMode(mode) {
     if (state.layoutMove.active) cancelManualLayoutMove();
-    if (!['place','move','delete','color'].includes(mode)) return;
+    if (!['place','move','delete','color','boundary','cutout'].includes(mode)) return;
     state.mode = state.mode === mode && mode !== 'place' ? 'place' : mode;
     state.hoveredPartId = null;
+    resetFastPathSession();
+    clearSnapTargetChoice();
     resetPointerInteraction();
     if (state.mode === 'place') clearSelection(false);
     updateUI();
@@ -512,6 +540,8 @@
       app: 'mini4wd-course-layout-mouse-flow',
       version: VERSION,
       field: { ...state.field },
+      siteBoundary: { ...state.siteBoundary },
+      roomCutouts: state.roomCutouts.map(cutout => ({ ...cutout })),
       parts: state.parts.map(p => ({ ...p })),
       start: state.start ? { ...state.start } : null,
       startPhase: state.startPhase,
@@ -531,6 +561,10 @@
   function applySerialized(data, resetHistory = true, options = {}) {
     if (!data || !data.field || !Array.isArray(data.parts)) throw new Error('不正なレイアウトデータです');
     state.field = FIELD_BOUNDARY.normalizeField(data.field);
+    state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary(data.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(state.field));
+    state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(state.siteBoundary, state.field));
+    state.roomCutouts = ROOM_BOUNDARY.normalizeRoomCutouts(data.roomCutouts || []);
+    state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, moveBase: null, dragSnapshotTaken: false };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
@@ -864,12 +898,14 @@
       ctx.translate(state.view.offsetX, state.view.offsetY);
       ctx.scale(state.view.scale, state.view.scale);
       drawField(ctx);
+      drawRoomShape(ctx);
       if (state.start) drawStartLane(ctx, state.start, false);
       drawPartsInLayerOrder(ctx, { selected: true });
       drawMissingStartWarning(ctx);
       if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
       drawCursorAndGhost(ctx);
       drawMarquee(ctx);
+      drawCadInteraction(ctx);
       ctx.restore();
     });
   }
@@ -891,11 +927,13 @@
     c.fillRect(frame.minX, frame.minY, frame.w, frame.h);
     c.shadowBlur = 0;
     if (state.showGrid) drawGrid(c);
-    c.strokeStyle = '#6e716d';
-    c.lineWidth = 1.6 / state.view.scale;
-    c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
-    c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
-    c.setLineDash([]);
+    if (state.siteBoundary.visible) {
+      c.strokeStyle = '#6e716d';
+      c.lineWidth = 1.6 / state.view.scale;
+      c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
+      c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
+      c.setLineDash([]);
+    }
     const m = 100;
     c.strokeStyle = '#555953';
     c.lineWidth = 2 / state.view.scale;
@@ -922,6 +960,73 @@
       c.strokeStyle = i % majorEvery === 0 ? '#ccc9c0' : '#e9e6df';
       c.beginPath(); c.moveTo(frame.minX, y); c.lineTo(frame.maxX, y); c.stroke();
     }
+  }
+
+  function cadWorldToMm(world) { return { x: ROOM_BOUNDARY.round10mm(world.x * 10), y: ROOM_BOUNDARY.round10mm(world.y * 10) }; }
+  function cadMmToWorld(point) { return { x: point.x / 10, y: point.y / 10 }; }
+  function selectedCutout() { return state.roomCutouts.find(cutout => cutout.id === state.cad.selectedCutoutId) || null; }
+  function cutoutBoundsWorld(cutout) {
+    const bounds = ROOM_BOUNDARY.rotatedBounds(cutout);
+    return { x: bounds.left / 10, y: bounds.top / 10, w: (bounds.right - bounds.left) / 10, h: (bounds.bottom - bounds.top) / 10 };
+  }
+
+  function drawRoomShape(c) {
+    if (!state.siteBoundary.visible) return;
+    state.roomCutouts.filter(cutout => cutout.visible).forEach(cutout => {
+      const box = cutoutBoundsWorld(cutout);
+      c.save();
+      c.fillStyle = 'rgba(27, 48, 60, .38)';
+      c.fillRect(box.x, box.y, box.w, box.h);
+      c.strokeStyle = 'rgba(39, 121, 133, .9)';
+      c.lineWidth = 1.4 / state.view.scale;
+      c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
+      c.strokeRect(box.x, box.y, box.w, box.h);
+      c.setLineDash([]);
+      for (let x = box.x - box.h; x < box.x + box.w; x += 16 / state.view.scale) {
+        c.beginPath(); c.moveTo(x, box.y); c.lineTo(x + box.h, box.y + box.h); c.stroke();
+      }
+      c.restore();
+    });
+  }
+
+  function drawCadInteraction(c) {
+    if (state.mode !== 'cutout') return;
+    const selected = selectedCutout();
+    const preview = state.cad.dragStartMm && state.cad.dragCurrentMm
+      ? ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: 'preview' })
+      : null;
+    [selected, preview].filter(Boolean).forEach((cutout, index) => {
+      const box = cutoutBoundsWorld(cutout);
+      c.save();
+      c.strokeStyle = index === 1 ? '#f7c657' : '#56d7c5';
+      c.fillStyle = index === 1 ? 'rgba(247,198,87,.16)' : 'rgba(86,215,197,.12)';
+      c.lineWidth = 2.4 / state.view.scale;
+      c.setLineDash(index === 1 ? [6 / state.view.scale, 4 / state.view.scale] : []);
+      c.fillRect(box.x, box.y, box.w, box.h);
+      c.strokeRect(box.x, box.y, box.w, box.h);
+      c.setLineDash([]);
+      c.restore();
+    });
+    const dimensionTarget = preview || selected;
+    if (dimensionTarget) drawCadDimensions(c, dimensionTarget);
+  }
+
+  function drawCadDimensions(c, cutout) {
+    const box = cutoutBoundsWorld(cutout);
+    const distances = ROOM_BOUNDARY.distancesToBoundary(state.siteBoundary, cutout);
+    const scale = state.view.scale;
+    c.save();
+    c.strokeStyle = '#68e7d5'; c.fillStyle = '#153d43'; c.lineWidth = 1 / scale;
+    c.font = `700 ${10 / scale}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const label = (text, x, y) => { c.fillStyle = 'rgba(235,255,252,.96)'; c.fillText(text, x, y); };
+    const boundary = ROOM_BOUNDARY.normalizeSiteBoundary(state.siteBoundary);
+    const left = boundary.x / 10; const top = boundary.y / 10; const right = (boundary.x + boundary.width) / 10; const bottom = (boundary.y + boundary.height) / 10;
+    const line = (x1, y1, x2, y2, text) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); label(`${text}mm`, (x1 + x2) / 2, (y1 + y2) / 2); };
+    line(left, box.y, box.x, box.y, distances.left);
+    line(box.x + box.w, box.y + box.h, right, box.y + box.h, distances.right);
+    line(box.x, top, box.x, box.y, distances.top);
+    line(box.x + box.w, box.y + box.h, box.x + box.w, bottom, distances.bottom);
+    c.restore();
   }
 
   function resolvePartDef(part) {
@@ -2456,6 +2561,128 @@
     c.restore();
   }
 
+  function cutoutHitTest(world) {
+    const point = cadWorldToMm(world);
+    return [...state.roomCutouts].reverse().find(cutout => {
+      if (!cutout.visible) return false;
+      const bounds = ROOM_BOUNDARY.rotatedBounds(cutout);
+      return point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom;
+    }) || null;
+  }
+
+  function onCadPointerDown(e, world) {
+    const point = cadWorldToMm(world);
+    if (state.mode === 'boundary') return;
+    const hit = cutoutHitTest(world);
+    if (hit) {
+      state.cad.selectedCutoutId = hit.id;
+      state.cad.tool = 'select';
+      if (!hit.locked) {
+        state.cad.moveBase = { x: hit.x, y: hit.y, pointer: point };
+        state.cad.dragSnapshotTaken = false;
+      }
+    } else {
+      state.cad.selectedCutoutId = null;
+      state.cad.tool = 'create';
+      state.cad.dragStartMm = point;
+      state.cad.dragCurrentMm = point;
+      state.cad.dragSnapshotTaken = false;
+    }
+    updateUI(); render();
+  }
+
+  function onCadPointerMove(world) {
+    if (state.mode !== 'cutout' || !state.pointer.down) return;
+    const point = cadWorldToMm(world);
+    if (state.cad.dragStartMm) state.cad.dragCurrentMm = point;
+    const selected = selectedCutout();
+    if (selected && state.cad.moveBase && !selected.locked) {
+      const next = ROOM_BOUNDARY.moveCutout(selected, { x: point.x - state.cad.moveBase.pointer.x, y: point.y - state.cad.moveBase.pointer.y });
+      if ((next.x !== selected.x || next.y !== selected.y) && !state.cad.dragSnapshotTaken) { snapshot(); state.cad.dragSnapshotTaken = true; }
+      if (state.cad.dragSnapshotTaken) replaceCutout(next, false);
+    }
+    updateUI(); render();
+  }
+
+  function onCadPointerUp() {
+    if (state.mode !== 'cutout') return;
+    if (state.cad.dragStartMm && state.cad.dragCurrentMm) {
+      snapshot();
+      const cutout = ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: ROOM_BOUNDARY.nextCutoutId(state.roomCutouts) });
+      state.roomCutouts.push(cutout);
+      state.cad.selectedCutoutId = cutout.id;
+      toast('部屋形状用切り抜きを作成しました');
+    }
+    state.cad.dragStartMm = null;
+    state.cad.dragCurrentMm = null;
+    state.cad.moveBase = null;
+    state.cad.dragSnapshotTaken = false;
+    persistLocal(); updateUI(); render();
+  }
+
+  function replaceCutout(next, sync = true) {
+    state.roomCutouts = state.roomCutouts.map(cutout => cutout.id === next.id ? ROOM_BOUNDARY.normalizeCutout(next, { id: next.id }) : cutout);
+    if (sync) { persistLocal(); updateUI(); render(); }
+  }
+
+  function applySiteBoundaryFromInputs() {
+    const candidate = boundaryFromInputs();
+    if (!candidate) return toast('幅と奥行は10mm以上の数値を入力してください');
+    snapshot();
+    state.siteBoundary = candidate;
+    state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(candidate, state.field));
+    fitView(); persistLocal(); updateUI(); render();
+  }
+
+  function boundaryFromInputs() {
+    const values = ['siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight'].map(id => els[id]?.value);
+    if (values.some(value => value === '' || !Number.isFinite(Number(value)))) return null;
+    const candidate = ROOM_BOUNDARY.normalizeSiteBoundary({ name: els.siteBoundaryName.value, x: values[0], y: values[1], width: values[2], height: values[3], visible: els.siteBoundaryVisible.checked }, state.siteBoundary);
+    if (Number(values[2]) <= 0 || Number(values[3]) <= 0) return null;
+    return candidate;
+  }
+
+  function previewSiteBoundaryInputs() {
+    // Values remain provisional until the explicit apply action. This avoids
+    // corrupting a valid boundary while an input is temporarily empty.
+    if (state.mode === 'boundary') render();
+  }
+
+  function applyCutoutFromInputs() {
+    const selected = selectedCutout();
+    if (!selected) return;
+    const candidate = cutoutFromInputs(selected);
+    if (!candidate) return toast('幅と高さは10mm以上の数値を入力してください');
+    snapshot(); replaceCutout(candidate);
+  }
+
+  function cutoutFromInputs(selected) {
+    const ids = ['cutoutX','cutoutY','cutoutWidth','cutoutHeight'];
+    if (ids.some(id => els[id]?.value === '' || !Number.isFinite(Number(els[id].value)))) return null;
+    if (Number(els.cutoutWidth.value) <= 0 || Number(els.cutoutHeight.value) <= 0) return null;
+    return ROOM_BOUNDARY.normalizeCutout({ ...selected, name: els.cutoutName.value, x: els.cutoutX.value, y: els.cutoutY.value, width: els.cutoutWidth.value, height: els.cutoutHeight.value, rotation: els.cutoutRotation.value, visible: els.cutoutVisible.checked, locked: els.cutoutLocked.checked }, { id: selected.id });
+  }
+
+  function previewCutoutInputs() {
+    // The form itself is the live preview; commit keeps Undo/Redo to one entry.
+    if (state.mode === 'cutout') render();
+  }
+
+  function deleteSelectedCutout() {
+    const selected = selectedCutout();
+    if (!selected) return;
+    if (selected.locked) return toast('ロック中の切り抜きは削除できません');
+    snapshot(); state.roomCutouts = state.roomCutouts.filter(cutout => cutout.id !== selected.id); state.cad.selectedCutoutId = null;
+    persistLocal(); updateUI(); render();
+  }
+
+  function duplicateSelectedCutout() {
+    const selected = selectedCutout();
+    if (!selected) return;
+    snapshot(); const copy = ROOM_BOUNDARY.duplicateCutout(selected, state.roomCutouts); state.roomCutouts.push(copy); state.cad.selectedCutoutId = copy.id;
+    persistLocal(); updateUI(); render();
+  }
+
   function onPointerDown(e) {
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
@@ -2488,6 +2715,10 @@
     }
 
     if (e.button !== 0) return;
+    if (state.mode === 'boundary' || state.mode === 'cutout') {
+      onCadPointerDown(e, world);
+      return;
+    }
     const fastPathResult = state.mode === 'place'
       ? updateFastPathPointer(physicalPointer)
       : { phase: FAST_PATH.FREE };
@@ -2589,6 +2820,11 @@
       state.pointer.lastX = e.clientX;
       state.pointer.lastY = e.clientY;
       render();
+      return;
+    }
+
+    if (state.mode === 'boundary' || state.mode === 'cutout') {
+      onCadPointerMove(world);
       return;
     }
 
@@ -2703,6 +2939,13 @@
   }
 
   function onPointerUp(e) {
+    if (state.mode === 'boundary' || state.mode === 'cutout') {
+      onCadPointerUp();
+      state.pointer.down = false;
+      state.pointer.panning = false;
+      try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      return;
+    }
     const pendingPlacementProposal = state.pointer.pendingPlacementProposal;
     const pendingPlacement = state.pointer.pendingPlacement;
     // Consume the event before any placement code. Duplicate pointerup/click
@@ -2879,6 +3122,23 @@
     }
     const key = e.key.toLowerCase();
 
+    if (state.mode === 'cutout') {
+      const selected = selectedCutout();
+      const deltaMm = e.shiftKey ? 100 : 10;
+      const delta = key === 'arrowleft' ? { x: -deltaMm, y: 0 }
+        : key === 'arrowright' ? { x: deltaMm, y: 0 }
+        : key === 'arrowup' ? { x: 0, y: -deltaMm }
+        : key === 'arrowdown' ? { x: 0, y: deltaMm }
+        : null;
+      if (delta && selected) {
+        e.preventDefault();
+        if (selected.locked) return toast('ロック中の切り抜きは移動できません');
+        snapshot(); replaceCutout(ROOM_BOUNDARY.moveCutout(selected, delta));
+        return;
+      }
+      if ((key === 'delete' || key === 'backspace') && selected) { e.preventDefault(); deleteSelectedCutout(); return; }
+    }
+
     if ((key === '[' || key === ']') && state.mode === 'place') {
       const proposal = getPlacementProposal();
       if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
@@ -2901,6 +3161,8 @@
       else setMode('color');
       return;
     }
+    if (key === 'b') { e.preventDefault(); setMode('boundary'); return; }
+    if (key === 'h') { e.preventDefault(); setMode('cutout'); return; }
     if (key === 'z') { e.preventDefault(); rotateCurrent(-45); return; }
     if (key === 'x') { e.preventDefault(); rotateCurrent(45); return; }
     if (key === 'f') {
@@ -3359,6 +3621,13 @@
     }
     snapshot();
     state.field = nextField;
+    state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary({
+      ...state.siteBoundary,
+      x: nextField.originX * 10,
+      y: nextField.originY * 10,
+      width: nextField.widthCm * 10,
+      height: nextField.heightCm * 10
+    }, state.siteBoundary);
     persistLocal();
     fitView();
     updateUI();
@@ -3719,10 +3988,34 @@
       els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
       if (document.activeElement !== els.placementHeightCustom) els.placementHeightCustom.value = String(state.placementHeightMm);
     }
+    const boundaryMode = state.mode === 'boundary';
+    const cutoutMode = state.mode === 'cutout';
+    if (els.siteBoundaryPanel) els.siteBoundaryPanel.hidden = !boundaryMode;
+    if (els.roomCutoutPanel) els.roomCutoutPanel.hidden = !cutoutMode;
+    if (boundaryMode) {
+      const boundary = state.siteBoundary;
+      const values = { siteBoundaryName: boundary.name, siteBoundaryX: boundary.x, siteBoundaryY: boundary.y, siteBoundaryWidth: boundary.width, siteBoundaryHeight: boundary.height };
+      Object.entries(values).forEach(([id, value]) => { if (els[id] && document.activeElement !== els[id]) els[id].value = String(value); });
+      if (els.siteBoundaryVisible) els.siteBoundaryVisible.checked = boundary.visible;
+    }
+    if (cutoutMode) {
+      const cutout = selectedCutout();
+      if (els.roomCutoutEmpty) els.roomCutoutEmpty.hidden = !!cutout;
+      if (els.roomCutoutEditor) els.roomCutoutEditor.hidden = !cutout;
+      if (cutout) {
+        const values = { cutoutName: cutout.name, cutoutX: cutout.x, cutoutY: cutout.y, cutoutWidth: cutout.width, cutoutHeight: cutout.height, cutoutRotation: cutout.rotation };
+        Object.entries(values).forEach(([id, value]) => { if (els[id] && document.activeElement !== els[id]) els[id].value = String(value); });
+        els.cutoutVisible.checked = cutout.visible;
+        els.cutoutLocked.checked = cutout.locked;
+        const distances = ROOM_BOUNDARY.distancesToBoundary(state.siteBoundary, cutout);
+        els.cutoutDistances.innerHTML = `<span>左: ${distances.left}mm</span><span>右: ${distances.right}mm</span><span>上: ${distances.top}mm</span><span>下: ${distances.bottom}mm</span>`;
+        els.deleteCutoutBtn.disabled = cutout.locked;
+      }
+    }
     updateFastPathGuide();
     updateSnapCandidatePanel(proposal);
 
-    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color'].includes(state.mode);
+    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color','boundary','cutout'].includes(state.mode);
     els.instruction.classList.toggle('hidden', !showInstruction);
     if (state.layoutMove.active) {
       els.instruction.innerHTML = '<strong>レイアウト全体を移動中</strong><span>マウスで移動 → クリックで固定・Esc／右クリックで取消</span>';
@@ -3736,6 +4029,10 @@
       els.instruction.innerHTML = '<strong>W：パーツ削除</strong><span>クリックで1個削除・Shift+クリックで複数選択・範囲ドラッグでまとめて削除</span>';
     } else if (state.mode === 'color') {
       els.instruction.innerHTML = '<strong>E：カラー変更</strong><span>クリックで色を順送り・Shift+クリック／範囲ドラッグで複数変更</span>';
+    } else if (state.mode === 'boundary') {
+      els.instruction.innerHTML = '<strong>設置範囲設定</strong><span>左パネルのmm入力で設置範囲を変更。既存コースは移動しません。</span>';
+    } else if (state.mode === 'cutout') {
+      els.instruction.innerHTML = '<strong>部屋形状作成</strong><span>ドラッグで切り抜きを作成。選択後はドラッグ移動・矢印10mm・Shift+矢印100mm。</span>';
     }
 
     els.gridBtn.classList.toggle('active', state.showGrid);
@@ -3770,6 +4067,7 @@
     els.courseCanvas.classList.toggle('mode-move', state.mode === 'move');
     els.courseCanvas.classList.toggle('mode-delete', state.mode === 'delete');
     els.courseCanvas.classList.toggle('mode-color', state.mode === 'color');
+    els.courseCanvas.classList.toggle('mode-cad', boundaryMode || cutoutMode);
     updateStatusOnly();
     updateSummary();
   }
