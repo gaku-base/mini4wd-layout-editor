@@ -86,19 +86,23 @@ for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
     const forward = { x: Math.cos(radians), y: Math.sin(radians) };
     const right = { x: -Math.sin(radians), y: Math.cos(radians) };
     const exit = { x: 100, y: 100, heading };
-    const point = lateral => ({
-      x: exit.x + forward.x * 4 + right.x * lateral,
-      y: exit.y + forward.y * 4 + right.y * lateral
+    const physicalPointerOrigin = { x: 24, y: 36 };
+    const selectionPoint = lateral => ({
+      x: exit.x + forward.x * 16 + right.x * lateral,
+      y: exit.y + forward.y * 16 + right.y * lateral
+    });
+    const physicalPoint = lateral => ({
+      x: physicalPointerOrigin.x + forward.x * 16 + right.x * lateral,
+      y: physicalPointerOrigin.y + forward.y * 16 + right.y * lateral
     });
     const fastPath = {
       activePlacementAnchor: { x: 1, y: 1, heading },
-      // The physical movement must first leave the 10px repeat zone, while
-      // the selection itself remains measured from the ghost exit.
-      physicalPointerOrigin: { x: exit.x - forward.x * 16, y: exit.y - forward.y * 16 }
+      physicalPointerOrigin,
+      selectionPointerOrigin: exit
     };
-    const rightMove = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point(35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
-    const centerMove = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point(0), ghostExitScreen: exit, currentType: FAST.RIGHT });
-    const leftMove = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: point(-35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    const rightMove = FAST.runtimeTransitionForPointer({ fastPath, physicalPointerScreen: physicalPoint(35), selectionPointerScreen: selectionPoint(35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    const centerMove = FAST.runtimeTransitionForPointer({ fastPath, physicalPointerScreen: physicalPoint(0), selectionPointerScreen: selectionPoint(0), ghostExitScreen: exit, currentType: FAST.RIGHT });
+    const leftMove = FAST.runtimeTransitionForPointer({ fastPath, physicalPointerScreen: physicalPoint(-35), selectionPointerScreen: selectionPoint(-35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
     assert.equal(rightMove.phase, FAST.SELECT);
     assert.equal(rightMove.type, FAST.RIGHT);
     assert.equal(centerMove.type, FAST.STRAIGHT);
@@ -118,12 +122,19 @@ test('runtime pointer flow keeps an anchored ghost beyond 90px while the pointer
   }
 });
 
-test('runtime flow uses the actual leading pointer for both release and side selection', () => {
-  const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin: { x: 10, y: 10 } };
+test('selection pointer applies the physical delta to a distinct ghost-exit origin', () => {
+  const physicalPointerOrigin = { x: 10, y: 10 };
+  const selectionPointerOrigin = { x: 500, y: 500 };
+  const physicalPointerCurrent = { x: 10, y: 45 };
+  const selectionPointerScreen = FAST.selectionPointerFromPhysicalDelta({
+    physicalPointerOrigin, selectionPointerOrigin, physicalPointerCurrent
+  });
+  assert.deepEqual(selectionPointerScreen, { x: 500, y: 535 });
+  const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin, selectionPointerOrigin };
   const result = FAST.runtimeTransitionForPointer({
     fastPath,
-    physicalPointerScreen: { x: 500, y: 535 },
-    selectionPointerScreen: { x: 500, y: 535 },
+    physicalPointerScreen: physicalPointerCurrent,
+    selectionPointerScreen,
     ghostExitScreen: { x: 500, y: 500, heading: 0 },
     currentType: FAST.STRAIGHT
   });
@@ -132,6 +143,152 @@ test('runtime flow uses the actual leading pointer for both release and side sel
   assert.equal(result.forwardPx, 0);
   assert.equal(result.lateralPx, 35);
 });
+
+test('zero physical delta retains the current repeat type even when origins differ', () => {
+  const pointer = { x: 35, y: 85 };
+  const selection = FAST.selectionPointerFromPhysicalDelta({
+    physicalPointerOrigin: pointer,
+    selectionPointerOrigin: { x: 480, y: 260 },
+    physicalPointerCurrent: pointer
+  });
+  const result = FAST.runtimeTransitionForPointer({
+    fastPath: { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin: pointer },
+    physicalPointerScreen: pointer,
+    selectionPointerScreen: selection,
+    ghostExitScreen: { x: 480, y: 260, heading: 0 },
+    currentType: FAST.RIGHT
+  });
+  assert.equal(result.phase, FAST.REPEAT);
+  assert.equal(result.type, FAST.RIGHT);
+});
+
+test('relative lateral deltas select the exact 30px left and right thresholds', () => {
+  const physicalPointerOrigin = { x: 40, y: 80 };
+  const selectionPointerOrigin = { x: 420, y: 260 };
+  const fastPath = { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin, selectionPointerOrigin };
+  const selectAt = lateral => {
+    const physicalPointerScreen = { x: physicalPointerOrigin.x + 16, y: physicalPointerOrigin.y + lateral };
+    const selectionPointerScreen = FAST.selectionPointerFromPhysicalDelta({
+      physicalPointerOrigin, selectionPointerOrigin, physicalPointerCurrent: physicalPointerScreen
+    });
+    return FAST.runtimeTransitionForPointer({
+      fastPath, physicalPointerScreen, selectionPointerScreen,
+      ghostExitScreen: { ...selectionPointerOrigin, heading: 0 }, currentType: FAST.STRAIGHT
+    });
+  };
+  assert.equal(selectAt(30).type, FAST.RIGHT);
+  assert.equal(selectAt(-30).type, FAST.LEFT);
+  assert.equal(selectAt(0).type, FAST.STRAIGHT);
+});
+
+test('a reattached session selects from its fresh ghost exit, not the prior exit', () => {
+  const physicalPointerOrigin = { x: 720, y: 160 };
+  const freshSelectionPointerOrigin = { x: 180, y: 420 };
+  const physicalPointerCurrent = { x: 736, y: 195 };
+  const selectionPointerScreen = FAST.selectionPointerFromPhysicalDelta({
+    physicalPointerOrigin,
+    selectionPointerOrigin: freshSelectionPointerOrigin,
+    physicalPointerCurrent
+  });
+  assert.deepEqual(selectionPointerScreen, { x: 196, y: 455 });
+  const result = FAST.runtimeTransitionForPointer({
+    fastPath: { activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin, selectionPointerOrigin: freshSelectionPointerOrigin },
+    physicalPointerScreen: physicalPointerCurrent,
+    selectionPointerScreen,
+    ghostExitScreen: { ...freshSelectionPointerOrigin, heading: 0 },
+    currentType: FAST.STRAIGHT
+  });
+  assert.equal(result.phase, FAST.SELECT);
+  assert.equal(result.type, FAST.RIGHT);
+});
+
+test('a fixed selection frame keeps center → right → center attached', () => {
+  const physicalPointerOrigin = { x: 80, y: 100 };
+  const selectionPointerOrigin = { x: 420, y: 300 };
+  const fastPath = {
+    activePlacementAnchor: { x: 1, y: 1, heading: 0 },
+    physicalPointerOrigin,
+    releasePointerOrigin: physicalPointerOrigin,
+    selectionPointerOrigin,
+    selectionFrameHeading: 0
+  };
+  const run = (lateral, currentType) => {
+    const physicalPointerScreen = { x: physicalPointerOrigin.x + 16, y: physicalPointerOrigin.y + lateral };
+    const selectionPointerScreen = FAST.selectionPointerFromPhysicalDelta({
+      physicalPointerOrigin, selectionPointerOrigin, physicalPointerCurrent: physicalPointerScreen
+    });
+    return FAST.runtimeTransitionForPointer({
+      fastPath, physicalPointerScreen, selectionPointerScreen,
+      // The selected Right ghost has a different exit heading, which must not
+      // rotate this placement cycle's selection or release frame.
+      ghostExitScreen: { x: 450, y: 330, heading: 45 }, currentType
+    });
+  };
+  const right = run(35, FAST.STRAIGHT);
+  const center = run(0, FAST.RIGHT);
+  assert.equal(right.phase, FAST.SELECT);
+  assert.equal(right.type, FAST.RIGHT);
+  assert.equal(center.phase, FAST.SELECT);
+  assert.equal(center.type, FAST.STRAIGHT);
+});
+
+test('a fixed selection frame supports left → center and right → left without release', () => {
+  const physicalPointerOrigin = { x: 160, y: 220 };
+  const selectionPointerOrigin = { x: 560, y: 160 };
+  const fastPath = {
+    activePlacementAnchor: { x: 1, y: 1, heading: 0 }, physicalPointerOrigin,
+    selectionPointerOrigin, selectionFrameHeading: 0
+  };
+  const run = (lateral, currentType) => {
+    const physicalPointerScreen = { x: physicalPointerOrigin.x + 16, y: physicalPointerOrigin.y + lateral };
+    return FAST.runtimeTransitionForPointer({
+      fastPath, physicalPointerScreen,
+      selectionPointerScreen: FAST.selectionPointerFromPhysicalDelta({ physicalPointerOrigin, selectionPointerOrigin, physicalPointerCurrent: physicalPointerScreen }),
+      ghostExitScreen: { x: 590, y: 190, heading: 315 }, currentType
+    });
+  };
+  const left = run(-35, FAST.STRAIGHT);
+  const center = run(0, FAST.LEFT);
+  const right = run(35, FAST.LEFT);
+  assert.equal(left.phase, FAST.SELECT);
+  assert.equal(left.type, FAST.LEFT);
+  assert.equal(center.phase, FAST.SELECT);
+  assert.equal(center.type, FAST.STRAIGHT);
+  assert.equal(right.phase, FAST.SELECT);
+  assert.equal(right.type, FAST.RIGHT);
+});
+
+for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
+  test(`fixed selection frame remains stable across ghost exits at ${heading} degrees`, () => {
+    const radians = heading * Math.PI / 180;
+    const forward = { x: Math.cos(radians), y: Math.sin(radians) };
+    const right = { x: -Math.sin(radians), y: Math.cos(radians) };
+    const physicalPointerOrigin = { x: 120, y: 140 };
+    const selectionPointerOrigin = { x: 500, y: 360 };
+    const fastPath = {
+      activePlacementAnchor: { x: 1, y: 1, heading }, physicalPointerOrigin,
+      selectionPointerOrigin, selectionFrameHeading: heading
+    };
+    const run = (lateral, currentType) => {
+      const physicalPointerScreen = {
+        x: physicalPointerOrigin.x + forward.x * 16 + right.x * lateral,
+        y: physicalPointerOrigin.y + forward.y * 16 + right.y * lateral
+      };
+      return FAST.runtimeTransitionForPointer({
+        fastPath, physicalPointerScreen,
+        selectionPointerScreen: FAST.selectionPointerFromPhysicalDelta({ physicalPointerOrigin, selectionPointerOrigin, physicalPointerCurrent: physicalPointerScreen }),
+        ghostExitScreen: { x: 530, y: 390, heading: (heading + 45) % 360 }, currentType
+      });
+    };
+    const center = run(0, FAST.RIGHT);
+    const rightTurn = run(35, FAST.STRAIGHT);
+    const leftTurn = run(-35, FAST.STRAIGHT);
+    assert.equal(center.phase, FAST.SELECT);
+    assert.equal(center.type, FAST.STRAIGHT);
+    assert.equal(rightTurn.type, FAST.RIGHT);
+    assert.equal(leftTurn.type, FAST.LEFT);
+  });
+}
 
 test('the 20-30px transition band keeps the current ghost type', () => {
   const anchor = { x: 0, y: 0 };
@@ -158,11 +315,15 @@ for (const heading of [0, 45, 90, 135, 180, 225, 270, 315]) {
     const forward = { x: Math.cos(radians), y: Math.sin(radians) };
     const right = { x: -Math.sin(radians), y: Math.cos(radians) };
     const exit = { x: 400, y: 300, heading };
-    const fastPath = { phase: FAST.SELECT, activePlacementAnchor: { x: 1, y: 1, heading }, physicalPointerOrigin: { x: 0, y: 0 } };
-    const pointerAt = lateral => ({ x: exit.x + forward.x * 200 + right.x * lateral, y: exit.y + forward.y * 200 + right.y * lateral });
-    const center = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: pointerAt(0), ghostExitScreen: exit, currentType: FAST.RIGHT });
-    const rightTurn = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: pointerAt(35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
-    const leftTurn = FAST.runtimeTransitionForPointer({ fastPath, pointerScreen: pointerAt(-35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    const physicalPointerOrigin = { x: 40, y: 60 };
+    const fastPath = { phase: FAST.SELECT, activePlacementAnchor: { x: 1, y: 1, heading }, physicalPointerOrigin, selectionPointerOrigin: exit };
+    const physicalAt = lateral => ({ x: physicalPointerOrigin.x + forward.x * 200 + right.x * lateral, y: physicalPointerOrigin.y + forward.y * 200 + right.y * lateral });
+    const selectionAt = lateral => FAST.selectionPointerFromPhysicalDelta({
+      physicalPointerOrigin, selectionPointerOrigin: exit, physicalPointerCurrent: physicalAt(lateral)
+    });
+    const center = FAST.runtimeTransitionForPointer({ fastPath, physicalPointerScreen: physicalAt(0), selectionPointerScreen: selectionAt(0), ghostExitScreen: exit, currentType: FAST.RIGHT });
+    const rightTurn = FAST.runtimeTransitionForPointer({ fastPath, physicalPointerScreen: physicalAt(35), selectionPointerScreen: selectionAt(35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
+    const leftTurn = FAST.runtimeTransitionForPointer({ fastPath, physicalPointerScreen: physicalAt(-35), selectionPointerScreen: selectionAt(-35), ghostExitScreen: exit, currentType: FAST.STRAIGHT });
     for (const result of [center, rightTurn, leftTurn]) assert.equal(result.phase, FAST.SELECT);
     assert.equal(center.type, FAST.STRAIGHT);
     assert.equal(rightTurn.type, FAST.RIGHT);
@@ -180,4 +341,19 @@ test('the fast-path guide is an HTML overlay and hides outside anchored placemen
   assert.match(app, /state\.mode === 'place'/);
   assert.match(app, /guide\.hidden = !visible/);
   assert.match(app, /fast\.guideVisible = false/);
+});
+
+test('app lifecycle fixes the selection frame at activation and keeps it through type changes', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const fast = fs.readFileSync('fast-path-placement.js', 'utf8');
+  const activateStart = app.indexOf('function activateFastPathPlacement');
+  const activateEnd = app.indexOf('function fastPathGhostExitScreen', activateStart);
+  const applyStart = app.indexOf('function applyFastPathSelectionResult');
+  const applyEnd = app.indexOf('function updateFastPathTypeForPointer', applyStart);
+  const activate = app.slice(activateStart, activateEnd);
+  const apply = app.slice(applyStart, applyEnd);
+  assert.match(activate, /selectionFrameHeading = normalizeRotation\(anchor\.heading\)/);
+  assert.match(fast, /headingDeg: selectionFrameHeading/);
+  assert.match(app, /Number\.isFinite\(fast\.selectionFrameHeading\)\n      \? fast\.selectionFrameHeading/);
+  assert.doesNotMatch(apply, /rebaseFastPathSelectionPointer/);
 });

@@ -77,6 +77,7 @@
       releasePointerOrigin: null,
       selectionPointerOrigin: null,
       selectionPointerCurrent: null,
+      selectionFrameHeading: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
@@ -980,6 +981,7 @@
       releasePointerOrigin: null,
       selectionPointerOrigin: null,
       selectionPointerCurrent: null,
+      selectionFrameHeading: null,
       lateralPx: 0,
       forwardPx: 0,
       distancePx: 0,
@@ -1013,6 +1015,7 @@
     state.fastPath.releasePointerOrigin = { ...pointer };
     state.fastPath.selectionPointerOrigin = null;
     state.fastPath.selectionPointerCurrent = null;
+    state.fastPath.selectionFrameHeading = normalizeRotation(anchor.heading);
     state.fastPath.lateralPx = 0;
     state.fastPath.forwardPx = 0;
     state.fastPath.distancePx = 0;
@@ -1023,6 +1026,11 @@
     state.rotation = normalizeRotation(anchor.heading);
     state.ghostProposal = null;
     state.ghostProposalKey = null;
+    // Every activation (including snapped free placement) owns a newly
+    // generated ghost exit.  Do not carry a selection origin over from the
+    // previous part.
+    refreshFastPathGhostProposal();
+    rebaseFastPathSelectionPointer();
   }
 
   function fastPathGhostExitScreen() {
@@ -1042,9 +1050,9 @@
     return cacheGhostProposal(proposal);
   }
 
-  // The selection origin describes the displayed ghost exit, but the actual
-  // pointer remains the selection point.  It leads an anchored ghost instead
-  // of being translated into virtual coordinates.
+  // The displayed ghost exit is the virtual selection origin. The OS pointer
+  // remains untouched; only its movement since the last confirmed placement
+  // is applied to this origin.
   function rebaseFastPathSelectionPointer() {
     const fast = state.fastPath;
     const exit = fastPathGhostExitScreen();
@@ -1053,7 +1061,11 @@
   }
 
   function selectionPointerForPhysicalPointer(pointerScreen) {
-    return { ...pointerScreen };
+    return FAST_PATH.selectionPointerFromPhysicalDelta({
+      physicalPointerOrigin: state.fastPath.physicalPointerOrigin,
+      selectionPointerOrigin: state.fastPath.selectionPointerOrigin,
+      physicalPointerCurrent: pointerScreen
+    }) || { ...pointerScreen };
   }
 
   function applyFastPathSelectionResult(result) {
@@ -1064,7 +1076,6 @@
     const changed = setFastPathType(result.type);
     if (changed) {
       refreshFastPathGhostProposal();
-      rebaseFastPathSelectionPointer();
     }
     return changed;
   }
@@ -1110,6 +1121,7 @@
       fast.releasePointerOrigin = null;
       fast.selectionPointerOrigin = null;
       fast.selectionPointerCurrent = null;
+      fast.selectionFrameHeading = null;
       fast.lateralPx = 0;
       fast.forwardPx = 0;
       fast.distancePx = 0;
@@ -3779,7 +3791,9 @@
     guide.hidden = !visible;
     if (!visible) return;
     const point = worldToScreen(anchor.x, anchor.y);
-    const heading = normalizeRotation(anchor.heading || 0);
+    const heading = normalizeRotation(Number.isFinite(fast.selectionFrameHeading)
+      ? fast.selectionFrameHeading
+      : anchor.heading || 0);
     guide.style.transform = `translate(${point.x}px, ${point.y}px) rotate(${heading}deg)`;
     guide.dataset.type = state.selectedType;
     const label = state.selectedType === FAST_PATH.RIGHT ? 'RIGHT'

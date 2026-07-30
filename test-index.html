@@ -232,7 +232,7 @@
   <script src="part-render-pose.js?visible-ghost-pose-v1"></script>
   <script src="placement-proposal.js?visible-ghost-pose-v1"></script>
   <script src="corner-variant.js?corner-variant-v1"></script>
-  <script src="fast-path-placement.js?leading-pointer-v2"></script>
+  <script src="fast-path-placement.js?stable-selection-frame-v1"></script>
   <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
   <script src="persistence.js"></script>
@@ -270,7 +270,7 @@
       setInterval(refresh, 250);
     });
   </script>
-  <script src="app.js?leading-pointer-v2"></script>
+  <script src="app.js?stable-selection-frame-v1"></script>
 
 <script>
 window.addEventListener('load', () => {
@@ -538,7 +538,7 @@ window.addEventListener('load', () => {
       const screen = point => point ? `${(point.x * runtime.view.scale + runtime.view.offsetX).toFixed(1)},${(point.y * runtime.view.scale + runtime.view.offsetY).toFixed(1)}` : 'none';
       const ghostExitScreen = proposal?.exit ? screen(proposal.exit) : 'none';
       const guideVisible = !document.getElementById('fastPathGuide')?.hidden;
-      const fastText = `fastPhase=${fast.phase || 'none'}, fastAnchor=${screen(fast.activePlacementAnchor)}, physicalOrigin=${fast.physicalPointerOrigin ? `${fast.physicalPointerOrigin.x.toFixed(1)},${fast.physicalPointerOrigin.y.toFixed(1)}` : 'none'}, releaseOrigin=${fast.releasePointerOrigin ? `${fast.releasePointerOrigin.x.toFixed(1)},${fast.releasePointerOrigin.y.toFixed(1)}` : 'none'}, selectionOrigin=${fast.selectionPointerOrigin ? `${fast.selectionPointerOrigin.x.toFixed(1)},${fast.selectionPointerOrigin.y.toFixed(1)}` : 'none'}, selectionCurrent=${fast.selectionPointerCurrent ? `${fast.selectionPointerCurrent.x.toFixed(1)},${fast.selectionPointerCurrent.y.toFixed(1)}` : 'none'}, ghostExitScreen=${ghostExitScreen}, ghostExitHeading=${proposal?.exit?.heading ?? 'none'}, forward=${Number(fast.forwardPx || 0).toFixed(1)}, lateral=${Number(fast.lateralPx || 0).toFixed(1)}, guide=${guideVisible}`;
+      const fastText = `fastPhase=${fast.phase || 'none'}, fastAnchor=${screen(fast.activePlacementAnchor)}, physicalOrigin=${fast.physicalPointerOrigin ? `${fast.physicalPointerOrigin.x.toFixed(1)},${fast.physicalPointerOrigin.y.toFixed(1)}` : 'none'}, releaseOrigin=${fast.releasePointerOrigin ? `${fast.releasePointerOrigin.x.toFixed(1)},${fast.releasePointerOrigin.y.toFixed(1)}` : 'none'}, selectionOrigin=${fast.selectionPointerOrigin ? `${fast.selectionPointerOrigin.x.toFixed(1)},${fast.selectionPointerOrigin.y.toFixed(1)}` : 'none'}, selectionCurrent=${fast.selectionPointerCurrent ? `${fast.selectionPointerCurrent.x.toFixed(1)},${fast.selectionPointerCurrent.y.toFixed(1)}` : 'none'}, selectionFrameHeading=${fast.selectionFrameHeading ?? 'none'}, ghostExitScreen=${ghostExitScreen}, ghostExitHeading=${proposal?.exit?.heading ?? 'none'}, forward=${Number(fast.forwardPx || 0).toFixed(1)}, lateral=${Number(fast.lateralPx || 0).toFixed(1)}, guide=${guideVisible}`;
       qaStatus.textContent = `${scenario}: stage=${persistenceStage}, parts=${state.parts.length}, edges=${runtime.connections?.length || 0}, seams=${runtime.seamCount}, warnings=${warningText || 'none'}, proposal=${proposalText}, entry=${proposalEntry}, target=${proposalTarget}, ${typeText}, ${poseText}, ${placementText}, ${fastText}, renderTraceMatch=${traceMatch}, heights=${heightText}, connectorHeights=${connectorHeightText}, edgeList=${edgeText}, partDigest=${partDigest}, fieldDigest=${fieldDigest}${detail}`;
     };
     refreshScenarioStatus();
@@ -567,11 +567,11 @@ window.addEventListener('load', () => {
           };
         }
         const exit = runtime.proposal?.exit;
-        const origin = exit ? {
-          x: exit.x * runtime.view.scale + runtime.view.offsetX,
-          y: exit.y * runtime.view.scale + runtime.view.offsetY
-        } : runtime.fastPath?.selectionPointerOrigin;
-        const heading = exit?.heading ?? runtime.activeConnection?.heading ?? 0;
+        // The QA pointer is an OS-pointer position, so derive it from the
+        // physical click origin rather than from the ghost exit. The app then
+        // maps this delta onto selectionPointerOrigin itself.
+        const origin = runtime.fastPath?.physicalPointerOrigin;
+        const heading = runtime.fastPath?.selectionFrameHeading ?? exit?.heading ?? runtime.activeConnection?.heading ?? 0;
         if (!origin) return;
         const radians = heading * Math.PI / 180;
         const point = {
