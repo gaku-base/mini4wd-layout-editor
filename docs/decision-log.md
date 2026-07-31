@@ -272,3 +272,8 @@
 - Cutout pointer moves update only the CAD overlay and a coalesced canvas paint. Full sidebar refreshes, including dynamic HTML replacement, occur at interaction boundaries instead of on every pointer event. Canvas backing/style dimensions are assigned and repainted only when the measured CSS size or DPR changes.
 - The four room-wall dimension labels are DOM editing aids, not canvas content. Each is centered on the screen-space midpoint of its own dimension line, with a small centered background; short or colliding labels may move only perpendicular to the line. They are excluded from PNG, JSON, localStorage, and undo history.
 - Room-corner snapping uses the boundary of `siteBoundary - union(visible cutouts)`, not the original boundary or raw cutout corners. Candidate corners are cached per room state, normalized to 10mm, and exclude a cutout currently being moved. Enter/exit radii are 12px/18px in screen space; grid rounding is used only when no effective-room corner is selected.
+
+### CAD guide-line midpoint labels and effective-room wall snapping (2026-07-31)
+
+- Each cyan CAD dimension line now owns its exact world start/end points. Canvas drawing and the HTML label both consume that one line object; the label position is the midpoint after those endpoints are transformed into canvas-wrap CSS pixels. The centered CSS transform remains the only label-origin correction.
+- Effective-room cache entries include normalized horizontal and vertical boundary segments as well as corners. Wall snapping projects to a segment only within its finite extent, uses 8px/14px enter/exit hysteresis, and is secondary to 12px/18px corner snapping. A moved cutout can align matching vertical or horizontal edges while retaining free movement along the wall.

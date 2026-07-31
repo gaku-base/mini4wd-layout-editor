@@ -192,3 +192,48 @@ test('CAD pointer moves do not rebuild the sidebar or persist, and no-op resize 
   assert.match(app, /renderScheduler\.request\(drawFrame\)/);
   assert.doesNotMatch(app, /new ResizeObserver/);
 });
+
+test('one common midpoint handles horizontal, vertical, diagonal, reverse, negative, and zoomed screen endpoints', () => {
+  const start = { x: -50, y: 120 };
+  const end = { x: 350, y: -80 };
+  assert.deepEqual(ROOM.dimensionMidpoint(start, end), { x: 150, y: 20 });
+  assert.deepEqual(ROOM.dimensionMidpoint(end, start), { x: 150, y: 20 });
+  assert.deepEqual(ROOM.horizontalDimensionLabelPoint({ x: 20, y: 40 }, { x: 220, y: 40 }), { x: 120, y: 40 });
+  assert.deepEqual(ROOM.verticalDimensionLabelPoint({ x: 20, y: 40 }, { x: 20, y: 240 }), { x: 20, y: 140 });
+  [0.5, 1, 2].forEach(scale => {
+    const view = { scale, offsetX: 17, offsetY: 29 };
+    const a = ROOM.worldToScreen({ x: -5, y: 12 }, view);
+    const b = ROOM.worldToScreen({ x: 35, y: -8 }, view);
+    assert.deepEqual(ROOM.dimensionMidpoint(a, b), { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  });
+});
+
+test('effective room boundary segments keep only actual outer and inner walls', () => {
+  const rectangle = ROOM.effectiveRoomBoundarySegments({ x: 0, y: 0, width: 9000, height: 6000 });
+  assert.deepEqual(rectangle.map(segment => [segment.orientation, segment.x1, segment.y1, segment.x2, segment.y2]), [
+    ['horizontal', 0, 0, 9000, 0], ['horizontal', 0, 6000, 9000, 6000],
+    ['vertical', 0, 0, 0, 6000], ['vertical', 9000, 0, 9000, 6000]
+  ]);
+  const lShape = ROOM.effectiveRoomBoundarySegments({ x: 0, y: 0, width: 9000, height: 6000 }, [{ id: 'upper-right', x: 6000, y: 0, width: 3000, height: 2500 }]);
+  assert.ok(lShape.some(segment => segment.orientation === 'horizontal' && segment.y1 === 2500 && segment.x1 === 6000 && segment.x2 === 9000));
+  assert.ok(lShape.some(segment => segment.orientation === 'vertical' && segment.x1 === 6000 && segment.y1 === 0 && segment.y2 === 2500));
+  assert.ok(!ROOM.effectiveRoomBoundarySegments({ x: 0, y: 0, width: 9000, height: 6000 }, [{ id: 'hidden', x: 0, y: 0, width: 1000, height: 1000, visible: false }]).some(segment => segment.x1 === 1000 || segment.y1 === 1000));
+});
+
+test('boundary segment projection clamps to segment ends without using an extension', () => {
+  assert.deepEqual(ROOM.closestPointOnBoundarySegment({ x: 40, y: 99 }, { orientation: 'horizontal', x1: 100, y1: 50, x2: 300, y2: 50 }), { x: 100, y: 50 });
+  assert.deepEqual(ROOM.closestPointOnBoundarySegment({ x: 240, y: 99 }, { orientation: 'horizontal', x1: 100, y1: 50, x2: 300, y2: 50 }), { x: 240, y: 50 });
+  assert.deepEqual(ROOM.closestPointOnBoundarySegment({ x: 99, y: 700 }, { orientation: 'vertical', x1: 40, y1: 100, x2: 40, y2: 500 }), { x: 40, y: 500 });
+});
+
+test('dimension overlay shares the canvas guide-line endpoints and uses a centered HTML transform', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const draw = app.slice(app.indexOf('function drawCadDimensions'), app.indexOf('function resolvePartDef'));
+  const overlay = app.slice(app.indexOf('function updateCutoutDimensionOverlay'), app.indexOf('function makeId'));
+  const css = fs.readFileSync('styles.css', 'utf8');
+  assert.match(draw, /cadDimensionLines\(cutout\)/);
+  assert.match(overlay, /cadDimensionLines\(cutout\)\.map/);
+  assert.match(overlay, /worldToScreen\(line\.start\.x, line\.start\.y\)/);
+  assert.match(overlay, /worldToScreen\(line\.end\.x, line\.end\.y\)/);
+  assert.match(css, /\.cutout-dimension-overlay span \{[^}]*translate\(-50%, -50%\)/);
+});

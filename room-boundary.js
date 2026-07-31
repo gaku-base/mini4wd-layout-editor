@@ -281,6 +281,81 @@
       .sort((a, b) => a.x - b.x || a.y - b.y);
   }
 
+  // The same Boolean boundary represented as normalized axis-aligned segments.
+  // This is intentionally separate from raw cutout edges: only a real room
+  // boundary is eligible for line snapping.
+  function effectiveRoomBoundarySegments(siteBoundary, cutouts = [], options = {}) {
+    const boundary = rectFrom(normalizeSiteBoundary(siteBoundary));
+    const excludedId = options.excludeCutoutId;
+    const masks = normalizeRoomCutouts(cutouts)
+      .filter(cutout => cutout.visible && cutout.id !== excludedId)
+      .map(rotatedBounds).map(bounds => intersection(boundary, bounds)).filter(Boolean);
+    const xs = [...new Set([boundary.left, boundary.right, ...masks.flatMap(mask => [mask.left, mask.right])])].sort((a, b) => a - b);
+    const ys = [...new Set([boundary.top, boundary.bottom, ...masks.flatMap(mask => [mask.top, mask.bottom])])].sort((a, b) => a - b);
+    const isRoom = (xIndex, yIndex) => {
+      if (xIndex < 0 || yIndex < 0 || xIndex >= xs.length - 1 || yIndex >= ys.length - 1) return false;
+      const x = (xs[xIndex] + xs[xIndex + 1]) / 2;
+      const y = (ys[yIndex] + ys[yIndex + 1]) / 2;
+      return !masks.some(mask => x > mask.left && x < mask.right && y > mask.top && y < mask.bottom);
+    };
+    const edges = new Map();
+    const add = (a, b) => {
+      const horizontal = a.y === b.y;
+      const start = horizontal
+        ? (a.x <= b.x ? a : b)
+        : (a.y <= b.y ? a : b);
+      const end = start === a ? b : a;
+      const x1 = round10mm(start.x), y1 = round10mm(start.y), x2 = round10mm(end.x), y2 = round10mm(end.y);
+      if (x1 === x2 && y1 === y2) return;
+      const orientation = y1 === y2 ? 'horizontal' : 'vertical';
+      const key = `${orientation}:${x1},${y1}:${x2},${y2}`;
+      edges.set(key, { id: key, orientation, x1, y1, x2, y2 });
+    };
+    for (let xIndex = 0; xIndex < xs.length - 1; xIndex += 1) {
+      for (let yIndex = 0; yIndex < ys.length - 1; yIndex += 1) {
+        if (!isRoom(xIndex, yIndex)) continue;
+        const left = xs[xIndex], right = xs[xIndex + 1], top = ys[yIndex], bottom = ys[yIndex + 1];
+        if (!isRoom(xIndex - 1, yIndex)) add({ x: left, y: top }, { x: left, y: bottom });
+        if (!isRoom(xIndex + 1, yIndex)) add({ x: right, y: top }, { x: right, y: bottom });
+        if (!isRoom(xIndex, yIndex - 1)) add({ x: left, y: top }, { x: right, y: top });
+        if (!isRoom(xIndex, yIndex + 1)) add({ x: left, y: bottom }, { x: right, y: bottom });
+      }
+    }
+    const merged = [];
+    ['horizontal', 'vertical'].forEach(orientation => {
+      const groups = new Map();
+      [...edges.values()].filter(edge => edge.orientation === orientation).forEach(edge => {
+        const fixed = orientation === 'horizontal' ? edge.y1 : edge.x1;
+        if (!groups.has(fixed)) groups.set(fixed, []);
+        groups.get(fixed).push(edge);
+      });
+      groups.forEach(group => {
+        group.sort((a, b) => (orientation === 'horizontal' ? a.x1 - b.x1 : a.y1 - b.y1));
+        let current = { ...group[0] };
+        group.slice(1).forEach(edge => {
+          const contiguous = orientation === 'horizontal' ? edge.x1 <= current.x2 : edge.y1 <= current.y2;
+          if (contiguous) {
+            if (orientation === 'horizontal') current.x2 = Math.max(current.x2, edge.x2);
+            else current.y2 = Math.max(current.y2, edge.y2);
+          } else { merged.push(current); current = { ...edge }; }
+        });
+        merged.push(current);
+      });
+    });
+    return merged.map(edge => ({ ...edge, id: `${edge.orientation}:${edge.x1},${edge.y1}:${edge.x2},${edge.y2}` }))
+      .sort((a, b) => a.orientation.localeCompare(b.orientation) || a.x1 - b.x1 || a.y1 - b.y1 || a.x2 - b.x2 || a.y2 - b.y2);
+  }
+
+  function closestPointOnBoundarySegment(point = {}, segment = {}) {
+    const x = number(point.x), y = number(point.y);
+    if (segment.orientation === 'vertical' || number(segment.x1) === number(segment.x2)) {
+      return { x: number(segment.x1), y: clampNumber(y, Math.min(number(segment.y1), number(segment.y2)), Math.max(number(segment.y1), number(segment.y2))) };
+    }
+    return { x: clampNumber(x, Math.min(number(segment.x1), number(segment.x2)), Math.max(number(segment.x1), number(segment.x2))), y: number(segment.y1) };
+  }
+
+  function clampNumber(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
   function selectScreenCornerSnap(pointer = {}, candidates = [], options = {}) {
     const enterPx = number(options.enterPx, 12);
     const exitPx = number(options.exitPx, 18);
@@ -362,7 +437,7 @@
     round10mm, normalizeRotation, defaultSiteBoundary, normalizeSiteBoundary,
     normalizeCutout, normalizeRoomCutouts, nextCutoutId, rotatedBounds,
     intersection, unionArea, visibleCutoutIntersections, effectiveRoomMetrics, distancesToBoundary, wallDimensionGeometry,
-    horizontalDimensionLabelPoint, verticalDimensionLabelPoint, cutoutCornerPoints, effectiveRoomCornerCandidates, selectScreenCornerSnap,
+    dimensionMidpoint, horizontalDimensionLabelPoint, verticalDimensionLabelPoint, cutoutCornerPoints, effectiveRoomCornerCandidates, effectiveRoomBoundarySegments, closestPointOnBoundarySegment, selectScreenCornerSnap,
     screenToWorld, worldToScreen, beginCutoutDrag, cutoutPositionForDrag,
     cutoutFromDrag, moveCutout, duplicateCutout, fieldFromSiteBoundary
   });
