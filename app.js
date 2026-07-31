@@ -175,7 +175,7 @@
     cacheElements();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
-    wheelRotation = WHEEL_ROTATION.createWheelRotationAccumulator(40);
+    wheelRotation = WHEEL_ROTATION.createWheelRotationAccumulator(30);
     initializePartAssets();
     buildPartsList();
     buildColorLegend();
@@ -3185,7 +3185,7 @@
     // so sidebars and form controls never reach this handler.
     if (e.shiftKey || e.metaKey || !hasWheelRotatableTarget()) { wheelRotation.reset(); return; }
     e.preventDefault();
-    const direction = wheelRotation.push(e.deltaY);
+    const direction = wheelRotation.push(e);
     if (!direction) return;
     if (state.mode === 'place') {
       const proposal = getPlacementProposal();
