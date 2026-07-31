@@ -403,7 +403,7 @@ kbd {
 #courseCanvas.mode-move { cursor: default; }
 #courseCanvas.mode-delete { cursor: crosshair; }
 #courseCanvas.mode-color { cursor: pointer; }
-#courseCanvas.is-panning, #courseCanvas.is-moving { cursor: grabbing !important; }
+#courseCanvas.is-moving { cursor: grabbing !important; }
 
 .mode-button.active kbd { border-color: currentColor; }
 .statusbar { gap: 16px; }

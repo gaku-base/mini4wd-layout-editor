@@ -119,3 +119,18 @@ test('CAD model is loaded before app code and persisted field names remain addit
   assert.match(app, /if \(state\.mode === 'cutout'\) cancelCadDrag\(\)/);
   assert.match(app, /cutoutDimensionOverlay/);
 });
+
+test('canvas navigation is Ctrl-wheel zoom only and carries no pan state', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const index = fs.readFileSync('index.html', 'utf8');
+  const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));
+  assert.match(app, /addEventListener\('wheel', onWheel, \{ passive: false \}\)/);
+  assert.match(wheel, /if \(!e\.ctrlKey\) return;\s*e\.preventDefault\(\);/);
+  assert.match(wheel, /if \(state\.pointer\.down\) return;/);
+  assert.match(wheel, /const before = screenToWorld\(sx, sy\);/);
+  assert.match(wheel, /state\.view\.offsetX = sx - before\.x \* state\.view\.scale;/);
+  assert.doesNotMatch(wheel, /rotateCurrent|cycleSnapTargetChoice/);
+  assert.doesNotMatch(app, /spaceDown|pointer\.panning|is-panning|function onKeyUp/);
+  assert.match(app, /if \(e\.button !== 0 && !state\.layoutMove\.active\) return;/);
+  assert.doesNotMatch(index, /Space\+ドラッグ|Z \/ X \/ ホイール/);
+});

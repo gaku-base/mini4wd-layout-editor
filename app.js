@@ -103,8 +103,8 @@
     view: { scale: 1, offsetX: 40, offsetY: 40 },
     showGrid: true,
     pointer: {
-      x: 0, y: 0, down: false, panning: false, spaceDown: false,
-      lastX: 0, lastY: 0, draggingParts: false, dragStart: null,
+      x: 0, y: 0, down: false,
+      draggingParts: false, dragStart: null,
       dragBase: null, dragSnapshotTaken: false,
       marquee: false, marqueeStart: null, marqueeEnd: null, marqueeAdd: false,
       groupSnap: null, pendingPlacement: false, pendingPlacementProposal: null
@@ -320,7 +320,6 @@
   function bindEvents() {
     window.addEventListener('resize', resizeCanvas);
     document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
 
     els.setupForm.addEventListener('submit', e => { e.preventDefault(); applySetup(); });
     els.cancelSetupBtn.addEventListener('click', () => { if (state.setupStarted) els.setupDialog.close(); });
@@ -2752,6 +2751,7 @@
   }
 
   function onPointerDown(e) {
+    if (e.button !== 0 && !state.layoutMove.active) return;
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
     const { x: sx, y: sy } = canvasScreenPoint(e);
@@ -2760,8 +2760,6 @@
     const physicalPointer = { x: sx, y: sy };
 
     state.pointer.down = true;
-    state.pointer.lastX = e.clientX;
-    state.pointer.lastY = e.clientY;
     state.pointer.x = world.x;
     state.pointer.y = world.y;
     state.pointer.groupSnap = null;
@@ -2771,12 +2769,6 @@
       else if (e.button === 0) finalizeManualLayoutMove();
       state.pointer.down = false;
       try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
-      return;
-    }
-
-    if (e.button === 1 || e.button === 2 || state.pointer.spaceDown) {
-      state.pointer.panning = true;
-      els.courseCanvas.classList.add('is-panning');
       return;
     }
 
@@ -2875,15 +2867,6 @@
         state.layoutMove.anchor = point;
       }
       updateUI(); render();
-      return;
-    }
-
-    if (state.pointer.panning && state.pointer.down) {
-      state.view.offsetX += e.clientX - state.pointer.lastX;
-      state.view.offsetY += e.clientY - state.pointer.lastY;
-      state.pointer.lastX = e.clientX;
-      state.pointer.lastY = e.clientY;
-      render();
       return;
     }
 
@@ -3006,7 +2989,6 @@
     if (state.mode === 'boundary' || state.mode === 'cutout') {
       onCadPointerUp(e);
       state.pointer.down = false;
-      state.pointer.panning = false;
       try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
       return;
     }
@@ -3059,7 +3041,6 @@
     }
 
     state.pointer.down = false;
-    state.pointer.panning = false;
     state.pointer.draggingParts = false;
     state.pointer.dragStart = null;
     state.pointer.dragBase = null;
@@ -3074,7 +3055,7 @@
     const hoverAfter = ['move','delete','color'].includes(state.mode) ? hitTest(state.pointer.x, state.pointer.y) : null;
     state.hoveredPartId = hoverAfter?.id || null;
     els.courseCanvas.classList.toggle('is-hovering-part', !!state.hoveredPartId);
-    els.courseCanvas.classList.remove('is-panning', 'is-moving');
+    els.courseCanvas.classList.remove('is-moving');
     try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
     persistLocal();
     updateUI();
@@ -3110,7 +3091,6 @@
     // cancellation cannot later become a second placement.
     if (state.mode === 'cutout') cancelCadDrag();
     state.pointer.down = false;
-    state.pointer.panning = false;
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
     state.pointer.draggingParts = false;
@@ -3122,7 +3102,7 @@
     state.pointer.marqueeStart = null;
     state.pointer.marqueeEnd = null;
     state.pointer.marqueeAdd = false;
-    els.courseCanvas.classList.remove('is-panning', 'is-moving');
+    els.courseCanvas.classList.remove('is-moving');
     try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
     updateUI();
     render();
@@ -3138,19 +3118,13 @@
   }
 
   function onWheel(e) {
+    // Plain and Shift+wheel intentionally retain browser scrolling.  Ctrl is
+    // the only modifier that owns this event, preventing browser page zoom.
+    if (!e.ctrlKey) return;
     e.preventDefault();
-    if (((state.mode === 'start' && !state.start) || state.mode === 'place') && !e.ctrlKey && !e.metaKey) {
-      const proposal = state.mode === 'place' ? getPlacementProposal() : null;
-      if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
-        cycleSnapTargetChoice(e.deltaY < 0 ? -1 : 1);
-        return;
-      }
-      rotateCurrent(e.deltaY < 0 ? -45 : 45);
-      return;
-    }
-    const rect = els.courseCanvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    // Do not alter the view while a cutout or part drag owns the pointer.
+    if (state.pointer.down) return;
+    const { x: sx, y: sy } = canvasScreenPoint(e);
     const before = screenToWorld(sx, sy);
     const factor = e.deltaY < 0 ? 1.1 : .9;
     state.view.scale = clamp(state.view.scale * factor, .08, 8);
@@ -3181,10 +3155,6 @@
       return;
     }
 
-    if (e.code === 'Space') {
-      state.pointer.spaceDown = true;
-      e.preventDefault();
-    }
     const key = e.key.toLowerCase();
 
     if (state.mode === 'cutout') {
@@ -3262,10 +3232,6 @@
       updateUI(); render();
       return;
     }
-  }
-
-  function onKeyUp(e) {
-    if (e.code === 'Space') state.pointer.spaceDown = false;
   }
 
   function clearSnapTargetChoice() {
@@ -3569,7 +3535,6 @@
   function resetPointerInteraction() {
     cancelCadDrag();
     state.pointer.down = false;
-    state.pointer.panning = false;
     state.pointer.draggingParts = false;
     state.pointer.dragStart = null;
     state.pointer.dragBase = null;
@@ -3582,7 +3547,7 @@
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
     state.hoveredPartId = null;
-    els.courseCanvas?.classList.remove('is-panning', 'is-moving', 'is-hovering-part');
+    els.courseCanvas?.classList.remove('is-moving', 'is-hovering-part');
   }
 
   function toggleGrid() {
@@ -3914,8 +3879,6 @@
       return;
     }
     event.preventDefault();
-    state.pointer.panning = false;
-    els.courseCanvas.classList.remove('is-panning');
     els.canvasContextMenu.style.left = `${event.clientX}px`;
     els.canvasContextMenu.style.top = `${event.clientY}px`;
     els.canvasContextMenu.dataset.partId = target.id;
@@ -4122,7 +4085,7 @@
     if (state.layoutMove.active) {
       els.instruction.innerHTML = '<strong>レイアウト全体を移動中</strong><span>マウスで移動 → クリックで固定・Esc／右クリックで取消</span>';
     } else if (state.mode === 'start') {
-      els.instruction.innerHTML = '<strong>スタートレーンを配置</strong><span>マウスで位置移動・Z/Xまたはホイールで回転 → クリックで配置</span>';
+      els.instruction.innerHTML = '<strong>スタートレーンを配置</strong><span>マウスで位置移動・Z/Xで回転 → クリックで配置</span>';
     } else if (state.mode === 'place') {
       updatePlacementInstruction(proposal);
     } else if (state.mode === 'move') {

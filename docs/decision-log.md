@@ -13,6 +13,16 @@
 - 旧JSONおよび旧localStorageには既存fieldからsiteBoundaryを補い、切り抜きは空配列
   とする。元のfield項目は保存し続けるため、既存データを破壊的に変換しない。
 
+### Canvas navigation is zoom-only (2026-07-31)
+
+- Canvas pan is intentionally unsupported: Space+drag, middle-button drag,
+  plain-wheel pan, and Shift+wheel pan do not alter the view offset.
+- Ctrl+wheel on the canvas performs pointer-centred zoom only. It prevents the
+  browser default solely for that modified gesture; plain and Shift+wheel keep
+  browser scrolling.
+- Existing view offsets remain layout-view state for backwards compatibility,
+  but navigation input no longer changes them.
+
 ### Default fast-path placement for Straight and 45-degree corners (2026-07-29)
 
 - Fast repeated placement is part of the normal placement workflow, not a
