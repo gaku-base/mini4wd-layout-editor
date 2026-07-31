@@ -120,16 +120,21 @@ test('CAD model is loaded before app code and persisted field names remain addit
   assert.match(app, /cutoutDimensionOverlay/);
 });
 
-test('canvas navigation is Ctrl-wheel zoom only and carries no pan state', () => {
+test('canvas wheel keeps Ctrl zoom while reserving plain wheel rotation for course editing', () => {
   const app = fs.readFileSync('app.js', 'utf8');
   const index = fs.readFileSync('index.html', 'utf8');
   const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));
   assert.match(app, /addEventListener\('wheel', onWheel, \{ passive: false \}\)/);
-  assert.match(wheel, /if \(!e\.ctrlKey\) return;\s*e\.preventDefault\(\);/);
+  assert.match(index, /<script src="wheel-rotation\.js"><\/script>\s*<script src="app\.js"><\/script>/);
+  assert.match(wheel, /if \(e\.ctrlKey\) \{\s*e\.preventDefault\(\);\s*wheelRotation\.reset\(\);/);
+  assert.match(wheel, /if \(e\.shiftKey \|\| e\.metaKey \|\| !hasWheelRotatableTarget\(\)\) \{ wheelRotation\.reset\(\); return; \}/);
+  assert.match(wheel, /const direction = wheelRotation\.push\(e\.deltaY\);/);
+  assert.match(wheel, /rotateCurrent\(direction < 0 \? -45 : 45\);/);
   assert.match(wheel, /if \(state\.pointer\.down\) return;/);
   assert.match(wheel, /const before = screenToWorld\(sx, sy\);/);
   assert.match(wheel, /state\.view\.offsetX = sx - before\.x \* state\.view\.scale;/);
-  assert.doesNotMatch(wheel, /rotateCurrent|cycleSnapTargetChoice/);
+  assert.match(app, /function hasWheelRotatableTarget\(\) \{[\s\S]*state\.mode === 'cutout'[\s\S]*state\.mode === 'boundary'[\s\S]*selectedParts\(\)\.length > 0;/);
+  assert.match(app, /function rotateCurrent\(delta\) \{[\s\S]*snapshot\(\);[\s\S]*p\.rotation = normalizeRotation\(p\.rotation \+ delta\);/);
   assert.doesNotMatch(app, /spaceDown|pointer\.panning|is-panning|function onKeyUp/);
   assert.match(app, /if \(e\.button !== 0 && !state\.layoutMove\.active\) return;/);
   assert.doesNotMatch(index, /Space\+ドラッグ|Z \/ X \/ ホイール/);
