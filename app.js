@@ -18,6 +18,8 @@
   if (!ROOM_BOUNDARY) throw new Error('room-boundary.jsが読み込まれていません');
   const RENDER_SCHEDULER = window.M4WD_RENDER_SCHEDULER;
   if (!RENDER_SCHEDULER) throw new Error('render-scheduler.jsが読み込まれていません');
+  const WHEEL_ROTATION = window.M4WD_WHEEL_ROTATION;
+  if (!WHEEL_ROTATION) throw new Error('wheel-rotation.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
@@ -127,6 +129,7 @@
   let ctx;
   let dpr = 1;
   let renderScheduler;
+  let wheelRotation;
   let toastTimer = 0;
   let layoutStore;
   const roomCornerCache = new Map();
@@ -172,6 +175,7 @@
     cacheElements();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
+    wheelRotation = WHEEL_ROTATION.createWheelRotationAccumulator(40);
     initializePartAssets();
     buildPartsList();
     buildColorLegend();
@@ -3161,20 +3165,44 @@
   }
 
   function onWheel(e) {
-    // Plain and Shift+wheel intentionally retain browser scrolling.  Ctrl is
-    // the only modifier that owns this event, preventing browser page zoom.
-    if (!e.ctrlKey) return;
+    // Ctrl owns zoom, even with a selected part. It never falls through to rotation.
+    if (e.ctrlKey) {
+      e.preventDefault();
+      wheelRotation.reset();
+      if (state.pointer.down) return;
+      const { x: sx, y: sy } = canvasScreenPoint(e);
+      const before = screenToWorld(sx, sy);
+      const factor = e.deltaY < 0 ? 1.1 : .9;
+      state.view.scale = clamp(state.view.scale * factor, .08, 8);
+      state.view.offsetX = sx - before.x * state.view.scale;
+      state.view.offsetY = sy - before.y * state.view.scale;
+      updateUI();
+      render();
+      return;
+    }
+    // Shift-wheel is reserved for the browser/OS, as are room-CAD and empty
+    // course canvas scrolling. The listener is attached to the canvas only,
+    // so sidebars and form controls never reach this handler.
+    if (e.shiftKey || e.metaKey || !hasWheelRotatableTarget()) { wheelRotation.reset(); return; }
     e.preventDefault();
-    // Do not alter the view while a cutout or part drag owns the pointer.
-    if (state.pointer.down) return;
-    const { x: sx, y: sy } = canvasScreenPoint(e);
-    const before = screenToWorld(sx, sy);
-    const factor = e.deltaY < 0 ? 1.1 : .9;
-    state.view.scale = clamp(state.view.scale * factor, .08, 8);
-    state.view.offsetX = sx - before.x * state.view.scale;
-    state.view.offsetY = sy - before.y * state.view.scale;
-    updateUI();
-    render();
+    const direction = wheelRotation.push(e.deltaY);
+    if (!direction) return;
+    if (state.mode === 'place') {
+      const proposal = getPlacementProposal();
+      if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
+        cycleSnapTargetChoice(direction);
+        return;
+      }
+    }
+    rotateCurrent(direction < 0 ? -45 : 45);
+  }
+
+  function hasWheelRotatableTarget() {
+    if (state.pointer.down || state.layoutMove.active) return false;
+    if (state.mode === 'cutout' || state.mode === 'boundary') return false;
+    if (state.mode === 'place') return true; // placement ghost
+    if (state.mode === 'start') return !state.start; // start ghost
+    return selectedParts().length > 0;
   }
 
   function onKeyDown(e) {

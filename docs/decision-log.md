@@ -15,6 +15,12 @@
 
 ### Canvas navigation is zoom-only (2026-07-31)
 
+### Course editing wheel rotation restored (2026-07-31)
+
+- Ctrl+wheel remains pointer-centred canvas zoom and never rotates parts.
+- Plain wheel rotates a selected course part or placement ghost by 45 degrees only while course editing; room-CAD, unselected, Shift/Meta, and non-canvas interactions retain browser scrolling.
+- High-resolution wheel input accumulates to 40px and is limited to one rotation per 100ms scroll gesture.
+
 - Canvas pan is intentionally unsupported: Space+drag, middle-button drag,
   plain-wheel pan, and Shift+wheel pan do not alter the view offset.
 - Ctrl+wheel on the canvas performs pointer-centred zoom only. It prevents the
