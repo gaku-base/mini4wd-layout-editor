@@ -354,6 +354,6 @@ test('app lifecycle fixes the selection frame at activation and keeps it through
   const apply = app.slice(applyStart, applyEnd);
   assert.match(activate, /selectionFrameHeading = normalizeRotation\(anchor\.heading\)/);
   assert.match(fast, /headingDeg: selectionFrameHeading/);
-  assert.match(app, /Number\.isFinite\(fast\.selectionFrameHeading\)\n      \? fast\.selectionFrameHeading/);
+  assert.match(app, /Number\.isFinite\(fast\.selectionFrameHeading\)\r?\n      \? fast\.selectionFrameHeading/);
   assert.doesNotMatch(apply, /rebaseFastPathSelectionPointer/);
 });

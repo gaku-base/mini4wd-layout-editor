@@ -14,6 +14,10 @@
   if (!BURNING_CHANGER_VISUAL) throw new Error('burning-changer-visual.jsが読み込まれていません');
   const FIELD_BOUNDARY = window.M4WD_FIELD_BOUNDARY;
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
+  const ROOM_BOUNDARY = window.M4WD_ROOM_BOUNDARY;
+  if (!ROOM_BOUNDARY) throw new Error('room-boundary.jsが読み込まれていません');
+  const RENDER_SCHEDULER = window.M4WD_RENDER_SCHEDULER;
+  if (!RENDER_SCHEDULER) throw new Error('render-scheduler.jsが読み込まれていません');
   const LAYOUT_GRAPH = window.M4WD_LAYOUT_GRAPH;
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
@@ -51,12 +55,15 @@
   ];
 
   const MODE_LABELS = {
-    start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', layoutMove: '全体移動'
+    start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', boundary: '設置範囲設定', cutout: '部屋形状作成', layoutMove: '全体移動'
   };
 
   const els = {};
   const state = {
     field: { originX: 0, originY: 0, widthCm: 600, heightCm: 400, gridCm: 10 },
+    siteBoundary: ROOM_BOUNDARY.defaultSiteBoundary({ originX: 0, originY: 0, widthCm: 600, heightCm: 400 }),
+    roomCutouts: [],
+    cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null },
     parts: [],
     start: null,
     startPhase: 'position',
@@ -96,8 +103,8 @@
     view: { scale: 1, offsetX: 40, offsetY: 40 },
     showGrid: true,
     pointer: {
-      x: 0, y: 0, down: false, panning: false, spaceDown: false,
-      lastX: 0, lastY: 0, draggingParts: false, dragStart: null,
+      x: 0, y: 0, down: false,
+      draggingParts: false, dragStart: null,
       dragBase: null, dragSnapshotTaken: false,
       marquee: false, marqueeStart: null, marqueeEnd: null, marqueeAdd: false,
       groupSnap: null, pendingPlacement: false, pendingPlacementProposal: null
@@ -119,13 +126,13 @@
 
   let ctx;
   let dpr = 1;
-  let raf = 0;
+  let renderScheduler;
   let toastTimer = 0;
   let layoutStore;
 
   function migrateLayoutCornerTypes(layout) {
     if (!layout || typeof layout !== 'object') return layout;
-    return {
+    const migrated = {
       ...layout,
       selectedType: migratedPartType({ type: layout.selectedType }),
       parts: Array.isArray(layout.parts)
@@ -135,6 +142,11 @@
           return { ...persistentPart, type };
         })
         : layout.parts
+    };
+    return {
+      ...migrated,
+      siteBoundary: ROOM_BOUNDARY.normalizeSiteBoundary(migrated.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(migrated.field || {})),
+      roomCutouts: ROOM_BOUNDARY.normalizeRoomCutouts(migrated.roomCutouts || [])
     };
   }
 
@@ -148,7 +160,9 @@
       'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
-      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide'
+      'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
+      'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
+      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -156,6 +170,7 @@
   function init() {
     cacheElements();
     ctx = els.courseCanvas.getContext('2d');
+    renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
     initializePartAssets();
     buildPartsList();
     buildColorLegend();
@@ -305,7 +320,6 @@
   function bindEvents() {
     window.addEventListener('resize', resizeCanvas);
     document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('keyup', onKeyUp);
 
     els.setupForm.addEventListener('submit', e => { e.preventDefault(); applySetup(); });
     els.cancelSetupBtn.addEventListener('click', () => { if (state.setupStarted) els.setupDialog.close(); });
@@ -369,6 +383,17 @@
       clearSnapTargetChoice();
       updateUI(); render();
     });
+    els.applySiteBoundaryBtn?.addEventListener('click', applySiteBoundaryFromInputs);
+    ['change', 'blur'].forEach(eventName => {
+      ['siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible'].forEach(id => on(els[id], eventName, previewSiteBoundaryInputs));
+    });
+    els.newCutoutBtn?.addEventListener('click', () => { state.cad.tool = 'create'; state.cad.selectedCutoutId = null; updateUI(); render(); els.courseCanvas.focus(); });
+    els.applyCutoutBtn?.addEventListener('click', applyCutoutFromInputs);
+    els.duplicateCutoutBtn?.addEventListener('click', duplicateSelectedCutout);
+    els.deleteCutoutBtn?.addEventListener('click', deleteSelectedCutout);
+    ['change', 'blur'].forEach(eventName => {
+      ['cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked'].forEach(id => on(els[id], eventName, previewCutoutInputs));
+    });
 
     const canvas = els.courseCanvas;
     canvas.addEventListener('pointerdown', onPointerDown);
@@ -418,6 +443,7 @@
       heightCm: heightM * 100,
       gridCm
     };
+    state.siteBoundary = ROOM_BOUNDARY.defaultSiteBoundary(state.field);
     if (reset) {
       state.parts = [];
       state.start = null;
@@ -428,6 +454,8 @@
       state.selectedType = 'start';
       state.rotation = 0;
       state.mode = 'start';
+      state.roomCutouts = [];
+      state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null };
       resetCornerVariantSession();
       resetFastPathSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
@@ -446,9 +474,11 @@
 
   function setMode(mode) {
     if (state.layoutMove.active) cancelManualLayoutMove();
-    if (!['place','move','delete','color'].includes(mode)) return;
+    if (!['place','move','delete','color','boundary','cutout'].includes(mode)) return;
     state.mode = state.mode === mode && mode !== 'place' ? 'place' : mode;
     state.hoveredPartId = null;
+    resetFastPathSession();
+    clearSnapTargetChoice();
     resetPointerInteraction();
     if (state.mode === 'place') clearSelection(false);
     updateUI();
@@ -484,12 +514,14 @@
     els.courseCanvas.focus();
   }
 
-  function snapshot() {
-    state.history.push(JSON.stringify(serializeState()));
+  function snapshotSerialized(serialized) {
+    state.history.push(serialized);
     if (state.history.length > HISTORY_LIMIT) state.history.shift();
     state.future = [];
     state.dirty = true;
   }
+
+  function snapshot() { snapshotSerialized(JSON.stringify(serializeState())); }
 
   function undo() {
     if (!state.history.length) return toast('戻せる操作がありません');
@@ -512,6 +544,8 @@
       app: 'mini4wd-course-layout-mouse-flow',
       version: VERSION,
       field: { ...state.field },
+      siteBoundary: { ...state.siteBoundary },
+      roomCutouts: state.roomCutouts.map(cutout => ({ ...cutout })),
       parts: state.parts.map(p => ({ ...p })),
       start: state.start ? { ...state.start } : null,
       startPhase: state.startPhase,
@@ -531,6 +565,10 @@
   function applySerialized(data, resetHistory = true, options = {}) {
     if (!data || !data.field || !Array.isArray(data.parts)) throw new Error('不正なレイアウトデータです');
     state.field = FIELD_BOUNDARY.normalizeField(data.field);
+    state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary(data.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(state.field));
+    state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(state.siteBoundary, state.field));
+    state.roomCutouts = ROOM_BOUNDARY.normalizeRoomCutouts(data.roomCutouts || []);
+    state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
@@ -812,6 +850,11 @@
     c.strokeStyle = '#2b3440';
     c.lineWidth = 1.2;
     c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
+    // The exported frame already includes the legacy field border, so retain
+    // the visible room cutouts as part of that same room-boundary output.
+    // CAD-only dimensions, handles, previews, and selection frames are drawn
+    // separately and never reach this export path.
+    drawRoomShape(c);
     if (state.start) drawStartLane(c, state.start, true);
     drawPartsInLayerOrder(c, { exportMode: true });
   }
@@ -831,11 +874,18 @@
 
   function resizeCanvas() {
     const rect = els.canvasWrap.getBoundingClientRect();
-    dpr = Math.min(window.devicePixelRatio || 1, 2);
-    els.courseCanvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    els.courseCanvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    els.courseCanvas.style.width = `${rect.width}px`;
-    els.courseCanvas.style.height = `${rect.height}px`;
+    const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
+    const nextWidth = Math.max(1, Math.floor(rect.width * nextDpr));
+    const nextHeight = Math.max(1, Math.floor(rect.height * nextDpr));
+    const nextStyleWidth = `${rect.width}px`;
+    const nextStyleHeight = `${rect.height}px`;
+    dpr = nextDpr;
+    // Assigning canvas.width/height clears its bitmap.  Only do that when the
+    // physical drawing size has actually changed, never during pointer input.
+    if (els.courseCanvas.width !== nextWidth) els.courseCanvas.width = nextWidth;
+    if (els.courseCanvas.height !== nextHeight) els.courseCanvas.height = nextHeight;
+    if (els.courseCanvas.style.width !== nextStyleWidth) els.courseCanvas.style.width = nextStyleWidth;
+    if (els.courseCanvas.style.height !== nextStyleHeight) els.courseCanvas.style.height = nextStyleHeight;
     render();
   }
 
@@ -852,26 +902,30 @@
   }
 
   function render() {
-    cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      const canvas = els.courseCanvas;
-      const w = canvas.width / dpr;
-      const h = canvas.height / dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
-      drawBackground(w, h);
-      ctx.save();
-      ctx.translate(state.view.offsetX, state.view.offsetY);
-      ctx.scale(state.view.scale, state.view.scale);
-      drawField(ctx);
-      if (state.start) drawStartLane(ctx, state.start, false);
-      drawPartsInLayerOrder(ctx, { selected: true });
-      drawMissingStartWarning(ctx);
-      if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
-      drawCursorAndGhost(ctx);
-      drawMarquee(ctx);
-      ctx.restore();
-    });
+    renderScheduler.request(drawFrame);
+  }
+
+  function drawFrame() {
+    const canvas = els.courseCanvas;
+    const w = canvas.width / dpr;
+    const h = canvas.height / dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.clearRect(0, 0, w, h);
+    drawBackground(w, h);
+    ctx.save();
+    ctx.translate(state.view.offsetX, state.view.offsetY);
+    ctx.scale(state.view.scale, state.view.scale);
+    drawField(ctx);
+    drawRoomShape(ctx);
+    if (state.start) drawStartLane(ctx, state.start, false);
+    drawPartsInLayerOrder(ctx, { selected: true });
+    drawMissingStartWarning(ctx);
+    if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
+    drawCursorAndGhost(ctx);
+    drawMarquee(ctx);
+    drawCadInteraction(ctx);
+    ctx.restore();
   }
 
   function drawBackground(w, h) {
@@ -891,11 +945,13 @@
     c.fillRect(frame.minX, frame.minY, frame.w, frame.h);
     c.shadowBlur = 0;
     if (state.showGrid) drawGrid(c);
-    c.strokeStyle = '#6e716d';
-    c.lineWidth = 1.6 / state.view.scale;
-    c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
-    c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
-    c.setLineDash([]);
+    if (state.siteBoundary.visible) {
+      c.strokeStyle = '#6e716d';
+      c.lineWidth = 1.6 / state.view.scale;
+      c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
+      c.strokeRect(frame.minX, frame.minY, frame.w, frame.h);
+      c.setLineDash([]);
+    }
     const m = 100;
     c.strokeStyle = '#555953';
     c.lineWidth = 2 / state.view.scale;
@@ -922,6 +978,105 @@
       c.strokeStyle = i % majorEvery === 0 ? '#ccc9c0' : '#e9e6df';
       c.beginPath(); c.moveTo(frame.minX, y); c.lineTo(frame.maxX, y); c.stroke();
     }
+  }
+
+  function cadWorldToMm(world) { return { x: ROOM_BOUNDARY.round10mm(world.x * 10), y: ROOM_BOUNDARY.round10mm(world.y * 10) }; }
+  function cadMmToWorld(point) { return { x: point.x / 10, y: point.y / 10 }; }
+  function selectedCutout() { return state.roomCutouts.find(cutout => cutout.id === state.cad.selectedCutoutId) || null; }
+  function cutoutBoundsWorld(cutout) {
+    const bounds = ROOM_BOUNDARY.rotatedBounds(cutout);
+    return { x: bounds.left / 10, y: bounds.top / 10, w: (bounds.right - bounds.left) / 10, h: (bounds.bottom - bounds.top) / 10 };
+  }
+
+  function drawRoomShape(c) {
+    if (!state.siteBoundary.visible) return;
+    const boxes = ROOM_BOUNDARY.visibleCutoutIntersections(state.siteBoundary, state.roomCutouts)
+      .map(rect => ({ x: rect.left / 10, y: rect.top / 10, w: (rect.right - rect.left) / 10, h: (rect.bottom - rect.top) / 10 }));
+    if (!boxes.length) return;
+
+    c.save();
+    c.globalCompositeOperation = 'source-over';
+    // Add each rectangle as its own closed subpath.  rect() never connects
+    // separate cutouts, unlike a reused moveTo/lineTo path can.
+    c.beginPath();
+    boxes.forEach(box => { c.rect(box.x, box.y, box.w, box.h); c.closePath(); });
+    c.fillStyle = 'rgba(27, 48, 60, .38)';
+    c.fill('nonzero');
+    // The hatch has a separate path and is clipped to the union mask, so a
+    // diagonal can neither join cutouts nor escape a partial intersection.
+    c.clip('nonzero');
+    c.strokeStyle = 'rgba(39, 121, 133, .9)';
+    c.lineWidth = 1.4 / state.view.scale;
+    c.setLineDash([]);
+    const minX = Math.min(...boxes.map(box => box.x));
+    const minY = Math.min(...boxes.map(box => box.y));
+    const maxX = Math.max(...boxes.map(box => box.x + box.w));
+    const maxY = Math.max(...boxes.map(box => box.y + box.h));
+    const span = Math.max(maxX - minX, maxY - minY);
+    c.beginPath();
+    for (let x = minX - span; x <= maxX; x += 16 / state.view.scale) {
+      c.moveTo(x, minY);
+      c.lineTo(x + span, maxY);
+    }
+    c.stroke();
+    c.restore();
+
+    // Keep borders separate from the fill/hatch path.  This also ensures the
+    // active composite mode is restored before subsequent course rendering.
+    c.save();
+    c.globalCompositeOperation = 'source-over';
+    c.strokeStyle = 'rgba(39, 121, 133, .9)';
+    c.lineWidth = 1.4 / state.view.scale;
+    c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
+    boxes.forEach(box => {
+      c.beginPath();
+      c.rect(box.x, box.y, box.w, box.h);
+      c.closePath();
+      c.stroke();
+    });
+    c.restore();
+  }
+
+  function drawCadInteraction(c) {
+    if (state.mode !== 'cutout') return;
+    const selected = selectedCutout();
+    const preview = state.cad.dragStartMm && state.cad.dragCurrentMm
+      ? ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: 'preview' })
+      : null;
+    [selected, preview].filter(Boolean).forEach((cutout, index) => {
+      const box = cutoutBoundsWorld(cutout);
+      c.save();
+      c.strokeStyle = index === 1 ? '#f7c657' : '#56d7c5';
+      c.fillStyle = index === 1 ? 'rgba(247,198,87,.16)' : 'rgba(86,215,197,.12)';
+      c.lineWidth = 2.4 / state.view.scale;
+      c.setLineDash(index === 1 ? [6 / state.view.scale, 4 / state.view.scale] : []);
+      c.fillRect(box.x, box.y, box.w, box.h);
+      c.strokeRect(box.x, box.y, box.w, box.h);
+      c.setLineDash([]);
+      c.restore();
+    });
+    const dimensionTarget = preview || selected;
+    if (dimensionTarget) drawCadDimensions(c, dimensionTarget);
+  }
+
+  function drawCadDimensions(c, cutout) {
+    const geometry = ROOM_BOUNDARY.wallDimensionGeometry(state.siteBoundary, cutout);
+    const bounds = geometry.bounds;
+    const box = { x: bounds.left / 10, y: bounds.top / 10, w: (bounds.right - bounds.left) / 10, h: (bounds.bottom - bounds.top) / 10 };
+    const distances = geometry.distances;
+    const scale = state.view.scale;
+    c.save();
+    c.strokeStyle = '#68e7d5'; c.fillStyle = '#153d43'; c.lineWidth = 1 / scale;
+    c.font = `700 ${10 / scale}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const label = (text, x, y) => { c.fillStyle = 'rgba(235,255,252,.96)'; c.fillText(text, x, y); };
+    const boundary = ROOM_BOUNDARY.normalizeSiteBoundary(state.siteBoundary);
+    const left = boundary.x / 10; const top = boundary.y / 10; const right = (boundary.x + boundary.width) / 10; const bottom = (boundary.y + boundary.height) / 10;
+    const line = (x1, y1, x2, y2, text) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); label(`${text}mm`, (x1 + x2) / 2, (y1 + y2) / 2); };
+    line(left, box.y, box.x, box.y, distances.left);
+    line(box.x + box.w, box.y + box.h, right, box.y + box.h, distances.right);
+    line(box.x, top, box.x, box.y, distances.top);
+    line(box.x + box.w, box.y + box.h, box.x + box.w, bottom, distances.bottom);
+    c.restore();
   }
 
   function resolvePartDef(part) {
@@ -967,9 +1122,7 @@
     return FAST_PATH.isFastPathType(type);
   }
 
-  function worldToScreen(x, y) {
-    return { x: x * state.view.scale + state.view.offsetX, y: y * state.view.scale + state.view.offsetY };
-  }
+  function worldToScreen(x, y) { return ROOM_BOUNDARY.worldToScreen({ x, y }, state.view); }
 
   function resetFastPathSession() {
     state.fastPath = {
@@ -2456,19 +2609,157 @@
     c.restore();
   }
 
+  function cutoutHitTest(world) {
+    const point = cadWorldToMm(world);
+    return [...state.roomCutouts].reverse().find(cutout => {
+      if (!cutout.visible) return false;
+      const bounds = ROOM_BOUNDARY.rotatedBounds(cutout);
+      return point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom;
+    }) || null;
+  }
+
+  function clearCadDrag() {
+    state.cad.dragStartMm = null;
+    state.cad.dragCurrentMm = null;
+    state.cad.drag = null;
+  }
+
+  function cancelCadDrag() {
+    const drag = state.cad.drag;
+    if (drag?.kind === 'move') {
+      const selected = state.roomCutouts.find(cutout => cutout.id === drag.cutoutId);
+      if (selected) replaceCutout({ ...selected, x: drag.startCutoutX, y: drag.startCutoutY }, false);
+    }
+    clearCadDrag();
+  }
+
+  function onCadPointerDown(e, world) {
+    const point = cadWorldToMm(world);
+    if (state.mode === 'boundary') return;
+    cancelCadDrag();
+    const hit = cutoutHitTest(world);
+    if (hit) {
+      state.cad.selectedCutoutId = hit.id;
+      state.cad.tool = 'select';
+      if (!hit.locked) {
+        state.cad.drag = { ...ROOM_BOUNDARY.beginCutoutDrag(hit, point, e.pointerId), historyState: JSON.stringify(serializeState()), moved: false };
+      }
+    } else {
+      state.cad.selectedCutoutId = null;
+      state.cad.tool = 'create';
+      state.cad.dragStartMm = point;
+      state.cad.dragCurrentMm = point;
+      state.cad.drag = { kind: 'create', pointerId: e.pointerId };
+    }
+    updateUI(); render();
+  }
+
+  function onCadPointerMove(e, world) {
+    if (state.mode !== 'cutout' || !state.pointer.down) return;
+    const point = cadWorldToMm(world);
+    const drag = state.cad.drag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (drag.kind === 'create' && state.cad.dragStartMm) state.cad.dragCurrentMm = point;
+    const selected = drag.kind === 'move' ? state.roomCutouts.find(cutout => cutout.id === drag.cutoutId) : null;
+    if (selected && !selected.locked) {
+      const position = ROOM_BOUNDARY.cutoutPositionForDrag(drag, point);
+      if (position.x !== selected.x || position.y !== selected.y) {
+        drag.moved = true;
+        replaceCutout({ ...selected, ...position }, false);
+      }
+    }
+    updateUI(); render();
+  }
+
+  function onCadPointerUp(e) {
+    if (state.mode !== 'cutout') return;
+    const drag = state.cad.drag;
+    if (!drag || drag.pointerId !== e.pointerId) return;
+    if (drag.kind === 'create' && state.cad.dragStartMm && state.cad.dragCurrentMm) {
+      snapshot();
+      const cutout = ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: ROOM_BOUNDARY.nextCutoutId(state.roomCutouts) });
+      state.roomCutouts.push(cutout);
+      state.cad.selectedCutoutId = cutout.id;
+      toast('部屋形状用切り抜きを作成しました');
+    }
+    if (drag.kind === 'move' && drag.moved) snapshotSerialized(drag.historyState);
+    clearCadDrag();
+    persistLocal(); updateUI(); render();
+  }
+
+  function replaceCutout(next, sync = true) {
+    state.roomCutouts = state.roomCutouts.map(cutout => cutout.id === next.id ? ROOM_BOUNDARY.normalizeCutout(next, { id: next.id }) : cutout);
+    if (sync) { persistLocal(); updateUI(); render(); }
+  }
+
+  function applySiteBoundaryFromInputs() {
+    const candidate = boundaryFromInputs();
+    if (!candidate) return toast('幅と奥行は10mm以上の数値を入力してください');
+    snapshot();
+    state.siteBoundary = candidate;
+    state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(candidate, state.field));
+    fitView(); persistLocal(); updateUI(); render();
+  }
+
+  function boundaryFromInputs() {
+    const values = ['siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight'].map(id => els[id]?.value);
+    if (values.some(value => value === '' || !Number.isFinite(Number(value)))) return null;
+    const candidate = ROOM_BOUNDARY.normalizeSiteBoundary({ name: els.siteBoundaryName.value, x: values[0], y: values[1], width: values[2], height: values[3], visible: els.siteBoundaryVisible.checked }, state.siteBoundary);
+    if (Number(values[2]) <= 0 || Number(values[3]) <= 0) return null;
+    return candidate;
+  }
+
+  function previewSiteBoundaryInputs() {
+    // Values remain provisional until the explicit apply action. This avoids
+    // corrupting a valid boundary while an input is temporarily empty.
+    if (state.mode === 'boundary') render();
+  }
+
+  function applyCutoutFromInputs() {
+    const selected = selectedCutout();
+    if (!selected) return;
+    const candidate = cutoutFromInputs(selected);
+    if (!candidate) return toast('幅と高さは10mm以上の数値を入力してください');
+    snapshot(); replaceCutout(candidate);
+  }
+
+  function cutoutFromInputs(selected) {
+    const ids = ['cutoutX','cutoutY','cutoutWidth','cutoutHeight'];
+    if (ids.some(id => els[id]?.value === '' || !Number.isFinite(Number(els[id].value)))) return null;
+    if (Number(els.cutoutWidth.value) <= 0 || Number(els.cutoutHeight.value) <= 0) return null;
+    return ROOM_BOUNDARY.normalizeCutout({ ...selected, name: els.cutoutName.value, x: els.cutoutX.value, y: els.cutoutY.value, width: els.cutoutWidth.value, height: els.cutoutHeight.value, rotation: els.cutoutRotation.value, visible: els.cutoutVisible.checked, locked: els.cutoutLocked.checked }, { id: selected.id });
+  }
+
+  function previewCutoutInputs() {
+    // The form itself is the live preview; commit keeps Undo/Redo to one entry.
+    if (state.mode === 'cutout') render();
+  }
+
+  function deleteSelectedCutout() {
+    const selected = selectedCutout();
+    if (!selected) return;
+    if (selected.locked) return toast('ロック中の切り抜きは削除できません');
+    snapshot(); state.roomCutouts = state.roomCutouts.filter(cutout => cutout.id !== selected.id); state.cad.selectedCutoutId = null;
+    persistLocal(); updateUI(); render();
+  }
+
+  function duplicateSelectedCutout() {
+    const selected = selectedCutout();
+    if (!selected) return;
+    snapshot(); const copy = ROOM_BOUNDARY.duplicateCutout(selected, state.roomCutouts); state.roomCutouts.push(copy); state.cad.selectedCutoutId = copy.id;
+    persistLocal(); updateUI(); render();
+  }
+
   function onPointerDown(e) {
+    if (e.button !== 0 && !state.layoutMove.active) return;
     els.courseCanvas.setPointerCapture(e.pointerId);
     els.courseCanvas.focus();
-    const rect = els.courseCanvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { x: sx, y: sy } = canvasScreenPoint(e);
     const world = screenToWorld(sx, sy);
     const snappedWorld = { x: snap(world.x), y: snap(world.y) };
     const physicalPointer = { x: sx, y: sy };
 
     state.pointer.down = true;
-    state.pointer.lastX = e.clientX;
-    state.pointer.lastY = e.clientY;
     state.pointer.x = world.x;
     state.pointer.y = world.y;
     state.pointer.groupSnap = null;
@@ -2481,13 +2772,11 @@
       return;
     }
 
-    if (e.button === 1 || e.button === 2 || state.pointer.spaceDown) {
-      state.pointer.panning = true;
-      els.courseCanvas.classList.add('is-panning');
+    if (e.button !== 0) return;
+    if (state.mode === 'boundary' || state.mode === 'cutout') {
+      onCadPointerDown(e, world);
       return;
     }
-
-    if (e.button !== 0) return;
     const fastPathResult = state.mode === 'place'
       ? updateFastPathPointer(physicalPointer)
       : { phase: FAST_PATH.FREE };
@@ -2561,9 +2850,7 @@
   }
 
   function onPointerMove(e) {
-    const rect = els.courseCanvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    const { x: sx, y: sy } = canvasScreenPoint(e);
     const world = screenToWorld(sx, sy);
     state.pointer.x = world.x;
     state.pointer.y = world.y;
@@ -2583,12 +2870,8 @@
       return;
     }
 
-    if (state.pointer.panning && state.pointer.down) {
-      state.view.offsetX += e.clientX - state.pointer.lastX;
-      state.view.offsetY += e.clientY - state.pointer.lastY;
-      state.pointer.lastX = e.clientX;
-      state.pointer.lastY = e.clientY;
-      render();
+    if (state.mode === 'boundary' || state.mode === 'cutout') {
+      onCadPointerMove(e, world);
       return;
     }
 
@@ -2703,6 +2986,12 @@
   }
 
   function onPointerUp(e) {
+    if (state.mode === 'boundary' || state.mode === 'cutout') {
+      onCadPointerUp(e);
+      state.pointer.down = false;
+      try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      return;
+    }
     const pendingPlacementProposal = state.pointer.pendingPlacementProposal;
     const pendingPlacement = state.pointer.pendingPlacement;
     // Consume the event before any placement code. Duplicate pointerup/click
@@ -2752,7 +3041,6 @@
     }
 
     state.pointer.down = false;
-    state.pointer.panning = false;
     state.pointer.draggingParts = false;
     state.pointer.dragStart = null;
     state.pointer.dragBase = null;
@@ -2767,7 +3055,7 @@
     const hoverAfter = ['move','delete','color'].includes(state.mode) ? hitTest(state.pointer.x, state.pointer.y) : null;
     state.hoveredPartId = hoverAfter?.id || null;
     els.courseCanvas.classList.toggle('is-hovering-part', !!state.hoveredPartId);
-    els.courseCanvas.classList.remove('is-panning', 'is-moving');
+    els.courseCanvas.classList.remove('is-moving');
     try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
     persistLocal();
     updateUI();
@@ -2801,8 +3089,8 @@
   function onPointerCancel(e) {
     // Cancellation is not a click.  Discard its captured proposal so touch
     // cancellation cannot later become a second placement.
+    if (state.mode === 'cutout') cancelCadDrag();
     state.pointer.down = false;
-    state.pointer.panning = false;
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
     state.pointer.draggingParts = false;
@@ -2814,7 +3102,7 @@
     state.pointer.marqueeStart = null;
     state.pointer.marqueeEnd = null;
     state.pointer.marqueeAdd = false;
-    els.courseCanvas.classList.remove('is-panning', 'is-moving');
+    els.courseCanvas.classList.remove('is-moving');
     try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
     updateUI();
     render();
@@ -2830,19 +3118,13 @@
   }
 
   function onWheel(e) {
+    // Plain and Shift+wheel intentionally retain browser scrolling.  Ctrl is
+    // the only modifier that owns this event, preventing browser page zoom.
+    if (!e.ctrlKey) return;
     e.preventDefault();
-    if (((state.mode === 'start' && !state.start) || state.mode === 'place') && !e.ctrlKey && !e.metaKey) {
-      const proposal = state.mode === 'place' ? getPlacementProposal() : null;
-      if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
-        cycleSnapTargetChoice(e.deltaY < 0 ? -1 : 1);
-        return;
-      }
-      rotateCurrent(e.deltaY < 0 ? -45 : 45);
-      return;
-    }
-    const rect = els.courseCanvas.getBoundingClientRect();
-    const sx = e.clientX - rect.left;
-    const sy = e.clientY - rect.top;
+    // Do not alter the view while a cutout or part drag owns the pointer.
+    if (state.pointer.down) return;
+    const { x: sx, y: sy } = canvasScreenPoint(e);
     const before = screenToWorld(sx, sy);
     const factor = e.deltaY < 0 ? 1.1 : .9;
     state.view.scale = clamp(state.view.scale * factor, .08, 8);
@@ -2873,11 +3155,24 @@
       return;
     }
 
-    if (e.code === 'Space') {
-      state.pointer.spaceDown = true;
-      e.preventDefault();
-    }
     const key = e.key.toLowerCase();
+
+    if (state.mode === 'cutout') {
+      const selected = selectedCutout();
+      const deltaMm = e.shiftKey ? 100 : 10;
+      const delta = key === 'arrowleft' ? { x: -deltaMm, y: 0 }
+        : key === 'arrowright' ? { x: deltaMm, y: 0 }
+        : key === 'arrowup' ? { x: 0, y: -deltaMm }
+        : key === 'arrowdown' ? { x: 0, y: deltaMm }
+        : null;
+      if (delta && selected) {
+        e.preventDefault();
+        if (selected.locked) return toast('ロック中の切り抜きは移動できません');
+        snapshot(); replaceCutout(ROOM_BOUNDARY.moveCutout(selected, delta));
+        return;
+      }
+      if ((key === 'delete' || key === 'backspace') && selected) { e.preventDefault(); deleteSelectedCutout(); return; }
+    }
 
     if ((key === '[' || key === ']') && state.mode === 'place') {
       const proposal = getPlacementProposal();
@@ -2901,6 +3196,8 @@
       else setMode('color');
       return;
     }
+    if (key === 'b') { e.preventDefault(); setMode('boundary'); return; }
+    if (key === 'h') { e.preventDefault(); setMode('cutout'); return; }
     if (key === 'z') { e.preventDefault(); rotateCurrent(-45); return; }
     if (key === 'x') { e.preventDefault(); rotateCurrent(45); return; }
     if (key === 'f') {
@@ -2935,10 +3232,6 @@
       updateUI(); render();
       return;
     }
-  }
-
-  function onKeyUp(e) {
-    if (e.code === 'Space') state.pointer.spaceDown = false;
   }
 
   function clearSnapTargetChoice() {
@@ -3240,8 +3533,8 @@
   }
 
   function resetPointerInteraction() {
+    cancelCadDrag();
     state.pointer.down = false;
-    state.pointer.panning = false;
     state.pointer.draggingParts = false;
     state.pointer.dragStart = null;
     state.pointer.dragBase = null;
@@ -3254,7 +3547,7 @@
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
     state.hoveredPartId = null;
-    els.courseCanvas?.classList.remove('is-panning', 'is-moving', 'is-hovering-part');
+    els.courseCanvas?.classList.remove('is-moving', 'is-hovering-part');
   }
 
   function toggleGrid() {
@@ -3359,6 +3652,13 @@
     }
     snapshot();
     state.field = nextField;
+    state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary({
+      ...state.siteBoundary,
+      x: nextField.originX * 10,
+      y: nextField.originY * 10,
+      width: nextField.widthCm * 10,
+      height: nextField.heightCm * 10
+    }, state.siteBoundary);
     persistLocal();
     fitView();
     updateUI();
@@ -3579,8 +3879,6 @@
       return;
     }
     event.preventDefault();
-    state.pointer.panning = false;
-    els.courseCanvas.classList.remove('is-panning');
     els.canvasContextMenu.style.left = `${event.clientX}px`;
     els.canvasContextMenu.style.top = `${event.clientY}px`;
     els.canvasContextMenu.dataset.partId = target.id;
@@ -3636,7 +3934,42 @@
   function snap(v) { return Math.round(v / state.field.gridCm) * state.field.gridCm; }
   function normalizeRotation(v) { return ((Math.round(v / 45) * 45) % 360 + 360) % 360; }
   function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
-  function screenToWorld(x, y) { return { x: (x - state.view.offsetX) / state.view.scale, y: (y - state.view.offsetY) / state.view.scale }; }
+  function screenToWorld(x, y) { return ROOM_BOUNDARY.screenToWorld({ x, y }, state.view); }
+  function canvasScreenPoint(event) {
+    const rect = els.courseCanvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  function updateCutoutDimensionOverlay() {
+    const overlay = els.cutoutDimensionOverlay;
+    const preview = state.cad.dragStartMm && state.cad.dragCurrentMm
+      ? ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: 'preview' })
+      : null;
+    const cutout = state.mode === 'cutout' ? (preview || selectedCutout()) : null;
+    if (!overlay || !cutout) { if (overlay) overlay.hidden = true; return; }
+    const geometry = ROOM_BOUNDARY.wallDimensionGeometry(state.siteBoundary, cutout);
+    const boundary = geometry.boundary;
+    const bounds = geometry.bounds;
+    const width = Math.max(1, els.canvasWrap.clientWidth);
+    const height = Math.max(1, els.canvasWrap.clientHeight);
+    const keepVisible = (point) => ({ x: clamp(point.x, 42, width - 42), y: clamp(point.y, 20, height - 20) });
+    const point = (x, y) => worldToScreen(x / 10, y / 10);
+    const labels = {
+      left: { value: geometry.distances.left, from: point(boundary.left, (bounds.top + bounds.bottom) / 2), to: point(bounds.left, (bounds.top + bounds.bottom) / 2) },
+      right: { value: geometry.distances.right, from: point(bounds.right, (bounds.top + bounds.bottom) / 2), to: point(bounds.right, (bounds.top + bounds.bottom) / 2) },
+      top: { value: geometry.distances.top, from: point((bounds.left + bounds.right) / 2, boundary.top), to: point((bounds.left + bounds.right) / 2, bounds.top) },
+      bottom: { value: geometry.distances.bottom, from: point((bounds.left + bounds.right) / 2, bounds.bottom), to: point((bounds.left + bounds.right) / 2, boundary.bottom) }
+    };
+    Object.entries(labels).forEach(([side, value]) => {
+      const element = overlay.querySelector(`[data-cutout-dimension="${side}"]`);
+      if (!element) return;
+      const midpoint = keepVisible({ x: (value.from.x + value.to.x) / 2, y: (value.from.y + value.to.y) / 2 });
+      element.textContent = `${side === 'left' ? '左' : side === 'right' ? '右' : side === 'top' ? '上' : '下'} ${value.value}mm`;
+      element.style.left = `${midpoint.x}px`;
+      element.style.top = `${midpoint.y}px`;
+    });
+    overlay.hidden = false;
+  }
   function makeId() { return globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
   function updateUI() {
@@ -3719,15 +4052,40 @@
       els.placementHeightCustom.hidden = state.placementHeightMode !== 'custom';
       if (document.activeElement !== els.placementHeightCustom) els.placementHeightCustom.value = String(state.placementHeightMm);
     }
+    const boundaryMode = state.mode === 'boundary';
+    const cutoutMode = state.mode === 'cutout';
+    if (els.siteBoundaryPanel) els.siteBoundaryPanel.hidden = !boundaryMode;
+    if (els.roomCutoutPanel) els.roomCutoutPanel.hidden = !cutoutMode;
+    if (boundaryMode) {
+      const boundary = state.siteBoundary;
+      const values = { siteBoundaryName: boundary.name, siteBoundaryX: boundary.x, siteBoundaryY: boundary.y, siteBoundaryWidth: boundary.width, siteBoundaryHeight: boundary.height };
+      Object.entries(values).forEach(([id, value]) => { if (els[id] && document.activeElement !== els[id]) els[id].value = String(value); });
+      if (els.siteBoundaryVisible) els.siteBoundaryVisible.checked = boundary.visible;
+    }
+    if (cutoutMode) {
+      const cutout = selectedCutout();
+      if (els.roomCutoutEmpty) els.roomCutoutEmpty.hidden = !!cutout;
+      if (els.roomCutoutEditor) els.roomCutoutEditor.hidden = !cutout;
+      if (cutout) {
+        const values = { cutoutName: cutout.name, cutoutX: cutout.x, cutoutY: cutout.y, cutoutWidth: cutout.width, cutoutHeight: cutout.height, cutoutRotation: cutout.rotation };
+        Object.entries(values).forEach(([id, value]) => { if (els[id] && document.activeElement !== els[id]) els[id].value = String(value); });
+        els.cutoutVisible.checked = cutout.visible;
+        els.cutoutLocked.checked = cutout.locked;
+        const distances = ROOM_BOUNDARY.distancesToBoundary(state.siteBoundary, cutout);
+        els.cutoutDistances.innerHTML = `<span>左: ${distances.left}mm</span><span>右: ${distances.right}mm</span><span>上: ${distances.top}mm</span><span>下: ${distances.bottom}mm</span>`;
+        els.deleteCutoutBtn.disabled = cutout.locked;
+      }
+    }
+    updateCutoutDimensionOverlay();
     updateFastPathGuide();
     updateSnapCandidatePanel(proposal);
 
-    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color'].includes(state.mode);
+    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color','boundary','cutout'].includes(state.mode);
     els.instruction.classList.toggle('hidden', !showInstruction);
     if (state.layoutMove.active) {
       els.instruction.innerHTML = '<strong>レイアウト全体を移動中</strong><span>マウスで移動 → クリックで固定・Esc／右クリックで取消</span>';
     } else if (state.mode === 'start') {
-      els.instruction.innerHTML = '<strong>スタートレーンを配置</strong><span>マウスで位置移動・Z/Xまたはホイールで回転 → クリックで配置</span>';
+      els.instruction.innerHTML = '<strong>スタートレーンを配置</strong><span>マウスで位置移動・Z/Xで回転 → クリックで配置</span>';
     } else if (state.mode === 'place') {
       updatePlacementInstruction(proposal);
     } else if (state.mode === 'move') {
@@ -3736,6 +4094,10 @@
       els.instruction.innerHTML = '<strong>W：パーツ削除</strong><span>クリックで1個削除・Shift+クリックで複数選択・範囲ドラッグでまとめて削除</span>';
     } else if (state.mode === 'color') {
       els.instruction.innerHTML = '<strong>E：カラー変更</strong><span>クリックで色を順送り・Shift+クリック／範囲ドラッグで複数変更</span>';
+    } else if (state.mode === 'boundary') {
+      els.instruction.innerHTML = '<strong>設置範囲設定</strong><span>左パネルのmm入力で設置範囲を変更。既存コースは移動しません。</span>';
+    } else if (state.mode === 'cutout') {
+      els.instruction.innerHTML = '<strong>部屋形状作成</strong><span>ドラッグで切り抜きを作成。選択後はドラッグ移動・矢印10mm・Shift+矢印100mm。</span>';
     }
 
     els.gridBtn.classList.toggle('active', state.showGrid);
@@ -3770,6 +4132,7 @@
     els.courseCanvas.classList.toggle('mode-move', state.mode === 'move');
     els.courseCanvas.classList.toggle('mode-delete', state.mode === 'delete');
     els.courseCanvas.classList.toggle('mode-color', state.mode === 'color');
+    els.courseCanvas.classList.toggle('mode-cad', boundaryMode || cutoutMode);
     updateStatusOnly();
     updateSummary();
   }

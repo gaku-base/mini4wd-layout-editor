@@ -14,7 +14,7 @@
   const SUPPORTED_LEGACY_VERSIONS = Object.freeze(['1.0.0-RC1']);
   const PERSISTED_FIELDS = [
     'app', 'version', 'field', 'parts', 'start', 'startPhase',
-    'selectedType', 'rotation', 'activeConnection', 'connections'
+    'selectedType', 'rotation', 'activeConnection', 'connections', 'siteBoundary', 'roomCutouts'
   ];
 
   function isRecord(value) {
@@ -101,6 +101,24 @@
     if (versionStatus === 'current' && (!hasOriginX || !hasOriginY)) return false;
     if ((hasOriginX && !isFiniteNumber(layout.field.originX)) || (hasOriginY && !isFiniteNumber(layout.field.originY))) return false;
     if (!Array.isArray(layout.parts) || !isRotation(layout.rotation)) return false;
+    if (Object.prototype.hasOwnProperty.call(layout, 'siteBoundary')) {
+      const boundary = layout.siteBoundary;
+      if (!isRecord(boundary) || boundary.shape !== 'rectangle' || typeof boundary.name !== 'string'
+        || !isFiniteNumber(boundary.x) || !isFiniteNumber(boundary.y) || !isFiniteNumber(boundary.width) || !isFiniteNumber(boundary.height)
+        || boundary.width <= 0 || boundary.height <= 0 || typeof boundary.visible !== 'boolean') return false;
+    }
+    if (Object.prototype.hasOwnProperty.call(layout, 'roomCutouts')) {
+      if (!Array.isArray(layout.roomCutouts)) return false;
+      const cutoutIds = new Set();
+      for (const cutout of layout.roomCutouts) {
+        if (!isRecord(cutout) || typeof cutout.id !== 'string' || !cutout.id || cutoutIds.has(cutout.id)
+          || typeof cutout.name !== 'string' || cutout.type !== 'room-cutout' || cutout.shape !== 'rectangle'
+          || !isFiniteNumber(cutout.x) || !isFiniteNumber(cutout.y) || !isFiniteNumber(cutout.width) || !isFiniteNumber(cutout.height)
+          || cutout.width <= 0 || cutout.height <= 0 || ![0, 90, 180, 270].includes(cutout.rotation)
+          || typeof cutout.locked !== 'boolean' || typeof cutout.visible !== 'boolean') return false;
+        cutoutIds.add(cutout.id);
+      }
+    }
 
     const knownTypes = new Set(options.partTypes || []);
     const knownColors = new Set(options.colorKeys || []);

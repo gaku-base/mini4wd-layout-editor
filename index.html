@@ -36,6 +36,8 @@
             <button class="mode-button" data-mode="move" type="button"><kbd>Q</kbd><span>パーツ移動</span></button>
             <button class="mode-button danger" data-mode="delete" type="button"><kbd>W</kbd><span>パーツ削除</span></button>
             <button class="mode-button color-mode" data-mode="color" type="button"><kbd>E</kbd><span>カラー変更</span></button>
+            <button class="mode-button cad-mode" data-mode="boundary" type="button"><kbd>B</kbd><span>設置範囲</span></button>
+            <button class="mode-button cad-mode" data-mode="cutout" type="button"><kbd>H</kbd><span>部屋形状</span></button>
           </div>
         </section>
 
@@ -47,11 +49,43 @@
           <div id="partsList" class="parts-list"></div>
         </section>
 
+        <section id="siteBoundaryPanel" class="panel cad-panel" hidden>
+          <div class="panel-heading"><h2>設置範囲</h2><span class="hint">mm / 10mm単位</span></div>
+          <div class="cad-form">
+            <label>名称<input id="siteBoundaryName" type="text" maxlength="80" /></label>
+            <label>X (mm)<input id="siteBoundaryX" type="number" step="10" /></label>
+            <label>Y (mm)<input id="siteBoundaryY" type="number" step="10" /></label>
+            <label>幅 (mm)<input id="siteBoundaryWidth" type="number" min="10" step="10" /></label>
+            <label>奥行 (mm)<input id="siteBoundaryHeight" type="number" min="10" step="10" /></label>
+            <label class="checkbox-row"><input id="siteBoundaryVisible" type="checkbox" />表示</label>
+            <button id="applySiteBoundaryBtn" class="button full-button" type="button">設置範囲を適用</button>
+          </div>
+        </section>
+
+        <section id="roomCutoutPanel" class="panel cad-panel" hidden>
+          <div class="panel-heading"><h2>部屋形状用切り抜き</h2><button id="newCutoutBtn" class="text-button" type="button">長方形を作成</button></div>
+          <p class="cad-help">キャンバスをドラッグして作成。選択後はドラッグ移動、矢印で10mm、Shift+矢印で100mm移動できます。</p>
+          <div id="roomCutoutEmpty" class="empty-summary">切り抜き未選択</div>
+          <div id="roomCutoutEditor" class="cad-form" hidden>
+            <label>名称<input id="cutoutName" type="text" maxlength="80" /></label>
+            <label>X (mm)<input id="cutoutX" type="number" step="10" /></label>
+            <label>Y (mm)<input id="cutoutY" type="number" step="10" /></label>
+            <label>幅 (mm)<input id="cutoutWidth" type="number" min="10" step="10" /></label>
+            <label>高さ (mm)<input id="cutoutHeight" type="number" min="10" step="10" /></label>
+            <label>回転<select id="cutoutRotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
+            <label class="checkbox-row"><input id="cutoutVisible" type="checkbox" />表示・除外を有効</label>
+            <label class="checkbox-row"><input id="cutoutLocked" type="checkbox" />ロック</label>
+            <button id="applyCutoutBtn" class="button full-button" type="button">切り抜きを適用</button>
+            <div id="cutoutDistances" class="cad-distances" aria-live="polite"></div>
+            <div class="cad-actions"><button id="duplicateCutoutBtn" class="button ghost" type="button">複製</button><button id="deleteCutoutBtn" class="button danger-button" type="button">削除</button></div>
+          </div>
+        </section>
+
         <section class="panel compact-panel">
           <div class="panel-heading"><h2>作成フロー</h2></div>
           <div class="shortcut-list">
             <div><kbd>マウス移動</kbd><span>ゴーストの位置を移動</span></div>
-            <div><kbd>Z / X / ホイール</kbd><span>左・右へ45°回転</span></div>
+            <div><kbd>Z / X</kbd><span>左・右へ45°回転</span></div>
             <div><kbd>クリック</kbd><span>ゴースト位置へパーツ配置</span></div>
             <div><kbd>R</kbd><span>一つ前のパーツへ戻る</span></div>
             <div><kbd>Esc</kbd><span>配置モードへ戻る</span></div>
@@ -84,10 +118,14 @@
 
         <div id="canvasWrap" class="canvas-wrap">
           <canvas id="courseCanvas" tabindex="0" aria-label="コース編集キャンバス"></canvas>
+          <div id="cutoutDimensionOverlay" class="cutout-dimension-overlay" hidden aria-hidden="true">
+            <span data-cutout-dimension="left"></span><span data-cutout-dimension="right"></span>
+            <span data-cutout-dimension="top"></span><span data-cutout-dimension="bottom"></span>
+          </div>
           <div id="fastPathGuide" class="fast-path-guide" hidden aria-hidden="true"><span data-fast-path-guide-label>STRAIGHT</span></div>
           <div id="instruction" class="instruction-card">
             <strong>スタートレーンを配置</strong>
-            <span>マウスで位置移動・Z/Xまたはホイールで回転 → クリック</span>
+            <span>マウスで位置移動・Z/Xで回転 → クリック</span>
           </div>
           <div id="toast" class="toast" role="status" aria-live="polite"></div>
         </div>
@@ -168,10 +206,8 @@
             <div><kbd>範囲ドラッグ</kbd><span>複数パーツを囲んで選択</span></div>
             <div><kbd>Enter / Delete</kbd><span>選択中を実行・削除</span></div>
             <div><kbd>Ctrl+Z / Y</kbd><span>アンドゥ / リドゥ（各20工程）</span></div>
-            <div><kbd>Space+ドラッグ</kbd><span>画面移動</span></div>
-            <div><kbd>ホイール</kbd><span>配置ゴーストを45°回転</span></div>
             <div><kbd>[ / ]</kbd><span>吸着候補を切替</span></div>
-            <div><kbd>Ctrl＋ホイール</kbd><span>画面の拡大・縮小</span></div>
+            <div><kbd>Ctrl＋ホイール</kbd><span>ポインター位置を中心に拡大・縮小</span></div>
           </div>
         </section>
       </aside>
@@ -247,6 +283,8 @@
   <script src="lane-change-visual.js"></script>
   <script src="burning-changer-visual.js"></script>
   <script src="field-boundary.js"></script>
+  <script src="room-boundary.js"></script>
+  <script src="render-scheduler.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
