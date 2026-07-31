@@ -198,6 +198,177 @@
     return { boundary, bounds, distances: distancesToBoundary(siteBoundary, cutout) };
   }
 
+  // Dimension labels are presentation-only, but keeping their anchor points
+  // here makes their midpoint rule testable and independent of canvas zoom.
+  function dimensionMidpoint(lineStart = {}, lineEnd = {}) {
+    return {
+      x: (number(lineStart.x) + number(lineEnd.x)) / 2,
+      y: (number(lineStart.y) + number(lineEnd.y)) / 2
+    };
+  }
+
+  function horizontalDimensionLabelPoint(lineStart = {}, lineEnd = {}) {
+    return dimensionMidpoint(lineStart, lineEnd);
+  }
+
+  function verticalDimensionLabelPoint(lineStart = {}, lineEnd = {}) {
+    return dimensionMidpoint(lineStart, lineEnd);
+  }
+
+  function pointKey(point = {}) {
+    return `${round10mm(point.x)},${round10mm(point.y)}`;
+  }
+
+  function cutoutCornerPoints(cutout) {
+    const bounds = rotatedBounds(cutout);
+    return [
+      { x: bounds.left, y: bounds.top }, { x: bounds.right, y: bounds.top },
+      { x: bounds.right, y: bounds.bottom }, { x: bounds.left, y: bounds.bottom }
+    ].map(point => ({ ...point, key: pointKey(point) }));
+  }
+
+  // Build the boundary of siteBoundary - union(cutouts) from the rectangular
+  // arrangement. This preserves only edges that actually separate usable room
+  // from non-room, so hidden and union-internal cutout corners never appear.
+  function effectiveRoomCornerCandidates(siteBoundary, cutouts = [], options = {}) {
+    const boundary = rectFrom(normalizeSiteBoundary(siteBoundary));
+    const excludedId = options.excludeCutoutId;
+    const masks = normalizeRoomCutouts(cutouts)
+      .filter(cutout => cutout.visible && cutout.id !== excludedId)
+      .map(rotatedBounds)
+      .map(bounds => intersection(boundary, bounds))
+      .filter(Boolean);
+    const xs = [...new Set([boundary.left, boundary.right, ...masks.flatMap(mask => [mask.left, mask.right])])].sort((a, b) => a - b);
+    const ys = [...new Set([boundary.top, boundary.bottom, ...masks.flatMap(mask => [mask.top, mask.bottom])])].sort((a, b) => a - b);
+    const isRoom = (xIndex, yIndex) => {
+      if (xIndex < 0 || yIndex < 0 || xIndex >= xs.length - 1 || yIndex >= ys.length - 1) return false;
+      const x = (xs[xIndex] + xs[xIndex + 1]) / 2;
+      const y = (ys[yIndex] + ys[yIndex + 1]) / 2;
+      return !masks.some(mask => x > mask.left && x < mask.right && y > mask.top && y < mask.bottom);
+    };
+    const points = new Map();
+    const adjacency = new Map();
+    const addPoint = (point) => {
+      const normalized = { x: round10mm(point.x), y: round10mm(point.y) };
+      const key = pointKey(normalized);
+      if (!points.has(key)) points.set(key, { ...normalized, key });
+      if (!adjacency.has(key)) adjacency.set(key, new Set());
+      return key;
+    };
+    const addEdge = (a, b) => {
+      const aKey = addPoint(a); const bKey = addPoint(b);
+      adjacency.get(aKey).add(bKey); adjacency.get(bKey).add(aKey);
+    };
+    for (let xIndex = 0; xIndex < xs.length - 1; xIndex += 1) {
+      for (let yIndex = 0; yIndex < ys.length - 1; yIndex += 1) {
+        if (!isRoom(xIndex, yIndex)) continue;
+        const left = xs[xIndex], right = xs[xIndex + 1], top = ys[yIndex], bottom = ys[yIndex + 1];
+        if (!isRoom(xIndex - 1, yIndex)) addEdge({ x: left, y: top }, { x: left, y: bottom });
+        if (!isRoom(xIndex + 1, yIndex)) addEdge({ x: right, y: top }, { x: right, y: bottom });
+        if (!isRoom(xIndex, yIndex - 1)) addEdge({ x: left, y: top }, { x: right, y: top });
+        if (!isRoom(xIndex, yIndex + 1)) addEdge({ x: left, y: bottom }, { x: right, y: bottom });
+      }
+    }
+    return [...points.values()]
+      .filter(point => {
+        const neighbors = [...(adjacency.get(point.key) || [])].map(key => points.get(key));
+        if (neighbors.length !== 2) return true;
+        // A degree-two vertex on one straight edge is merely a grid split,
+        // not an exterior or concave corner.
+        return !((neighbors[0].x === point.x && neighbors[1].x === point.x)
+          || (neighbors[0].y === point.y && neighbors[1].y === point.y));
+      })
+      .sort((a, b) => a.x - b.x || a.y - b.y);
+  }
+
+  // The same Boolean boundary represented as normalized axis-aligned segments.
+  // This is intentionally separate from raw cutout edges: only a real room
+  // boundary is eligible for line snapping.
+  function effectiveRoomBoundarySegments(siteBoundary, cutouts = [], options = {}) {
+    const boundary = rectFrom(normalizeSiteBoundary(siteBoundary));
+    const excludedId = options.excludeCutoutId;
+    const masks = normalizeRoomCutouts(cutouts)
+      .filter(cutout => cutout.visible && cutout.id !== excludedId)
+      .map(rotatedBounds).map(bounds => intersection(boundary, bounds)).filter(Boolean);
+    const xs = [...new Set([boundary.left, boundary.right, ...masks.flatMap(mask => [mask.left, mask.right])])].sort((a, b) => a - b);
+    const ys = [...new Set([boundary.top, boundary.bottom, ...masks.flatMap(mask => [mask.top, mask.bottom])])].sort((a, b) => a - b);
+    const isRoom = (xIndex, yIndex) => {
+      if (xIndex < 0 || yIndex < 0 || xIndex >= xs.length - 1 || yIndex >= ys.length - 1) return false;
+      const x = (xs[xIndex] + xs[xIndex + 1]) / 2;
+      const y = (ys[yIndex] + ys[yIndex + 1]) / 2;
+      return !masks.some(mask => x > mask.left && x < mask.right && y > mask.top && y < mask.bottom);
+    };
+    const edges = new Map();
+    const add = (a, b) => {
+      const horizontal = a.y === b.y;
+      const start = horizontal
+        ? (a.x <= b.x ? a : b)
+        : (a.y <= b.y ? a : b);
+      const end = start === a ? b : a;
+      const x1 = round10mm(start.x), y1 = round10mm(start.y), x2 = round10mm(end.x), y2 = round10mm(end.y);
+      if (x1 === x2 && y1 === y2) return;
+      const orientation = y1 === y2 ? 'horizontal' : 'vertical';
+      const key = `${orientation}:${x1},${y1}:${x2},${y2}`;
+      edges.set(key, { id: key, orientation, x1, y1, x2, y2 });
+    };
+    for (let xIndex = 0; xIndex < xs.length - 1; xIndex += 1) {
+      for (let yIndex = 0; yIndex < ys.length - 1; yIndex += 1) {
+        if (!isRoom(xIndex, yIndex)) continue;
+        const left = xs[xIndex], right = xs[xIndex + 1], top = ys[yIndex], bottom = ys[yIndex + 1];
+        if (!isRoom(xIndex - 1, yIndex)) add({ x: left, y: top }, { x: left, y: bottom });
+        if (!isRoom(xIndex + 1, yIndex)) add({ x: right, y: top }, { x: right, y: bottom });
+        if (!isRoom(xIndex, yIndex - 1)) add({ x: left, y: top }, { x: right, y: top });
+        if (!isRoom(xIndex, yIndex + 1)) add({ x: left, y: bottom }, { x: right, y: bottom });
+      }
+    }
+    const merged = [];
+    ['horizontal', 'vertical'].forEach(orientation => {
+      const groups = new Map();
+      [...edges.values()].filter(edge => edge.orientation === orientation).forEach(edge => {
+        const fixed = orientation === 'horizontal' ? edge.y1 : edge.x1;
+        if (!groups.has(fixed)) groups.set(fixed, []);
+        groups.get(fixed).push(edge);
+      });
+      groups.forEach(group => {
+        group.sort((a, b) => (orientation === 'horizontal' ? a.x1 - b.x1 : a.y1 - b.y1));
+        let current = { ...group[0] };
+        group.slice(1).forEach(edge => {
+          const contiguous = orientation === 'horizontal' ? edge.x1 <= current.x2 : edge.y1 <= current.y2;
+          if (contiguous) {
+            if (orientation === 'horizontal') current.x2 = Math.max(current.x2, edge.x2);
+            else current.y2 = Math.max(current.y2, edge.y2);
+          } else { merged.push(current); current = { ...edge }; }
+        });
+        merged.push(current);
+      });
+    });
+    return merged.map(edge => ({ ...edge, id: `${edge.orientation}:${edge.x1},${edge.y1}:${edge.x2},${edge.y2}` }))
+      .sort((a, b) => a.orientation.localeCompare(b.orientation) || a.x1 - b.x1 || a.y1 - b.y1 || a.x2 - b.x2 || a.y2 - b.y2);
+  }
+
+  function closestPointOnBoundarySegment(point = {}, segment = {}) {
+    const x = number(point.x), y = number(point.y);
+    if (segment.orientation === 'vertical' || number(segment.x1) === number(segment.x2)) {
+      return { x: number(segment.x1), y: clampNumber(y, Math.min(number(segment.y1), number(segment.y2)), Math.max(number(segment.y1), number(segment.y2))) };
+    }
+    return { x: clampNumber(x, Math.min(number(segment.x1), number(segment.x2)), Math.max(number(segment.x1), number(segment.x2))), y: number(segment.y1) };
+  }
+
+  function clampNumber(value, min, max) { return Math.min(max, Math.max(min, value)); }
+
+  function selectScreenCornerSnap(pointer = {}, candidates = [], options = {}) {
+    const enterPx = number(options.enterPx, 12);
+    const exitPx = number(options.exitPx, 18);
+    const activeKey = options.activeKey || null;
+    const ranked = candidates.map(candidate => ({
+      candidate,
+      distancePx: Math.hypot(number(candidate.x) - number(pointer.x), number(candidate.y) - number(pointer.y))
+    })).sort((a, b) => a.distancePx - b.distancePx || number(a.candidate.x) - number(b.candidate.x) || number(a.candidate.y) - number(b.candidate.y) || String(a.candidate.key).localeCompare(String(b.candidate.key)));
+    const active = ranked.find(item => item.candidate.key === activeKey);
+    if (active && active.distancePx <= exitPx) return active;
+    return ranked.find(item => item.distancePx <= enterPx) || null;
+  }
+
   // Canvas pointer coordinates are CSS pixels relative to the canvas. They
   // must not be multiplied by DPR: the view transform is also in CSS pixels.
   function screenToWorld(point = {}, view = {}) {
@@ -266,6 +437,7 @@
     round10mm, normalizeRotation, defaultSiteBoundary, normalizeSiteBoundary,
     normalizeCutout, normalizeRoomCutouts, nextCutoutId, rotatedBounds,
     intersection, unionArea, visibleCutoutIntersections, effectiveRoomMetrics, distancesToBoundary, wallDimensionGeometry,
+    dimensionMidpoint, horizontalDimensionLabelPoint, verticalDimensionLabelPoint, cutoutCornerPoints, effectiveRoomCornerCandidates, effectiveRoomBoundarySegments, closestPointOnBoundarySegment, selectScreenCornerSnap,
     screenToWorld, worldToScreen, beginCutoutDrag, cutoutPositionForDrag,
     cutoutFromDrag, moveCutout, duplicateCutout, fieldFromSiteBoundary
   });

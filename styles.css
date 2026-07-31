@@ -185,6 +185,7 @@ kbd {
 #courseCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 .cutout-dimension-overlay { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
 .cutout-dimension-overlay span { position: absolute; transform: translate(-50%, -50%); padding: 2px 5px; border: 1px solid rgba(104, 231, 213, .78); border-radius: 4px; color: #d8fffa; background: rgba(12, 43, 47, .92); box-shadow: 0 1px 4px rgba(0,0,0,.28); font: 700 11px/1.2 system-ui, sans-serif; white-space: nowrap; }
+.cutout-dimension-overlay span.is-negative { color: #ffd0d4; border-color: rgba(255, 122, 132, .85); background: rgba(76, 25, 34, .94); }
 .fast-path-guide {
   --guide-color: #53c6ff;
   position: absolute;
