@@ -16,8 +16,6 @@
   if (!FIELD_BOUNDARY) throw new Error('field-boundary.jsが読み込まれていません');
   const ROOM_BOUNDARY = window.M4WD_ROOM_BOUNDARY;
   if (!ROOM_BOUNDARY) throw new Error('room-boundary.jsが読み込まれていません');
-  const OBSTACLES = window.M4WD_OBSTACLES;
-  if (!OBSTACLES) throw new Error('obstacles.js must be loaded before app.js');
   const RENDER_SCHEDULER = window.M4WD_RENDER_SCHEDULER;
   if (!RENDER_SCHEDULER) throw new Error('render-scheduler.jsが読み込まれていません');
   const WHEEL_ROTATION = window.M4WD_WHEEL_ROTATION;
@@ -59,7 +57,7 @@
   ];
 
   const MODE_LABELS = {
-    start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', boundary: 'レイアウトスペース', cutout: 'スペース修正', obstacle: '干渉物設定', layoutMove: '全体移動'
+    start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', boundary: '設置範囲設定', cutout: '部屋形状作成', layoutMove: '全体移動'
   };
 
   const els = {};
@@ -68,8 +66,6 @@
     siteBoundary: ROOM_BOUNDARY.defaultSiteBoundary({ originX: 0, originY: 0, widthCm: 600, heightCm: 400 }),
     roomCutouts: [],
     cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null },
-    obstacles: [],
-    obstacle: { selectedId: null, ghost: null, drag: null, snap: null },
     parts: [],
     start: null,
     startPhase: 'position',
@@ -154,8 +150,7 @@
     return {
       ...migrated,
       siteBoundary: ROOM_BOUNDARY.normalizeSiteBoundary(migrated.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(migrated.field || {})),
-      roomCutouts: ROOM_BOUNDARY.normalizeRoomCutouts(migrated.roomCutouts || []),
-      obstacles: OBSTACLES.normalizeObstacles(migrated.obstacles || [])
+      roomCutouts: ROOM_BOUNDARY.normalizeRoomCutouts(migrated.roomCutouts || [])
     };
   }
 
@@ -170,9 +165,8 @@
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
-      'siteBoundaryPanel','roomCutoutPanel','obstaclePanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
-      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay',
-      'newObstacleBtn','obstacleEmpty','obstacleEditor','obstacleName','obstacleX','obstacleY','obstacleWidth','obstacleDepth','obstacleRotation','obstacleVisible','obstacleLocked','applyObstacleBtn','duplicateObstacleBtn','deleteObstacleBtn','obstacleWarnings','obstacleCreateDialog','obstacleCreateForm','obstacleCreateName','obstacleCreateWidth','obstacleCreateDepth','cancelObstacleCreateBtn'
+      'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
+      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -345,9 +339,6 @@
     document.querySelectorAll('[data-mode]').forEach(btn => {
       btn.addEventListener('click', () => setMode(btn.dataset.mode));
     });
-    document.querySelectorAll('[data-space-tab]').forEach(btn => {
-      btn.addEventListener('click', () => setMode(btn.dataset.spaceTab));
-    });
 
     els.newBtn.addEventListener('click', () => {
       if ((state.parts.length || state.start) && !window.confirm('現在のレイアウトを消して新規作成しますか？')) return;
@@ -407,15 +398,6 @@
     els.deleteCutoutBtn?.addEventListener('click', deleteSelectedCutout);
     ['change', 'blur'].forEach(eventName => {
       ['cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked'].forEach(id => on(els[id], eventName, previewCutoutInputs));
-    });
-    els.newObstacleBtn?.addEventListener('click', openObstacleCreateDialog);
-    els.cancelObstacleCreateBtn?.addEventListener('click', () => els.obstacleCreateDialog?.close());
-    els.obstacleCreateForm?.addEventListener('submit', beginObstaclePlacementFromDialog);
-    els.applyObstacleBtn?.addEventListener('click', applyObstacleFromInputs);
-    els.duplicateObstacleBtn?.addEventListener('click', duplicateSelectedObstacle);
-    els.deleteObstacleBtn?.addEventListener('click', deleteSelectedObstacle);
-    ['change', 'blur'].forEach(eventName => {
-      ['obstacleName','obstacleX','obstacleY','obstacleWidth','obstacleDepth','obstacleRotation','obstacleVisible','obstacleLocked'].forEach(id => on(els[id], eventName, previewObstacleInputs));
     });
 
     const canvas = els.courseCanvas;
@@ -479,8 +461,6 @@
       state.mode = 'start';
       state.roomCutouts = [];
       state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
-      state.obstacles = [];
-      state.obstacle = { selectedId: null, ghost: null, drag: null, snap: null };
       resetCornerVariantSession();
       resetFastPathSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
@@ -499,14 +479,13 @@
 
   function setMode(mode) {
     if (state.layoutMove.active) cancelManualLayoutMove();
-    if (!['place','move','delete','color','boundary','cutout','obstacle'].includes(mode)) return;
+    if (!['place','move','delete','color','boundary','cutout'].includes(mode)) return;
     state.mode = state.mode === mode && mode !== 'place' ? 'place' : mode;
     state.hoveredPartId = null;
     resetFastPathSession();
     clearSnapTargetChoice();
     resetPointerInteraction();
     if (state.mode === 'place') clearSelection(false);
-    if (state.mode !== 'obstacle') cancelObstacleInteraction();
     updateUI();
     render();
     els.courseCanvas.focus();
@@ -572,7 +551,6 @@
       field: { ...state.field },
       siteBoundary: { ...state.siteBoundary },
       roomCutouts: state.roomCutouts.map(cutout => ({ ...cutout })),
-      obstacles: state.obstacles.map(obstacle => ({ ...obstacle })),
       parts: state.parts.map(p => ({ ...p })),
       start: state.start ? { ...state.start } : null,
       startPhase: state.startPhase,
@@ -596,8 +574,6 @@
     state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(state.siteBoundary, state.field));
     state.roomCutouts = ROOM_BOUNDARY.normalizeRoomCutouts(data.roomCutouts || []);
     state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
-    state.obstacles = OBSTACLES.normalizeObstacles(data.obstacles || []);
-    state.obstacle = { selectedId: null, ghost: null, drag: null, snap: null };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
@@ -884,7 +860,6 @@
     // CAD-only dimensions, handles, previews, and selection frames are drawn
     // separately and never reach this export path.
     drawRoomShape(c);
-    drawObstacles(c, { exportMode: true });
     if (state.start) drawStartLane(c, state.start, true);
     drawPartsInLayerOrder(c, { exportMode: true });
   }
@@ -959,7 +934,6 @@
     ctx.scale(state.view.scale, state.view.scale);
     drawField(ctx);
     drawRoomShape(ctx);
-    drawObstacles(ctx);
     if (state.start) drawStartLane(ctx, state.start, false);
     drawPartsInLayerOrder(ctx, { selected: true });
     drawMissingStartWarning(ctx);
@@ -1079,53 +1053,7 @@
     c.restore();
   }
 
-  function obstacleBoundsWorld(obstacle) {
-    const box = OBSTACLES.bounds(obstacle);
-    return { x: box.left / 10, y: box.top / 10, w: (box.right - box.left) / 10, h: (box.bottom - box.top) / 10 };
-  }
-
-  function drawObstacle(c, obstacle, options = {}) {
-    const box = obstacleBoundsWorld(obstacle);
-    const selected = options.selected;
-    const ghost = options.ghost;
-    c.save();
-    c.fillStyle = ghost ? 'rgba(255, 181, 90, .25)' : 'rgba(112, 83, 47, .64)';
-    c.strokeStyle = options.warning ? '#e84c62' : selected ? '#ffe18b' : ghost ? '#ffbd6b' : '#d5a34c';
-    c.lineWidth = (selected ? 2.8 : 1.5) / state.view.scale;
-    if (ghost) c.setLineDash([8 / state.view.scale, 5 / state.view.scale]);
-    c.fillRect(box.x, box.y, box.w, box.h);
-    c.strokeRect(box.x, box.y, box.w, box.h);
-    if (!options.exportMode) {
-      c.fillStyle = ghost ? '#fff0cd' : '#fff4dc';
-      c.font = `700 ${Math.max(10, 12 / state.view.scale)}px sans-serif`;
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(obstacle.name, box.x + box.w / 2, box.y + box.h / 2);
-    }
-    c.restore();
-  }
-
-  function drawObstacles(c, options = {}) {
-    const warningIds = new Set(state.layoutWarnings
-      .filter(warning => warning.type === 'obstacle-course-interference' || warning.type === 'obstacle-interference' || warning.type === 'obstacle-outside-space')
-      .flatMap(warning => warning.obstacleIds || []));
-    state.obstacles.filter(obstacle => obstacle.visible).forEach(obstacle => {
-      drawObstacle(c, obstacle, { exportMode: options.exportMode, warning: !options.exportMode && warningIds.has(obstacle.id), selected: !options.exportMode && state.mode === 'obstacle' && obstacle.id === state.obstacle.selectedId });
-    });
-  }
-
   function drawCadInteraction(c) {
-    if (state.mode === 'obstacle') {
-      if (state.obstacle.ghost) drawObstacle(c, state.obstacle.ghost, { ghost: true });
-      const snap = state.obstacle.snap;
-      if (snap && Number.isFinite(snap.x) && Number.isFinite(snap.y)) {
-        const point = { x: snap.x / 10, y: snap.y / 10 };
-        c.save(); c.strokeStyle = snap.type === 'obstacle' ? '#ffbd6b' : '#ffe16e'; c.lineWidth = 2 / state.view.scale;
-        if (snap.type === 'obstacle') c.strokeRect(point.x - 5 / state.view.scale, point.y - 5 / state.view.scale, 10 / state.view.scale, 10 / state.view.scale);
-        else { c.beginPath(); c.arc(point.x, point.y, 7 / state.view.scale, 0, Math.PI * 2); c.stroke(); }
-        c.restore();
-      }
-      return;
-    }
     if (state.mode !== 'cutout') return;
     const selected = selectedCutout();
     const preview = state.cad.dragStartMm && state.cad.dragCurrentMm
@@ -2239,32 +2167,8 @@
     const interference = LAYOUT_GRAPH.interferenceWarnings(parts, PARTS, part => part.id === 'start' ? startBounds(part) : partBounds(part), { edges: state.connections });
     const negative = parts.filter(part => Number(part.zMm) < 0).map(part => ({ type: 'negative-height', partIds: [part.id] }));
     const missingStart = state.start ? [] : [{ type: 'missing-start' }];
-    const obstacleWarnings = obstacleCollisionWarnings(parts);
-    state.layoutWarnings = [...missingStart, ...duplicate, ...edgeWarnings, ...interference, ...negative, ...obstacleWarnings];
+    state.layoutWarnings = [...missingStart, ...duplicate, ...edgeWarnings, ...interference, ...negative];
     return state.layoutWarnings;
-  }
-
-  function obstacleCollisionWarnings(parts) {
-    const visible = state.obstacles.filter(obstacle => obstacle.visible);
-    const boundary = state.siteBoundary;
-    const warnings = visible.filter(obstacle => OBSTACLES.isOutside(obstacle, boundary))
-      .map(obstacle => ({ type: 'obstacle-outside-space', obstacleIds: [obstacle.id] }));
-    for (let i = 0; i < visible.length; i += 1) {
-      const obstacle = visible[i];
-      const obstacleBounds = OBSTACLES.bounds(obstacle);
-      parts.forEach(part => {
-        const obstaclePolygon = [
-          { x: obstacleBounds.left / 10, y: obstacleBounds.top / 10 }, { x: obstacleBounds.right / 10, y: obstacleBounds.top / 10 },
-          { x: obstacleBounds.right / 10, y: obstacleBounds.bottom / 10 }, { x: obstacleBounds.left / 10, y: obstacleBounds.bottom / 10 }
-        ];
-        const overlapArea = LAYOUT_GRAPH.polygonIntersectionArea(partOccupancyPolygon({ ...part, type: part.id === 'start' ? 'start' : part.type }), obstaclePolygon, LAYOUT_GRAPH.OCCUPANCY_EPSILON_CM);
-        if (overlapArea > LAYOUT_GRAPH.OCCUPANCY_AREA_EPSILON_CM2) warnings.push({ type: 'obstacle-course-interference', obstacleIds: [obstacle.id], partIds: [part.id], overlapAreaCm2: overlapArea });
-      });
-      for (let j = i + 1; j < visible.length; j += 1) {
-        if (OBSTACLES.intersects(obstacleBounds, OBSTACLES.bounds(visible[j]))) warnings.push({ type: 'obstacle-interference', obstacleIds: [obstacle.id, visible[j].id] });
-      }
-    }
-    return warnings;
   }
 
   function endpointsConnect(a, b) {
@@ -2893,176 +2797,6 @@
     persistLocal(); updateUI(); render();
   }
 
-  function selectedObstacle() { return state.obstacles.find(obstacle => obstacle.id === state.obstacle.selectedId) || null; }
-
-  function openObstacleCreateDialog() {
-    if (!els.obstacleCreateDialog?.showModal) return;
-    els.obstacleCreateName.value = '障害物';
-    els.obstacleCreateWidth.value = '500';
-    els.obstacleCreateDepth.value = '500';
-    els.obstacleCreateDialog.showModal();
-  }
-
-  function beginObstaclePlacementFromDialog(event) {
-    event.preventDefault();
-    const width = Number(els.obstacleCreateWidth.value);
-    const depth = Number(els.obstacleCreateDepth.value);
-    if (!Number.isFinite(width) || !Number.isFinite(depth) || width < 10 || depth < 10) return toast('幅と奥行きは10mm以上で入力してください');
-    const center = cadWorldToMm({ x: state.pointer.x || state.field.widthCm / 2, y: state.pointer.y || state.field.heightCm / 2 });
-    const ghost = OBSTACLES.normalizeObstacle({
-      id: 'obstacle-ghost', name: els.obstacleCreateName.value, width, depth, rotation: 0,
-      x: center.x - width / 2, y: center.y - depth / 2
-    }, { id: 'obstacle-ghost' });
-    state.obstacle.selectedId = null;
-    state.obstacle.ghost = snapObstacleGhost(ghost).obstacle;
-    state.obstacle.snap = null;
-    state.mode = 'obstacle';
-    els.obstacleCreateDialog.close();
-    updateUI(); render(); els.courseCanvas.focus();
-  }
-
-  function obstacleHitTest(world) {
-    const point = cadWorldToMm(world);
-    return [...state.obstacles].reverse().find(obstacle => obstacle.visible && OBSTACLES.containsPoint(obstacle, point)) || null;
-  }
-
-  function replaceObstacle(next, sync = true) {
-    state.obstacles = state.obstacles.map(obstacle => obstacle.id === next.id ? OBSTACLES.normalizeObstacle(next, { id: next.id }) : obstacle);
-    if (sync) { recalculateLayoutWarnings(); persistLocal(); updateUI(); render(); }
-  }
-
-  function obstacleFromInputs(obstacle) {
-    const ids = ['obstacleX','obstacleY','obstacleWidth','obstacleDepth'];
-    if (ids.some(id => els[id]?.value === '' || !Number.isFinite(Number(els[id].value)))) return null;
-    if (Number(els.obstacleWidth.value) <= 0 || Number(els.obstacleDepth.value) <= 0) return null;
-    return OBSTACLES.normalizeObstacle({ ...obstacle, name: els.obstacleName.value, x: els.obstacleX.value, y: els.obstacleY.value, width: els.obstacleWidth.value, depth: els.obstacleDepth.value, rotation: els.obstacleRotation.value, visible: els.obstacleVisible.checked, locked: els.obstacleLocked.checked }, { id: obstacle.id });
-  }
-
-  function applyObstacleFromInputs() {
-    const obstacle = selectedObstacle();
-    if (!obstacle) return;
-    const candidate = obstacleFromInputs(obstacle);
-    if (!candidate) return toast('幅と奥行きは10mm以上で入力してください');
-    snapshot(); replaceObstacle(candidate);
-  }
-
-  function previewObstacleInputs() {
-    if (state.mode === 'obstacle') render();
-  }
-
-  function duplicateSelectedObstacle() {
-    const obstacle = selectedObstacle();
-    if (!obstacle) return;
-    snapshot(); const copy = OBSTACLES.duplicateObstacle(obstacle, state.obstacles); state.obstacles.push(copy); state.obstacle.selectedId = copy.id;
-    recalculateLayoutWarnings(); persistLocal(); updateUI(); render();
-  }
-
-  function deleteSelectedObstacle() {
-    const obstacle = selectedObstacle();
-    if (!obstacle) return;
-    if (obstacle.locked) return toast('ロック中の障害物は削除できません');
-    snapshot(); state.obstacles = state.obstacles.filter(item => item.id !== obstacle.id); state.obstacle.selectedId = null;
-    recalculateLayoutWarnings(); persistLocal(); updateUI(); render();
-  }
-
-  function snapObstacleGhost(obstacle, activeSnap = null) {
-    const normalized = OBSTACLES.normalizeObstacle(obstacle, { id: obstacle.id });
-    const bounds = OBSTACLES.bounds(normalized);
-    const center = { x: (bounds.left + bounds.right) / 2, y: (bounds.top + bounds.bottom) / 2 };
-    const roomSnap = snapCadPointToRoomCorner(center, null, activeSnap);
-    if (roomSnap.snap) {
-      return { obstacle: OBSTACLES.normalizeObstacle({ ...normalized, x: normalized.x + roomSnap.point.x - center.x, y: normalized.y + roomSnap.point.y - center.y }, { id: normalized.id }), snap: roomSnap.snap };
-    }
-    const moving = OBSTACLES.bounds(normalized);
-    const candidates = [];
-    state.obstacles.filter(item => item.visible).forEach(target => {
-      const box = OBSTACLES.bounds(target);
-      [['left-right', box.left - moving.right, 0], ['right-left', box.right - moving.left, 0], ['top-bottom', 0, box.top - moving.bottom], ['bottom-top', 0, box.bottom - moving.top]].forEach(([edge, dx, dy]) => {
-        const distance = Math.hypot(dx, dy) / 10 * state.view.scale;
-        if (distance <= 12) candidates.push({ key: `${target.id}:${edge}`, dx, dy, distance });
-      });
-    });
-    candidates.sort((a, b) => a.distance - b.distance || a.key.localeCompare(b.key));
-    if (candidates.length) {
-      const snap = candidates[0];
-      return { obstacle: OBSTACLES.normalizeObstacle({ ...normalized, x: normalized.x + snap.dx, y: normalized.y + snap.dy }, { id: normalized.id }), snap: { type: 'obstacle', key: snap.key, x: center.x + snap.dx, y: center.y + snap.dy } };
-    }
-    return { obstacle: normalized, snap: null };
-  }
-
-  function snapMovedObstacle(obstacle, position, activeSnap = null) {
-    const proxy = { id: obstacle.id, x: position.x, y: position.y, width: obstacle.width, height: obstacle.depth, rotation: obstacle.rotation, visible: obstacle.visible, locked: obstacle.locked };
-    const room = snapMovedCutoutToRoomCorner(proxy, position, obstacle.id, activeSnap);
-    if (room.snap) return { position: room.position, snap: room.snap };
-    const moving = OBSTACLES.bounds({ ...obstacle, ...position });
-    const candidates = [];
-    state.obstacles.filter(item => item.visible && item.id !== obstacle.id).forEach(target => {
-      const box = OBSTACLES.bounds(target);
-      [['left-right', box.left - moving.right, 0], ['right-left', box.right - moving.left, 0], ['top-bottom', 0, box.top - moving.bottom], ['bottom-top', 0, box.bottom - moving.top]].forEach(([edge, dx, dy]) => {
-        const distance = Math.hypot(dx, dy) / 10 * state.view.scale;
-        if (distance <= 12) candidates.push({ key: `${target.id}:${edge}`, dx, dy, distance, target });
-      });
-    });
-    candidates.sort((a, b) => a.distance - b.distance || a.key.localeCompare(b.key));
-    const best = candidates[0];
-    return best
-      ? { position: { x: OBSTACLES.round10mm(position.x + best.dx), y: OBSTACLES.round10mm(position.y + best.dy) }, snap: { type: 'obstacle', key: best.key, x: 0, y: 0 } }
-      : { position, snap: null };
-  }
-
-  function cancelObstacleInteraction() {
-    const drag = state.obstacle.drag;
-    if (drag?.moved) {
-      const obstacle = state.obstacles.find(item => item.id === drag.obstacleId);
-      if (obstacle) replaceObstacle({ ...obstacle, x: drag.startX, y: drag.startY }, false);
-    }
-    state.obstacle.ghost = null;
-    state.obstacle.drag = null;
-    state.obstacle.snap = null;
-  }
-
-  function onObstaclePointerDown(e, world) {
-    const point = cadWorldToMm(world);
-    if (state.obstacle.ghost) return;
-    const hit = obstacleHitTest(world);
-    if (hit) {
-      state.obstacle.selectedId = hit.id;
-      if (!hit.locked) state.obstacle.drag = { obstacleId: hit.id, pointerId: e.pointerId, startPoint: point, startX: hit.x, startY: hit.y, historyState: JSON.stringify(serializeState()), moved: false };
-    } else state.obstacle.selectedId = null;
-    updateUI(); render();
-  }
-
-  function onObstaclePointerMove(e, world) {
-    const point = cadWorldToMm(world);
-    if (state.obstacle.ghost) {
-      const ghost = state.obstacle.ghost;
-      const next = OBSTACLES.normalizeObstacle({ ...ghost, x: point.x - ghost.width / 2, y: point.y - ghost.depth / 2 }, { id: ghost.id });
-      const snapped = snapObstacleGhost(next, state.obstacle.snap);
-      state.obstacle.ghost = snapped.obstacle; state.obstacle.snap = snapped.snap;
-      render(); return;
-    }
-    const drag = state.obstacle.drag;
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    const obstacle = state.obstacles.find(item => item.id === drag.obstacleId);
-    if (!obstacle || obstacle.locked) return;
-    const position = { x: OBSTACLES.round10mm(drag.startX + point.x - drag.startPoint.x), y: OBSTACLES.round10mm(drag.startY + point.y - drag.startPoint.y) };
-    const snapped = snapMovedObstacle(obstacle, position, state.obstacle.snap);
-    state.obstacle.snap = snapped.snap;
-    if (snapped.position.x !== obstacle.x || snapped.position.y !== obstacle.y) { drag.moved = true; replaceObstacle({ ...obstacle, ...snapped.position }, false); recalculateLayoutWarnings(); }
-    render();
-  }
-
-  function onObstaclePointerUp(e) {
-    if (state.obstacle.ghost) {
-      snapshot();
-      const placed = OBSTACLES.normalizeObstacle({ ...state.obstacle.ghost, id: OBSTACLES.nextObstacleId(state.obstacles) });
-      state.obstacles.push(placed); state.obstacle.selectedId = placed.id; state.obstacle.ghost = null; state.obstacle.snap = null;
-      toast('障害物を配置しました');
-    } else if (state.obstacle.drag?.moved) snapshotSerialized(state.obstacle.drag.historyState);
-    state.obstacle.drag = null;
-    recalculateLayoutWarnings(); persistLocal(); updateUI(); render();
-  }
-
   function onPointerDown(e) {
     if (e.button !== 0 && !state.layoutMove.active) return;
     els.courseCanvas.setPointerCapture(e.pointerId);
@@ -3088,10 +2822,6 @@
     if (e.button !== 0) return;
     if (state.mode === 'boundary' || state.mode === 'cutout') {
       onCadPointerDown(e, world);
-      return;
-    }
-    if (state.mode === 'obstacle') {
-      onObstaclePointerDown(e, world);
       return;
     }
     const fastPathResult = state.mode === 'place'
@@ -3189,10 +2919,6 @@
 
     if (state.mode === 'boundary' || state.mode === 'cutout') {
       onCadPointerMove(e, world);
-      return;
-    }
-    if (state.mode === 'obstacle') {
-      onObstaclePointerMove(e, world);
       return;
     }
 
@@ -3313,12 +3039,6 @@
       try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
       return;
     }
-    if (state.mode === 'obstacle') {
-      onObstaclePointerUp(e);
-      state.pointer.down = false;
-      try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
-      return;
-    }
     const pendingPlacementProposal = state.pointer.pendingPlacementProposal;
     const pendingPlacement = state.pointer.pendingPlacement;
     // Consume the event before any placement code. Duplicate pointerup/click
@@ -3417,7 +3137,6 @@
     // Cancellation is not a click.  Discard its captured proposal so touch
     // cancellation cannot later become a second placement.
     if (state.mode === 'cutout') cancelCadDrag();
-    if (state.mode === 'obstacle') cancelObstacleInteraction();
     state.pointer.down = false;
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
@@ -3475,17 +3194,12 @@
         return;
       }
     }
-    if (state.mode === 'obstacle') {
-      rotateObstacle(direction < 0 ? -90 : 90);
-      return;
-    }
     rotateCurrent(direction < 0 ? -45 : 45);
   }
 
   function hasWheelRotatableTarget() {
     if (state.pointer.down || state.layoutMove.active) return false;
     if (state.mode === 'cutout' || state.mode === 'boundary') return false;
-    if (state.mode === 'obstacle') return !!state.obstacle.ghost || !!selectedObstacle();
     if (state.mode === 'place') return true; // placement ghost
     if (state.mode === 'start') return !state.start; // start ghost
     return selectedParts().length > 0;
@@ -3531,22 +3245,6 @@
       if ((key === 'delete' || key === 'backspace') && selected) { e.preventDefault(); deleteSelectedCutout(); return; }
     }
 
-    if (state.mode === 'obstacle') {
-      const selected = selectedObstacle();
-      const deltaMm = e.shiftKey ? 100 : 10;
-      const delta = key === 'arrowleft' ? { x: -deltaMm, y: 0 }
-        : key === 'arrowright' ? { x: deltaMm, y: 0 }
-        : key === 'arrowup' ? { x: 0, y: -deltaMm }
-        : key === 'arrowdown' ? { x: 0, y: deltaMm } : null;
-      if (delta && selected) {
-        e.preventDefault();
-        if (selected.locked) return toast('ロック中の障害物は移動できません');
-        snapshot(); replaceObstacle({ ...selected, x: selected.x + delta.x, y: selected.y + delta.y }); return;
-      }
-      if ((key === 'delete' || key === 'backspace') && selected) { e.preventDefault(); deleteSelectedObstacle(); return; }
-      if (key === 'escape' && state.obstacle.ghost) { e.preventDefault(); cancelObstacleInteraction(); updateUI(); render(); return; }
-    }
-
     if ((key === '[' || key === ']') && state.mode === 'place') {
       const proposal = getPlacementProposal();
       if (proposal?.requiresHeightChoice && proposal.candidates.length > 1) {
@@ -3571,8 +3269,6 @@
     }
     if (key === 'b') { e.preventDefault(); setMode('boundary'); return; }
     if (key === 'h') { e.preventDefault(); setMode('cutout'); return; }
-    if (state.mode === 'obstacle' && key === 'z') { e.preventDefault(); rotateObstacle(-90); return; }
-    if (state.mode === 'obstacle' && key === 'x') { e.preventDefault(); rotateObstacle(90); return; }
     if (key === 'z') { e.preventDefault(); rotateCurrent(-45); return; }
     if (key === 'x') { e.preventDefault(); rotateCurrent(45); return; }
     if (key === 'f') {
@@ -3888,19 +3584,6 @@
     rebuildActiveConnectionFromTail();
     toast(`${parts.length}個のパーツを${delta < 0 ? '左' : '右'}へ回転しました`);
     persistLocal(); updateUI(); render();
-  }
-
-  function rotateObstacle(delta) {
-    if (state.obstacle.ghost) {
-      state.obstacle.ghost = OBSTACLES.normalizeObstacle({ ...state.obstacle.ghost, rotation: state.obstacle.ghost.rotation + delta }, { id: state.obstacle.ghost.id });
-      state.obstacle.snap = null;
-      updateUI(); render();
-      return;
-    }
-    const obstacle = selectedObstacle();
-    if (!obstacle) return;
-    if (obstacle.locked) return toast('ロック中の障害物は回転できません');
-    snapshot(); replaceObstacle({ ...obstacle, rotation: obstacle.rotation + delta });
   }
 
   function isSelected(id) { return state.selectedIds.includes(id); }
@@ -4566,7 +4249,7 @@
     if (els.statusWarnings) els.statusWarnings.textContent = String(state.layoutWarnings.length);
     if (els.layoutWarningSummary) {
       const counts = state.layoutWarnings.reduce((result, warning) => { result[warning.type] = (result[warning.type] || 0) + 1; return result; }, {});
-      const labels = { interference: '干渉の可能性', 'duplicate-connector': '接続口重複', 'height-mismatch': '高さが閉合していません', 'disconnected-edge': '接続ずれ', 'negative-height': '負の高さ', 'missing-connector': '不正接続', 'missing-start': 'スタート位置不明', 'obstacle-course-interference': 'コースと障害物が干渉', 'obstacle-interference': '障害物同士が干渉', 'obstacle-outside-space': '障害物がスペース外' };
+      const labels = { interference: '干渉の可能性', 'duplicate-connector': '接続口重複', 'height-mismatch': '高さが閉合していません', 'disconnected-edge': '接続ずれ', 'negative-height': '負の高さ', 'missing-connector': '不正接続', 'missing-start': 'スタート位置不明' };
       els.layoutWarningSummary.classList.toggle('has-warning', !!state.layoutWarnings.length);
       els.layoutWarningSummary.textContent = state.layoutWarnings.length
         ? Object.entries(counts).map(([type, count]) => `${labels[type] || type} ${count}件`).join(' / ')
@@ -4599,11 +4282,8 @@
     }
     const boundaryMode = state.mode === 'boundary';
     const cutoutMode = state.mode === 'cutout';
-    const obstacleMode = state.mode === 'obstacle';
-    document.querySelectorAll('[data-space-tab]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.spaceTab === state.mode)));
     if (els.siteBoundaryPanel) els.siteBoundaryPanel.hidden = !boundaryMode;
     if (els.roomCutoutPanel) els.roomCutoutPanel.hidden = !cutoutMode;
-    if (els.obstaclePanel) els.obstaclePanel.hidden = !obstacleMode;
     if (boundaryMode) {
       const boundary = state.siteBoundary;
       const values = { siteBoundaryName: boundary.name, siteBoundaryX: boundary.x, siteBoundaryY: boundary.y, siteBoundaryWidth: boundary.width, siteBoundaryHeight: boundary.height };
@@ -4624,27 +4304,11 @@
         els.deleteCutoutBtn.disabled = cutout.locked;
       }
     }
-    if (obstacleMode) {
-      const obstacle = selectedObstacle();
-      if (els.obstacleEmpty) els.obstacleEmpty.hidden = !!obstacle || !!state.obstacle.ghost;
-      if (els.obstacleEditor) els.obstacleEditor.hidden = !obstacle;
-      if (obstacle) {
-        const values = { obstacleName: obstacle.name, obstacleX: obstacle.x, obstacleY: obstacle.y, obstacleWidth: obstacle.width, obstacleDepth: obstacle.depth, obstacleRotation: obstacle.rotation };
-        Object.entries(values).forEach(([id, value]) => { if (els[id] && document.activeElement !== els[id]) els[id].value = String(value); });
-        els.obstacleVisible.checked = obstacle.visible;
-        els.obstacleLocked.checked = obstacle.locked;
-        const warnings = obstacleCollisionWarnings(allLayoutParts()).filter(warning => (warning.obstacleIds || []).includes(obstacle.id));
-        els.obstacleWarnings.innerHTML = warnings.length
-          ? warnings.map(warning => `<span>${warning.type === 'obstacle-course-interference' ? 'コースと干渉' : warning.type === 'obstacle-interference' ? '障害物と干渉' : 'スペース外'}</span>`).join('')
-          : '<span>干渉警告なし</span>';
-        els.deleteObstacleBtn.disabled = obstacle.locked;
-      }
-    }
     updateCutoutDimensionOverlay();
     updateFastPathGuide();
     updateSnapCandidatePanel(proposal);
 
-    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color','boundary','cutout','obstacle'].includes(state.mode);
+    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color','boundary','cutout'].includes(state.mode);
     els.instruction.classList.toggle('hidden', !showInstruction);
     if (state.layoutMove.active) {
       els.instruction.innerHTML = '<strong>レイアウト全体を移動中</strong><span>マウスで移動 → クリックで固定・Esc／右クリックで取消</span>';
@@ -4662,10 +4326,6 @@
       els.instruction.innerHTML = '<strong>設置範囲設定</strong><span>左パネルのmm入力で設置範囲を変更。既存コースは移動しません。</span>';
     } else if (state.mode === 'cutout') {
       els.instruction.innerHTML = '<strong>部屋形状作成</strong><span>ドラッグで切り抜きを作成。選択後はドラッグ移動・矢印10mm・Shift+矢印100mm。</span>';
-    } else if (state.mode === 'obstacle') {
-      els.instruction.innerHTML = state.obstacle.ghost
-        ? '<strong>障害物を配置</strong><span>クリックで確定・通常ホイールまたはZ/Xで90°回転・Escで取消します。</span>'
-        : '<strong>干渉物設定</strong><span>障害物を選択・ドラッグして編集します。重なりは警告として表示され、配置は止めません。</span>';
     }
 
     els.gridBtn.classList.toggle('active', state.showGrid);
@@ -4700,7 +4360,7 @@
     els.courseCanvas.classList.toggle('mode-move', state.mode === 'move');
     els.courseCanvas.classList.toggle('mode-delete', state.mode === 'delete');
     els.courseCanvas.classList.toggle('mode-color', state.mode === 'color');
-    els.courseCanvas.classList.toggle('mode-cad', boundaryMode || cutoutMode || obstacleMode);
+    els.courseCanvas.classList.toggle('mode-cad', boundaryMode || cutoutMode);
     updateStatusOnly();
     updateSummary();
   }
