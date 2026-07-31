@@ -331,15 +331,3 @@ test('15. both concrete corner types are accepted without a runtime mirror', () 
   const restored = createLayoutStore(storage, options).restore();
   assert.equal(restored.layout.parts[2].type, 'corner-45-right');
 });
-
-test('16. obstacle records are additively validated and round-trip with legacy layout data', () => {
-  const layout = layoutFixture();
-  layout.obstacles = [{ id: 'obstacle-1', name: '作業台', type: 'obstacle', shape: 'rectangle', x: 100, y: -200, width: 600, depth: 400, rotation: 90, visible: true, locked: false }];
-  const storage = new MemoryStorage();
-  const store = createLayoutStore(storage, options);
-  store.restore();
-  assert.equal(store.save(layout).status, 'saved');
-  assert.deepEqual(createLayoutStore(storage, options).restore().layout.obstacles, layout.obstacles);
-  layout.obstacles[0].rotation = 45;
-  assert.equal(store.save(layout).status, 'failed');
-});

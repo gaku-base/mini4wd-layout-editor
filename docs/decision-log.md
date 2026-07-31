@@ -13,14 +13,6 @@
 - 旧JSONおよび旧localStorageには既存fieldからsiteBoundaryを補い、切り抜きは空配列
   とする。元のfield項目は保存し続けるため、既存データを破壊的に変換しない。
 
-### Layout-space tabs and obstacle editor (2026-07-31)
-
-- Existing persisted `siteBoundary` and `roomCutouts[]` keys remain unchanged while the UI presents the three tabs as 「レイアウトスペース」「スペース修正」「干渉物設定」. This preserves existing JSON and localStorage layouts.
-- `obstacles[]` is an additive persisted millimetre model: id, name, x/y, width/depth, 0/90/180/270 rotation, visible, and locked. Height is intentionally outside this 2D collision scope.
-- Obstacles can be created through an input-and-ghost flow, selected, dragged, numerically edited, duplicated, deleted, hidden, locked, and rotated 90 degrees. Ctrl+wheel remains pointer-centred zoom; unmodified wheel is reserved for obstacle rotation only while an obstacle ghost or selection exists.
-- Course/obstacle intersections, obstacle/obstacle intersections, and space-overflow are warnings rather than placement blockers. Course checks reuse the existing occupancy polygon and obstacle rectangle overlap area.
-- PNG includes visible committed obstacles only. Ghosts, warnings, selection, and snap presentation are not persisted or exported.
-
 ### Canvas navigation is zoom-only (2026-07-31)
 
 ### Course editing wheel rotation restored (2026-07-31)
