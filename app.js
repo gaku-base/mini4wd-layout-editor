@@ -63,7 +63,7 @@
     field: { originX: 0, originY: 0, widthCm: 600, heightCm: 400, gridCm: 10 },
     siteBoundary: ROOM_BOUNDARY.defaultSiteBoundary({ originX: 0, originY: 0, widthCm: 600, heightCm: 400 }),
     roomCutouts: [],
-    cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null },
+    cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null },
     parts: [],
     start: null,
     startPhase: 'position',
@@ -129,6 +129,7 @@
   let renderScheduler;
   let toastTimer = 0;
   let layoutStore;
+  const roomCornerCache = new Map();
 
   function migrateLayoutCornerTypes(layout) {
     if (!layout || typeof layout !== 'object') return layout;
@@ -455,7 +456,7 @@
       state.rotation = 0;
       state.mode = 'start';
       state.roomCutouts = [];
-      state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null };
+      state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
       resetCornerVariantSession();
       resetFastPathSession();
       state.cursor = { x: snap(state.field.widthCm / 2), y: snap(state.field.heightCm / 2) };
@@ -568,7 +569,7 @@
     state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary(data.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(state.field));
     state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(state.siteBoundary, state.field));
     state.roomCutouts = ROOM_BOUNDARY.normalizeRoomCutouts(data.roomCutouts || []);
-    state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null };
+    state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
       const routeIndex = Number.isInteger(Number(p.routeIndex)) ? clamp(Number(p.routeIndex), 0, 1) : 0;
@@ -879,6 +880,16 @@
     const nextHeight = Math.max(1, Math.floor(rect.height * nextDpr));
     const nextStyleWidth = `${rect.width}px`;
     const nextStyleHeight = `${rect.height}px`;
+    const dprChanged = Math.abs(dpr - nextDpr) > .001;
+    const sizeChanged = dprChanged
+      || els.courseCanvas.width !== nextWidth
+      || els.courseCanvas.height !== nextHeight
+      || els.courseCanvas.style.width !== nextStyleWidth
+      || els.courseCanvas.style.height !== nextStyleHeight;
+    // A no-op resize previously still scheduled paint work. During interactive
+    // CAD edits that extra frame made the visible canvas more susceptible to
+    // a transient cleared bitmap, so only paint after an actual size/DPR change.
+    if (!sizeChanged) return false;
     dpr = nextDpr;
     // Assigning canvas.width/height clears its bitmap.  Only do that when the
     // physical drawing size has actually changed, never during pointer input.
@@ -887,6 +898,7 @@
     if (els.courseCanvas.style.width !== nextStyleWidth) els.courseCanvas.style.width = nextStyleWidth;
     if (els.courseCanvas.style.height !== nextStyleHeight) els.courseCanvas.style.height = nextStyleHeight;
     render();
+    return true;
   }
 
   function fitView() {
@@ -1057,6 +1069,24 @@
     });
     const dimensionTarget = preview || selected;
     if (dimensionTarget) drawCadDimensions(c, dimensionTarget);
+    drawCadCornerSnapMarker(c);
+  }
+
+  function drawCadCornerSnapMarker(c) {
+    const snap = state.cad.snap;
+    if (!snap) return;
+    const point = { x: snap.x / 10, y: snap.y / 10 };
+    const unit = Math.max(state.view.scale, .15);
+    c.save();
+    c.strokeStyle = '#ffd15c'; c.fillStyle = 'rgba(20, 29, 36, .94)'; c.lineWidth = 1.8 / unit;
+    c.beginPath(); c.arc(point.x, point.y, 7 / unit, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.beginPath();
+    c.moveTo(point.x - 11 / unit, point.y); c.lineTo(point.x + 11 / unit, point.y);
+    c.moveTo(point.x, point.y - 11 / unit); c.lineTo(point.x, point.y + 11 / unit);
+    c.stroke();
+    c.fillStyle = '#ffe9a7'; c.font = `700 ${9 / unit}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'bottom';
+    c.fillText('角', point.x, point.y - 10 / unit);
+    c.restore();
   }
 
   function drawCadDimensions(c, cutout) {
@@ -1066,16 +1096,17 @@
     const distances = geometry.distances;
     const scale = state.view.scale;
     c.save();
-    c.strokeStyle = '#68e7d5'; c.fillStyle = '#153d43'; c.lineWidth = 1 / scale;
-    c.font = `700 ${10 / scale}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-    const label = (text, x, y) => { c.fillStyle = 'rgba(235,255,252,.96)'; c.fillText(text, x, y); };
+    c.strokeStyle = '#68e7d5'; c.lineWidth = 1 / scale;
     const boundary = ROOM_BOUNDARY.normalizeSiteBoundary(state.siteBoundary);
     const left = boundary.x / 10; const top = boundary.y / 10; const right = (boundary.x + boundary.width) / 10; const bottom = (boundary.y + boundary.height) / 10;
-    const line = (x1, y1, x2, y2, text) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); label(`${text}mm`, (x1 + x2) / 2, (y1 + y2) / 2); };
-    line(left, box.y, box.x, box.y, distances.left);
-    line(box.x + box.w, box.y + box.h, right, box.y + box.h, distances.right);
-    line(box.x, top, box.x, box.y, distances.top);
-    line(box.x + box.w, box.y + box.h, box.x + box.w, bottom, distances.bottom);
+    // Text belongs to the DOM overlay so it gets one readable background and
+    // is never duplicated in a canvas export. This canvas path draws only
+    // the four dimension lines.
+    const line = (x1, y1, x2, y2) => { c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke(); };
+    line(left, box.y, box.x, box.y);
+    line(box.x + box.w, box.y + box.h, right, box.y + box.h);
+    line(box.x, top, box.x, box.y);
+    line(box.x + box.w, box.y + box.h, box.x + box.w, bottom);
     c.restore();
   }
 
@@ -2622,6 +2653,7 @@
     state.cad.dragStartMm = null;
     state.cad.dragCurrentMm = null;
     state.cad.drag = null;
+    state.cad.snap = null;
   }
 
   function cancelCadDrag() {
@@ -2647,8 +2679,10 @@
     } else {
       state.cad.selectedCutoutId = null;
       state.cad.tool = 'create';
-      state.cad.dragStartMm = point;
-      state.cad.dragCurrentMm = point;
+      const snapped = snapCadPointToRoomCorner(point);
+      state.cad.dragStartMm = snapped.point;
+      state.cad.dragCurrentMm = snapped.point;
+      state.cad.snap = snapped.snap;
       state.cad.drag = { kind: 'create', pointerId: e.pointerId };
     }
     updateUI(); render();
@@ -2659,16 +2693,25 @@
     const point = cadWorldToMm(world);
     const drag = state.cad.drag;
     if (!drag || drag.pointerId !== e.pointerId) return;
-    if (drag.kind === 'create' && state.cad.dragStartMm) state.cad.dragCurrentMm = point;
+    if (drag.kind === 'create' && state.cad.dragStartMm) {
+      const snapped = snapCadPointToRoomCorner(point, null, state.cad.snap?.key);
+      state.cad.dragCurrentMm = snapped.point;
+      state.cad.snap = snapped.snap;
+    }
     const selected = drag.kind === 'move' ? state.roomCutouts.find(cutout => cutout.id === drag.cutoutId) : null;
     if (selected && !selected.locked) {
       const position = ROOM_BOUNDARY.cutoutPositionForDrag(drag, point);
-      if (position.x !== selected.x || position.y !== selected.y) {
+      const snapped = snapMovedCutoutToRoomCorner(selected, position, selected.id, state.cad.snap?.key);
+      state.cad.snap = snapped.snap;
+      if (snapped.position.x !== selected.x || snapped.position.y !== selected.y) {
         drag.moved = true;
-        replaceCutout({ ...selected, ...position }, false);
+        replaceCutout({ ...selected, ...snapped.position }, false);
       }
     }
-    updateUI(); render();
+    // Pointer moves only change the CAD preview and canvas. Rebuilding the
+    // full sidebar here caused repeated innerHTML/layout work while dragging.
+    updateCutoutDimensionOverlay();
+    render();
   }
 
   function onCadPointerUp(e) {
@@ -3940,19 +3983,98 @@
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
+  function roomCornerCacheKey(excludeCutoutId = null) {
+    const cutouts = state.roomCutouts
+      .filter(cutout => cutout.id !== excludeCutoutId)
+      .map(cutout => [cutout.id, cutout.x, cutout.y, cutout.width, cutout.height, cutout.rotation, cutout.visible]);
+    return JSON.stringify([state.siteBoundary.x, state.siteBoundary.y, state.siteBoundary.width, state.siteBoundary.height, state.siteBoundary.visible, excludeCutoutId, cutouts]);
+  }
+
+  function roomBoundaryCorners(excludeCutoutId = null) {
+    const key = roomCornerCacheKey(excludeCutoutId);
+    if (!roomCornerCache.has(key)) {
+      roomCornerCache.clear();
+      roomCornerCache.set(key, ROOM_BOUNDARY.effectiveRoomCornerCandidates(state.siteBoundary, state.roomCutouts, { excludeCutoutId }));
+    }
+    return roomCornerCache.get(key);
+  }
+
+  function screenCornerCandidates(excludeCutoutId = null) {
+    return roomBoundaryCorners(excludeCutoutId).map(corner => {
+      const screen = worldToScreen(corner.x / 10, corner.y / 10);
+      return { ...corner, screenX: screen.x, screenY: screen.y };
+    });
+  }
+
+  function snapCadPointToRoomCorner(pointMm, excludeCutoutId = null, activeKey = null) {
+    const pointerScreen = worldToScreen(pointMm.x / 10, pointMm.y / 10);
+    const candidates = screenCornerCandidates(excludeCutoutId).map(corner => ({ ...corner, x: corner.screenX, y: corner.screenY }));
+    const snap = ROOM_BOUNDARY.selectScreenCornerSnap(pointerScreen, candidates, { activeKey, enterPx: 12, exitPx: 18 });
+    if (!snap) return { point: pointMm, snap: null };
+    return { point: { x: snap.candidate.x, y: snap.candidate.y }, snap: { key: snap.candidate.key, x: snap.candidate.x, y: snap.candidate.y } };
+  }
+
+  function snapMovedCutoutToRoomCorner(cutout, position, excludeCutoutId, activeKey = null) {
+    const moved = ROOM_BOUNDARY.normalizeCutout({ ...cutout, ...position }, { id: cutout.id });
+    const corners = ROOM_BOUNDARY.cutoutCornerPoints(moved);
+    const targets = screenCornerCandidates(excludeCutoutId);
+    const pairs = corners.flatMap((corner, index) => {
+      const screen = worldToScreen(corner.x / 10, corner.y / 10);
+      return targets.map(target => ({
+        key: `${index}:${target.key}`,
+        x: screen.x,
+        y: screen.y,
+        corner,
+        target
+      }));
+    });
+    const selection = ROOM_BOUNDARY.selectScreenCornerSnap({ x: 0, y: 0 }, pairs.map(pair => ({
+      key: pair.key,
+      x: Math.hypot(pair.x - pair.target.screenX, pair.y - pair.target.screenY),
+      y: 0,
+      pair
+    })), { activeKey, enterPx: 12, exitPx: 18 });
+    if (!selection) return { position, snap: null };
+    const pair = selection.candidate.pair;
+    return {
+      position: {
+        x: ROOM_BOUNDARY.round10mm(position.x + pair.target.x - pair.corner.x),
+        y: ROOM_BOUNDARY.round10mm(position.y + pair.target.y - pair.corner.y)
+      },
+      snap: { key: pair.key, x: pair.target.x, y: pair.target.y }
+    };
+  }
+
+  function offsetDimensionLabel(point, side, lineLength, width, height, occupied = []) {
+    const offset = 15;
+    const next = { ...point };
+    const horizontal = side === 'left' || side === 'right';
+    if (lineLength < 48) {
+      if (horizontal) next.y += side === 'left' ? -offset : offset;
+      else next.x += side === 'top' ? -offset : offset;
+    }
+    if (horizontal && (next.y < 14 || next.y > height - 14)) next.y += next.y < 14 ? offset : -offset;
+    if (!horizontal && (next.x < 30 || next.x > width - 30)) next.x += next.x < 30 ? offset : -offset;
+    const collides = occupied.some(other => Math.abs(other.x - next.x) < 54 && Math.abs(other.y - next.y) < 18);
+    if (collides) {
+      if (horizontal) next.y += side === 'left' ? -offset : offset;
+      else next.x += side === 'top' ? -offset : offset;
+    }
+    return next;
+  }
+
   function updateCutoutDimensionOverlay() {
     const overlay = els.cutoutDimensionOverlay;
     const preview = state.cad.dragStartMm && state.cad.dragCurrentMm
       ? ROOM_BOUNDARY.cutoutFromDrag(state.cad.dragStartMm, state.cad.dragCurrentMm, { id: 'preview' })
       : null;
     const cutout = state.mode === 'cutout' ? (preview || selectedCutout()) : null;
-    if (!overlay || !cutout) { if (overlay) overlay.hidden = true; return; }
+    if (!overlay || !cutout) { if (overlay && !overlay.hidden) overlay.hidden = true; return; }
     const geometry = ROOM_BOUNDARY.wallDimensionGeometry(state.siteBoundary, cutout);
     const boundary = geometry.boundary;
     const bounds = geometry.bounds;
     const width = Math.max(1, els.canvasWrap.clientWidth);
     const height = Math.max(1, els.canvasWrap.clientHeight);
-    const keepVisible = (point) => ({ x: clamp(point.x, 42, width - 42), y: clamp(point.y, 20, height - 20) });
     const point = (x, y) => worldToScreen(x / 10, y / 10);
     const labels = {
       left: { value: geometry.distances.left, from: point(boundary.left, (bounds.top + bounds.bottom) / 2), to: point(bounds.left, (bounds.top + bounds.bottom) / 2) },
@@ -3960,15 +4082,24 @@
       top: { value: geometry.distances.top, from: point((bounds.left + bounds.right) / 2, boundary.top), to: point((bounds.left + bounds.right) / 2, bounds.top) },
       bottom: { value: geometry.distances.bottom, from: point((bounds.left + bounds.right) / 2, bounds.bottom), to: point((bounds.left + bounds.right) / 2, boundary.bottom) }
     };
+    const occupied = [];
     Object.entries(labels).forEach(([side, value]) => {
       const element = overlay.querySelector(`[data-cutout-dimension="${side}"]`);
       if (!element) return;
-      const midpoint = keepVisible({ x: (value.from.x + value.to.x) / 2, y: (value.from.y + value.to.y) / 2 });
-      element.textContent = `${side === 'left' ? '左' : side === 'right' ? '右' : side === 'top' ? '上' : '下'} ${value.value}mm`;
-      element.style.left = `${midpoint.x}px`;
-      element.style.top = `${midpoint.y}px`;
+      const midpoint = side === 'left' || side === 'right'
+        ? ROOM_BOUNDARY.horizontalDimensionLabelPoint(value.from, value.to)
+        : ROOM_BOUNDARY.verticalDimensionLabelPoint(value.from, value.to);
+      const lineLength = Math.hypot(value.to.x - value.from.x, value.to.y - value.from.y);
+      const labelPoint = offsetDimensionLabel(midpoint, side, lineLength, width, height, occupied);
+      occupied.push(labelPoint);
+      const text = `${side === 'left' ? '左' : side === 'right' ? '右' : side === 'top' ? '上' : '下'} ${value.value}mm`;
+      if (element.textContent !== text) element.textContent = text;
+      const left = `${labelPoint.x}px`; const top = `${labelPoint.y}px`;
+      if (element.style.left !== left) element.style.left = left;
+      if (element.style.top !== top) element.style.top = top;
+      element.classList.toggle('is-negative', value.value < 0);
     });
-    overlay.hidden = false;
+    if (overlay.hidden) overlay.hidden = false;
   }
   function makeId() { return globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 

@@ -134,3 +134,61 @@ test('canvas navigation is Ctrl-wheel zoom only and carries no pan state', () =>
   assert.match(app, /if \(e\.button !== 0 && !state\.layoutMove\.active\) return;/);
   assert.doesNotMatch(index, /Space\+ドラッグ|Z \/ X \/ ホイール/);
 });
+
+test('dimension labels are centered on either orientation and retain their midpoint for negative distances', () => {
+  const horizontal = ROOM.horizontalDimensionLabelPoint({ x: 840, y: 100 }, { x: -160, y: 100 });
+  const vertical = ROOM.verticalDimensionLabelPoint({ x: 20, y: 900 }, { x: 20, y: -300 });
+  assert.deepEqual(horizontal, { x: 340, y: 100 });
+  assert.deepEqual(vertical, { x: 20, y: 300 });
+  assert.deepEqual(ROOM.horizontalDimensionLabelPoint({ x: -160, y: 100 }, { x: 840, y: 100 }), horizontal);
+  [0.5, 1, 2].forEach(scale => {
+    const view = { scale, offsetX: 41, offsetY: -19 };
+    const a = ROOM.worldToScreen({ x: -16, y: 10 }, view);
+    const b = ROOM.worldToScreen({ x: 84, y: 10 }, view);
+    assert.deepEqual(ROOM.horizontalDimensionLabelPoint(a, b), { x: (a.x + b.x) / 2, y: 10 * scale - 19 });
+  });
+});
+
+test('effective room corners retain L-shape concave and convex corners only', () => {
+  const corners = ROOM.effectiveRoomCornerCandidates(
+    { x: 0, y: 0, width: 9000, height: 6000 },
+    [{ id: 'upper-right', x: 6000, y: 0, width: 3000, height: 2500 }]
+  );
+  assert.deepEqual(corners.map(point => point.key), ['0,0', '0,6000', '6000,0', '6000,2500', '9000,2500', '9000,6000']);
+});
+
+test('effective room corners remove union-internal and hidden-cutout vertices', () => {
+  const boundary = { x: 0, y: 0, width: 1000, height: 1000 };
+  const corners = ROOM.effectiveRoomCornerCandidates(boundary, [
+    { id: 'left', x: 200, y: 200, width: 400, height: 400 },
+    { id: 'right', x: 500, y: 200, width: 300, height: 400 },
+    { id: 'hidden', x: 0, y: 700, width: 200, height: 300, visible: false }
+  ]);
+  const keys = corners.map(point => point.key);
+  assert.ok(!keys.includes('500,200'));
+  assert.ok(!keys.includes('0,700'));
+  assert.ok(keys.includes('200,200'));
+  assert.ok(keys.includes('800,600'));
+  const withoutLeft = ROOM.effectiveRoomCornerCandidates(boundary, [{ id: 'left', x: 200, y: 200, width: 400, height: 400 }], { excludeCutoutId: 'left' });
+  assert.deepEqual(withoutLeft.map(point => point.key), ['0,0', '0,1000', '1000,0', '1000,1000']);
+});
+
+test('screen corner snapping uses enter/exit hysteresis and stable ordering', () => {
+  const candidates = [{ key: 'a', x: 12, y: 0 }, { key: 'b', x: -12, y: 0 }];
+  assert.equal(ROOM.selectScreenCornerSnap({ x: 0, y: 0 }, candidates, { enterPx: 12, exitPx: 18 }).candidate.key, 'b');
+  assert.equal(ROOM.selectScreenCornerSnap({ x: 16, y: 0 }, candidates, { activeKey: 'a', enterPx: 12, exitPx: 18 }).candidate.key, 'a');
+  assert.equal(ROOM.selectScreenCornerSnap({ x: 31, y: 0 }, candidates, { activeKey: 'a', enterPx: 12, exitPx: 18 }), null);
+});
+
+test('CAD pointer moves do not rebuild the sidebar or persist, and no-op resize does not paint', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  const move = app.slice(app.indexOf('function onCadPointerMove'), app.indexOf('function onCadPointerUp'));
+  const resize = app.slice(app.indexOf('function resizeCanvas'), app.indexOf('function fitView'));
+  assert.doesNotMatch(move, /updateUI\(\)/);
+  assert.doesNotMatch(move, /persistLocal\(\)/);
+  assert.match(move, /updateCutoutDimensionOverlay\(\);\s*render\(\);/);
+  assert.match(resize, /if \(!sizeChanged\) return false;/);
+  assert.match(resize, /Math\.abs\(dpr - nextDpr\) > \.001/);
+  assert.match(app, /renderScheduler\.request\(drawFrame\)/);
+  assert.doesNotMatch(app, /new ResizeObserver/);
+});
