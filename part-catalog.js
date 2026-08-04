@@ -3,6 +3,10 @@
 
   const TRACK_WIDTH_CM = 36;
   const STRAIGHT_CM = 54;
+  // Connection faces use the measured JCJC outer width. This remains separate
+  // from the legacy visual lane width used by raster assets.
+  const STRAIGHT_CONNECTION_LENGTH_MM = 540;
+  const STRAIGHT_CONNECTION_WIDTH_MM = 370;
 
   const palette = {
     base: '#efede9',
@@ -137,6 +141,8 @@
     version: '1.3.0',
     TRACK_WIDTH_CM,
     STRAIGHT_CM,
+    STRAIGHT_CONNECTION_LENGTH_MM,
+    STRAIGHT_CONNECTION_WIDTH_MM,
     PARTS,
     MENU_ORDER
   });

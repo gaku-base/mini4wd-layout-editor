@@ -8,6 +8,7 @@
 
   const LEVEL_HEIGHT_MM = 115;
   const COURSE_BODY_HEIGHT_MM = 60;
+  const DEFAULT_CONNECTION_WIDTH_MM = 370;
   const SNAP_RADIUS_PX = 24;
   const XY_EPSILON_CM = 1.75;
   const ANGLE_EPSILON_DEG = 0.1;
@@ -57,6 +58,7 @@
       pitchDeg: finite(value?.pitchDeg),
       bankAngleDeg: finite(value?.bankAngleDeg),
       bankTransitionToDeg: value?.bankTransitionToDeg == null ? null : finite(value.bankTransitionToDeg),
+      connectionWidthMm: finite(value?.connectionWidthMm, DEFAULT_CONNECTION_WIDTH_MM),
       shape: String(value?.shape || 'jcjc-3lane'),
       laneCount: Math.max(1, Math.trunc(finite(value?.laneCount, 3)))
     };
@@ -587,13 +589,18 @@
         || connectorsByKey.get(endpointKey(edge.partBId, edge.connectorBId));
       if (!ownerId || !endpoint) return;
       if (!result.has(ownerId)) result.set(ownerId, []);
-      result.get(ownerId).push({ edge, point: { x: endpoint.x, y: endpoint.y }, heading: endpoint.directionDeg });
+      result.get(ownerId).push({
+        edge,
+        point: { x: endpoint.x, y: endpoint.y },
+        heading: endpoint.directionDeg,
+        connectionWidthMm: endpoint.connectionWidthMm
+      });
     });
     return result;
   }
 
   return Object.freeze({
-    LEVEL_HEIGHT_MM, COURSE_BODY_HEIGHT_MM, SNAP_RADIUS_PX, XY_EPSILON_CM, ANGLE_EPSILON_DEG, Z_EPSILON_MM, OCCUPANCY_EPSILON_CM, OCCUPANCY_AREA_EPSILON_CM2,
+    LEVEL_HEIGHT_MM, COURSE_BODY_HEIGHT_MM, DEFAULT_CONNECTION_WIDTH_MM, SNAP_RADIUS_PX, XY_EPSILON_CM, ANGLE_EPSILON_DEG, Z_EPSILON_MM, OCCUPANCY_EPSILON_CM, OCCUPANCY_AREA_EPSILON_CM2,
     normalizeAngle, angleDistance, rotate, normalizeConnector, connectorsForDefinition, normalizePart,
     worldConnector, allWorldConnectors, endpointKey, normalizeEdge, edgeKey, dedupeEdges, addEdge,
     removeEdgesForParts, connectorUsage, duplicateConnectorWarnings, connectedComponent,
