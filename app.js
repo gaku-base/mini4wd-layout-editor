@@ -36,6 +36,8 @@
   if (!NEW_LAYOUT_TABS) throw new Error('new-layout-tabs.jsが読み込まれていません');
   const OBSTACLE_GEOMETRY = window.M4WD_OBSTACLE_GEOMETRY;
   if (!OBSTACLE_GEOMETRY) throw new Error('obstacle-geometry.jsが読み込まれていません');
+  const OBSTACLE_COURSE_WARNINGS = window.M4WD_OBSTACLE_COURSE_WARNINGS;
+  if (!OBSTACLE_COURSE_WARNINGS) throw new Error('obstacle-course-warnings.jsが読み込まれていません');
   const INTERFERENCE_OBSTACLES = window.M4WD_INTERFERENCE_OBSTACLES;
   if (!INTERFERENCE_OBSTACLES) throw new Error('interference-obstacles.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
@@ -75,6 +77,7 @@
     selectedObstacleId: null,
     obstaclePlacement: null,
     obstacleDrag: null,
+    subEditMode: null,
     cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null },
     parts: [],
     start: null,
@@ -171,7 +174,7 @@
       'newBtn','saveBtn','loadInput','exportBtn','cancelSetupBtn','instruction','toast','partsList','partsSummary',
       'layoutSpacePanel','spaceAdjustmentPanel','interferencePanel','spaceAdjustmentGuide','backToLayoutSpaceBtn','startSpaceAdjustmentBtn',
       'newObstacleNameInput','newObstacleWidthInput','newObstacleDepthInput','newObstacleGuide','newObstacleError','startObstaclePlacementBtn','backToLayoutSpaceFromObstacleBtn','obstacleList',
-      'obstacleEditorPanel','clearObstacleSelectionBtn','obstacleCollisionWarning','obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput','obstacleVisibleInput','obstacleLockedInput','obstacleEditorError','duplicateObstacleBtn','deleteObstacleBtn',
+      'obstacleEditorPanel','clearObstacleSelectionBtn','obstacleCollisionWarning','obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput','obstacleVisibleInput','obstacleLockedInput','obstacleEditorError','rotateObstacleLeftBtn','rotateObstacleRightBtn','duplicateObstacleBtn','deleteObstacleBtn',
       'modeBadge','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
@@ -180,7 +183,8 @@
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
       'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
-      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay'
+      'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','rotateCutoutLeftBtn','rotateCutoutRightBtn','clearCutoutSelectionBtn','cutoutRotationNote','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay',
+      'subEditModeBar','subEditModeTitle','returnToSetupBtn','finishSubEditBtn'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
   }
@@ -359,12 +363,15 @@
     els.startSpaceAdjustmentBtn.addEventListener('click', () => {
       if (!NEW_LAYOUT_TABS.canStartSpaceAdjustment(state)) return;
       els.setupDialog.close();
+      state.subEditMode = 'space-adjustment';
       setMode('cutout');
       toast('スペース修正を開始しました');
     });
     els.backToLayoutSpaceFromObstacleBtn?.addEventListener('click', () => setNewLayoutModalTab('layout-space', { focus: true }));
     els.startObstaclePlacementBtn?.addEventListener('click', startObstaclePlacement);
     els.clearObstacleSelectionBtn?.addEventListener('click', () => clearObstacleSelection());
+    els.rotateObstacleLeftBtn?.addEventListener('click', () => rotateSelectedObstacle(-45));
+    els.rotateObstacleRightBtn?.addEventListener('click', () => rotateSelectedObstacle(45));
     els.duplicateObstacleBtn?.addEventListener('click', duplicateSelectedObstacle);
     els.deleteObstacleBtn?.addEventListener('click', deleteSelectedObstacle);
     ['change', 'blur'].forEach(eventName => {
@@ -437,6 +444,9 @@
     });
     els.newCutoutBtn?.addEventListener('click', () => { state.cad.tool = 'create'; state.cad.selectedCutoutId = null; updateUI(); render(); els.courseCanvas.focus(); });
     els.applyCutoutBtn?.addEventListener('click', applyCutoutFromInputs);
+    els.rotateCutoutLeftBtn?.addEventListener('click', () => rotateSelectedCutout(-90));
+    els.rotateCutoutRightBtn?.addEventListener('click', () => rotateSelectedCutout(90));
+    els.clearCutoutSelectionBtn?.addEventListener('click', clearCutoutSelection);
     els.duplicateCutoutBtn?.addEventListener('click', duplicateSelectedCutout);
     els.deleteCutoutBtn?.addEventListener('click', deleteSelectedCutout);
     ['change', 'blur'].forEach(eventName => {
@@ -454,6 +464,8 @@
     document.addEventListener('pointerdown', event => {
       if (!els.canvasContextMenu?.contains(event.target)) closeCanvasContextMenu();
     });
+    els.returnToSetupBtn?.addEventListener('click', () => exitSubEditMode({ returnToSetup: true }));
+    els.finishSubEditBtn?.addEventListener('click', () => exitSubEditMode({ returnToSetup: false }));
   }
 
   function openSetup(reset) {
@@ -492,6 +504,30 @@
     if (els.startObstaclePlacementBtn) els.startObstaclePlacementBtn.disabled = !view.canAdjustSpace;
     if (els.newObstacleGuide) els.newObstacleGuide.hidden = view.canAdjustSpace;
     updateObstacleList();
+    if (els.spaceAdjustmentGuide && view.selected === 'space-adjustment' && view.canAdjustSpace) {
+      els.spaceAdjustmentGuide.hidden = false;
+      els.spaceAdjustmentGuide.textContent = `設定済みの修正範囲: ${state.roomCutouts.length}件`;
+    }
+  }
+
+  function exitSubEditMode({ returnToSetup }) {
+    const tab = state.subEditMode;
+    if (!tab) return;
+    state.obstaclePlacement = null;
+    state.obstacleDrag = null;
+    clearCadDrag();
+    state.cad.selectedCutoutId = null;
+    clearSelection(false);
+    state.subEditMode = null;
+    state.mode = state.start ? 'place' : 'start';
+    resetPointerInteraction();
+    if (returnToSetup) {
+      setNewLayoutModalTab(tab);
+      els.setupDialog.showModal();
+    }
+    updateUI();
+    render();
+    if (!returnToSetup) els.courseCanvas.focus();
   }
 
   function applySetup() {
@@ -646,6 +682,7 @@
     state.selectedObstacleId = null;
     state.obstaclePlacement = null;
     state.obstacleDrag = null;
+    state.subEditMode = null;
     state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
@@ -1015,6 +1052,7 @@
     drawMissingStartWarning(ctx);
     if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
     drawCursorAndGhost(ctx);
+    drawCourseGhostObstacleWarning(ctx);
     drawObstaclePlacementGhost(ctx);
     drawMarquee(ctx);
     drawCadInteraction(ctx);
@@ -1154,6 +1192,20 @@
     return allLayoutParts().some(part => OBSTACLE_GEOMETRY.polygonsIntersect(
       polygon, LAYOUT_GRAPH.occupancyPolygon(part, PARTS[part.type])
     ));
+  }
+
+  function courseObstacleWarnings(parts = allLayoutParts()) {
+    return OBSTACLE_COURSE_WARNINGS.collect(
+      state.obstacles,
+      parts,
+      obstacle => OBSTACLE_GEOMETRY.corners(obstacle),
+      part => LAYOUT_GRAPH.occupancyPolygon(part, PARTS[part.type]),
+      OBSTACLE_GEOMETRY.polygonsIntersect
+    );
+  }
+
+  function obstacleWarningCountForPart(partId) {
+    return state.layoutWarnings.filter(warning => warning.type === 'obstacle-interference' && warning.partIds.includes(partId)).length;
   }
 
   function drawObstacleShape(c, obstacle, options = {}) {
@@ -2344,9 +2396,10 @@
     const duplicate = LAYOUT_GRAPH.duplicateConnectorWarnings(state.connections, connectors);
     const edgeWarnings = LAYOUT_GRAPH.validateEdges(parts, PARTS, state.connections);
     const interference = LAYOUT_GRAPH.interferenceWarnings(parts, PARTS, part => part.id === 'start' ? startBounds(part) : partBounds(part), { edges: state.connections });
+    const obstacleInterference = courseObstacleWarnings(parts);
     const negative = parts.filter(part => Number(part.zMm) < 0).map(part => ({ type: 'negative-height', partIds: [part.id] }));
     const missingStart = state.start ? [] : [{ type: 'missing-start' }];
-    state.layoutWarnings = [...missingStart, ...duplicate, ...edgeWarnings, ...interference, ...negative];
+    state.layoutWarnings = [...missingStart, ...duplicate, ...edgeWarnings, ...interference, ...obstacleInterference, ...negative];
     return state.layoutWarnings;
   }
 
@@ -2624,13 +2677,24 @@
   }
 
   function drawLayoutWarnings(c) {
-    const interferedIds = new Set(state.layoutWarnings
+    const heightInterferedIds = new Set(state.layoutWarnings
       .filter(warning => warning.type === 'interference')
       .flatMap(warning => warning.partIds || []));
+    const obstacleInterferedIds = new Set(state.layoutWarnings
+      .filter(warning => warning.type === 'obstacle-interference')
+      .flatMap(warning => warning.partIds || []));
+    const interferedIds = new Set([...heightInterferedIds, ...obstacleInterferedIds]);
     interferedIds.forEach(id => {
       const part = id === 'start' ? state.start : state.parts.find(item => item.id === id);
       if (!part) return;
       drawInterferenceOutline(c, { ...part, type: id === 'start' ? 'start' : part.type });
+    });
+    const obstacleIds = new Set(state.layoutWarnings
+      .filter(warning => warning.type === 'obstacle-interference')
+      .map(warning => warning.obstacleId));
+    obstacleIds.forEach(id => {
+      const obstacle = state.obstacles.find(item => item.id === id && item.visible);
+      if (obstacle) drawObstacleWarningOutline(c, obstacle);
     });
   }
 
@@ -2670,6 +2734,28 @@
 
   function setActiveConnection(connection) {
     state.activeConnection = connection ? normalizeConnection(connection) : null;
+  }
+
+  function drawObstacleWarningOutline(c, obstacle) {
+    c.save();
+    c.translate(obstacle.x, obstacle.y);
+    c.rotate(obstacle.rotation * Math.PI / 180);
+    c.strokeStyle = '#ff6f78';
+    c.lineWidth = 3 / Math.max(state.view.scale, .15);
+    c.strokeRect(-obstacle.widthCm / 2, -obstacle.depthCm / 2, obstacle.widthCm, obstacle.depthCm);
+    c.restore();
+  }
+
+  function drawCourseGhostObstacleWarning(c) {
+    let ghost = null;
+    if (state.mode === 'place') {
+      const proposal = getPlacementProposal();
+      if (proposal) ghost = renderPartFromProposal(proposal, 'ghost-course');
+    } else if (state.mode === 'start') {
+      ghost = { id: 'ghost-course', type: 'start', x: state.cursor.x, y: state.cursor.y, rotation: state.rotation, zMm: 0 };
+    }
+    if (!ghost || !courseObstacleWarnings([ghost]).length) return;
+    drawInterferenceOutline(c, ghost);
   }
 
   function rebuildActiveConnectionFromTail() {
@@ -2974,6 +3060,21 @@
     if (!selected) return;
     snapshot(); const copy = ROOM_BOUNDARY.duplicateCutout(selected, state.roomCutouts); state.roomCutouts.push(copy); state.cad.selectedCutoutId = copy.id;
     persistLocal(); updateUI(); render();
+  }
+
+  function clearCutoutSelection() {
+    state.cad.selectedCutoutId = null;
+    clearCadDrag();
+    updateUI();
+    render();
+  }
+
+  function rotateSelectedCutout(delta) {
+    const selected = selectedCutout();
+    if (!selected) return;
+    if (selected.locked) return toast('ロック中のスペース修正範囲は回転できません');
+    snapshot();
+    replaceCutout({ ...selected, rotation: normalizeRotation(selected.rotation + delta) });
   }
 
   function onPointerDown(e) {
@@ -3866,7 +3967,7 @@
     state.selectedIds = [];
     state.hoveredPartId = null;
     if (options.closeSetup) els.setupDialog.close();
-    if (options.mode !== false) state.mode = state.start ? 'place' : 'start';
+    if (options.mode !== false) state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
     updateUI(); render();
     return true;
   }
@@ -3893,6 +3994,7 @@
       return;
     }
     setNewObstacleError('');
+    state.subEditMode = 'interference';
     state.obstaclePlacement = { ...candidate, id: 'ghost', visible: true, locked: false };
     state.selectedObstacleId = null;
     clearSelection(false);
@@ -3906,7 +4008,7 @@
   function cancelObstaclePlacement() {
     if (!state.obstaclePlacement) return;
     state.obstaclePlacement = null;
-    state.mode = state.start ? 'place' : 'start';
+    state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
     toast('干渉物の配置をキャンセルしました');
     updateUI(); render();
   }
@@ -3923,7 +4025,7 @@
     snapshot();
     state.obstacles.push(obstacle);
     state.obstaclePlacement = null;
-    state.mode = state.start ? 'place' : 'start';
+    state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
     selectObstacle(obstacle.id, { mode: false });
     if (obstacleOverlapsCourse(obstacle)) toast('干渉物を配置しました。コースパーツと重なっています');
     else toast('干渉物を配置しました');
@@ -3980,6 +4082,19 @@
     state.obstacles.push(copy);
     selectObstacle(copy.id);
     persistLocal(); updateUI(); render();
+  }
+
+  function rotateSelectedObstacle(delta) {
+    const obstacle = selectedObstacle();
+    if (!obstacle) return;
+    if (obstacle.locked) return setObstacleEditorError('ロック中のため編集できません。');
+    const next = INTERFERENCE_OBSTACLES.updateObstacle(obstacle, { rotation: obstacle.rotation + delta });
+    if (!next || !obstaclePlacementValidity(next).valid) {
+      return setObstacleEditorError('回転後にスペース外または切り抜き領域へ重なるため、変更できません。');
+    }
+    snapshot();
+    replaceObstacle(next);
+    setObstacleEditorError('');
   }
 
   function deleteSelectedObstacle() {
@@ -4604,7 +4719,10 @@
       const label = document.createElement('strong'); label.textContent = obstacle.name;
       const status = document.createElement('small'); status.textContent = `${obstacle.visible ? '表示' : '非表示'}${obstacle.locked ? ' / ロック' : ''}`;
       button.append(label, status);
-      button.addEventListener('click', () => selectObstacle(obstacle.id, { closeSetup: true }));
+      button.addEventListener('click', () => {
+        state.subEditMode = 'interference';
+        selectObstacle(obstacle.id, { closeSetup: true });
+      });
       els.obstacleList.append(button);
     });
   }
@@ -4629,6 +4747,8 @@
     ['obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput'].forEach(id => { if (els[id]) els[id].disabled = obstacle.locked; });
     if (els.deleteObstacleBtn) els.deleteObstacleBtn.disabled = obstacle.locked;
     if (els.duplicateObstacleBtn) els.duplicateObstacleBtn.disabled = false;
+    if (els.rotateObstacleLeftBtn) els.rotateObstacleLeftBtn.disabled = obstacle.locked;
+    if (els.rotateObstacleRightBtn) els.rotateObstacleRightBtn.disabled = obstacle.locked;
     if (els.obstacleCollisionWarning) els.obstacleCollisionWarning.hidden = !obstacleOverlapsCourse(obstacle);
   }
 
@@ -4684,6 +4804,7 @@
     if (els.layoutWarningSummary) {
       const counts = state.layoutWarnings.reduce((result, warning) => { result[warning.type] = (result[warning.type] || 0) + 1; return result; }, {});
       const labels = { interference: '干渉の可能性', 'duplicate-connector': '接続口重複', 'height-mismatch': '高さが閉合していません', 'disconnected-edge': '接続ずれ', 'negative-height': '負の高さ', 'missing-connector': '不正接続', 'missing-start': 'スタート位置不明' };
+      labels['obstacle-interference'] = '干渉物との重なり';
       els.layoutWarningSummary.classList.toggle('has-warning', !!state.layoutWarnings.length);
       els.layoutWarningSummary.textContent = state.layoutWarnings.length
         ? Object.entries(counts).map(([type, count]) => `${labels[type] || type} ${count}件`).join(' / ')
@@ -4716,6 +4837,9 @@
     }
     const boundaryMode = state.mode === 'boundary';
     const cutoutMode = state.mode === 'cutout';
+    if (els.subEditModeBar) els.subEditModeBar.hidden = !state.subEditMode;
+    if (state.subEditMode === 'space-adjustment' && els.subEditModeTitle) els.subEditModeTitle.textContent = 'スペース修正中';
+    if (state.subEditMode === 'interference' && els.subEditModeTitle) els.subEditModeTitle.textContent = '干渉物設定中';
     if (els.siteBoundaryPanel) els.siteBoundaryPanel.hidden = !boundaryMode;
     if (els.roomCutoutPanel) els.roomCutoutPanel.hidden = !cutoutMode;
     if (boundaryMode) {
@@ -4736,6 +4860,11 @@
         const distances = ROOM_BOUNDARY.distancesToBoundary(state.siteBoundary, cutout);
         els.cutoutDistances.innerHTML = `<span>左: ${distances.left}mm</span><span>右: ${distances.right}mm</span><span>上: ${distances.top}mm</span><span>下: ${distances.bottom}mm</span>`;
         els.deleteCutoutBtn.disabled = cutout.locked;
+        if (els.rotateCutoutLeftBtn) els.rotateCutoutLeftBtn.disabled = cutout.locked;
+        if (els.rotateCutoutRightBtn) els.rotateCutoutRightBtn.disabled = cutout.locked;
+        if (els.clearCutoutSelectionBtn) els.clearCutoutSelectionBtn.disabled = false;
+        if (els.duplicateCutoutBtn) els.duplicateCutoutBtn.textContent = '修正範囲を複製';
+        if (els.deleteCutoutBtn) els.deleteCutoutBtn.textContent = '修正範囲を削除';
       }
     }
     const canStartObstaclePlacement = NEW_LAYOUT_TABS.canStartSpaceAdjustment(state);
@@ -4794,6 +4923,12 @@
     } else {
       els.selectionInfo.className = 'selection-info empty-summary';
       els.selectionInfo.textContent = '選択なし';
+    }
+    if (selectedObstacle() && obstacleOverlapsCourse(selectedObstacle())) {
+      els.selectionInfo.append(document.createElement('br'), 'コースパーツと重なっています');
+    } else if (state.selectedIds.length) {
+      const obstacleWarningCount = state.selectedIds.reduce((count, id) => count + obstacleWarningCountForPart(id), 0);
+      if (obstacleWarningCount) els.selectionInfo.append(document.createElement('br'), `干渉物と重なっています（${obstacleWarningCount}件）`);
     }
     if (els.convertStartBtn) {
       const target = state.selectedIds.length === 1 ? findLayoutPartById(state.selectedIds[0]) : null;

@@ -77,6 +77,9 @@
             <label class="checkbox-row"><input id="cutoutLocked" type="checkbox" />ロック</label>
             <button id="applyCutoutBtn" class="button full-button" type="button">切り抜きを適用</button>
             <div id="cutoutDistances" class="cad-distances" aria-live="polite"></div>
+            <p id="cutoutRotationNote" class="cad-help" hidden>現在、スペース修正範囲の回転には対応していません。</p>
+            <div class="cad-actions"><button id="rotateCutoutLeftBtn" class="button ghost" type="button">左へ90°回転</button><button id="rotateCutoutRightBtn" class="button ghost" type="button">右へ90°回転</button></div>
+            <div class="cad-actions"><button id="clearCutoutSelectionBtn" class="button ghost" type="button">選択を解除</button></div>
             <div class="cad-actions"><button id="duplicateCutoutBtn" class="button ghost" type="button">複製</button><button id="deleteCutoutBtn" class="button danger-button" type="button">削除</button></div>
           </div>
         </section>
@@ -117,6 +120,13 @@
         </div>
 
         <div id="canvasWrap" class="canvas-wrap">
+          <div id="subEditModeBar" class="sub-edit-mode-bar" hidden>
+            <strong id="subEditModeTitle"></strong>
+            <div>
+              <button id="returnToSetupBtn" class="button ghost" type="button">新規レイアウト設定へ戻る</button>
+              <button id="finishSubEditBtn" class="button primary" type="button">編集を完了</button>
+            </div>
+          </div>
           <canvas id="courseCanvas" tabindex="0" aria-label="コース編集キャンバス"></canvas>
           <div id="cutoutDimensionOverlay" class="cutout-dimension-overlay" hidden aria-hidden="true">
             <span data-cutout-dimension="left"></span><span data-cutout-dimension="right"></span>
@@ -185,6 +195,10 @@
             <label class="check-label"><input id="obstacleLockedInput" type="checkbox" /> ロック</label>
           </div>
           <p id="obstacleEditorError" class="form-error" hidden></p>
+          <div class="cad-actions">
+            <button id="rotateObstacleLeftBtn" class="button ghost" type="button">左へ45°</button>
+            <button id="rotateObstacleRightBtn" class="button ghost" type="button">右へ45°</button>
+          </div>
           <div class="cad-actions">
             <button id="duplicateObstacleBtn" class="button full-button" type="button">干渉物を複製</button>
             <button id="deleteObstacleBtn" class="button danger-button full-button" type="button">干渉物を削除</button>
@@ -337,6 +351,7 @@
   <script src="snap-toggle.js"></script>
   <script src="new-layout-tabs.js"></script>
   <script src="obstacle-geometry.js"></script>
+  <script src="obstacle-course-warnings.js"></script>
   <script src="interference-obstacles.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>

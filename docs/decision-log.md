@@ -32,6 +32,13 @@
 - Overlap with a course part is a 2D warning rather than a placement block. This feature does not claim a 3D collision decision or establish an unknown physical dimension.
 - Obstacle placement ghosts and selection outlines are editor-only. PNG export includes only visible placed obstacles.
 
+### Obstacle warning and sub-editor workflow (2026-08-04)
+
+- Visible interference obstacles and every placed course part, including Start, are compared as 2D polygons. A match is a warning only: it never blocks placement or moves either item.
+- The warning is recomputed from shared layout state, so placement, movement, rotation, persistence restore, and Undo/Redo use the same result. PNG export deliberately excludes warning outlines.
+- Space-adjustment and interference editing entered from the new-layout dialog keep an explicit, transient editor context. The exit bar can return to its originating tab or finish editing without creating an Undo entry.
+- Cutout rotation remains limited to its established right-angle data model; no new arbitrary rotation format is introduced.
+
 ### Canvas navigation is zoom-only (2026-07-31)
 
 ### Course editing wheel rotation restored (2026-07-31)
