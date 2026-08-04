@@ -220,36 +220,62 @@
         <div class="setup-icon">↔</div>
         <div>
           <p class="eyebrow">NEW LAYOUT</p>
-          <h2>作成サイズを指定</h2>
-          <p>実寸範囲を設定後、スタートレーンのゴーストを回転・移動して配置します。</p>
+          <h2>新規レイアウト</h2>
+          <p>レイアウトスペースを設定後、スタートレーンのゴーストを回転・移動して配置します。</p>
         </div>
       </div>
-      <div class="setup-fields">
-        <label>横幅（m）<input id="fieldWidthInput" name="width" type="number" min="1" max="50" step="0.1" value="6.0" required /></label>
-        <label>奥行（m）<input id="fieldHeightInput" name="height" type="number" min="1" max="50" step="0.1" value="4.0" required /></label>
-        <label>グリッド（cm）
-          <select id="gridInput" name="grid">
-            <option value="5">5 cm</option>
-            <option value="10" selected>10 cm</option>
-            <option value="25">25 cm</option>
-            <option value="50">50 cm</option>
-          </select>
-        </label>
+      <div class="setup-tabs" role="tablist" aria-label="新規レイアウトの設定">
+        <button id="layoutSpaceTab" class="setup-tab" type="button" role="tab" aria-selected="true" aria-controls="layoutSpacePanel" data-setup-tab="layout-space">レイアウトスペース</button>
+        <button id="spaceAdjustmentTab" class="setup-tab" type="button" role="tab" aria-selected="false" aria-controls="spaceAdjustmentPanel" data-setup-tab="space-adjustment" tabindex="-1">スペース修正</button>
+        <button id="interferenceTab" class="setup-tab" type="button" role="tab" aria-selected="false" aria-controls="interferencePanel" data-setup-tab="interference" tabindex="-1">干渉物設定</button>
       </div>
-      <div class="preset-row">
-        <button type="button" data-preset="6,4">6 × 4m</button>
-        <button type="button" data-preset="8,5">8 × 5m</button>
-        <button type="button" data-preset="10,6">10 × 6m</button>
-        <button type="button" data-preset="12,8">12 × 8m</button>
-      </div>
-      <div class="setup-note">
-        <strong>試作版の寸法</strong>
-        <p>3レーン幅34.5cm、ストレート54cmを基準にしています。表示寸法は参照エディターの1px＝1cm基準へ合わせています。画像は後からCanva PNGへ差し替えできます。</p>
-      </div>
-      <div class="dialog-actions">
-        <button id="cancelSetupBtn" class="button ghost" value="cancel" type="button">キャンセル</button>
-        <button class="button primary large" value="default" type="submit">サイズを決定</button>
-      </div>
+      <section id="layoutSpacePanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="layoutSpaceTab">
+        <h3>レイアウトスペース</h3>
+        <p class="setup-tab-description">コースを設置する大外のサイズを設定します。</p>
+        <div class="setup-fields">
+          <label>横幅（m）<input id="fieldWidthInput" name="width" type="number" min="1" max="50" step="0.1" value="6.0" required /></label>
+          <label>奥行（m）<input id="fieldHeightInput" name="height" type="number" min="1" max="50" step="0.1" value="4.0" required /></label>
+          <label>グリッド（cm）
+            <select id="gridInput" name="grid">
+              <option value="5">5 cm</option>
+              <option value="10" selected>10 cm</option>
+              <option value="25">25 cm</option>
+              <option value="50">50 cm</option>
+            </select>
+          </label>
+        </div>
+        <div class="preset-row">
+          <button type="button" data-preset="6,4">6 × 4m</button>
+          <button type="button" data-preset="8,5">8 × 5m</button>
+          <button type="button" data-preset="10,6">10 × 6m</button>
+          <button type="button" data-preset="12,8">12 × 8m</button>
+        </div>
+        <div class="setup-note">
+          <strong>試作版の寸法</strong>
+          <p>3レーン幅34.5cm、ストレート54cmを基準にしています。表示寸法は参照エディターの1px＝1cm基準へ合わせています。画像は後からCanva PNGへ差し替えできます。</p>
+        </div>
+        <div class="dialog-actions">
+          <button id="cancelSetupBtn" class="button ghost" value="cancel" type="button">キャンセル</button>
+          <button class="button primary large" value="default" type="submit">サイズを決定</button>
+        </div>
+      </section>
+      <section id="spaceAdjustmentPanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="spaceAdjustmentTab" hidden>
+        <h3>スペース修正</h3>
+        <p class="setup-tab-description">レイアウトスペースが長方形以外の場合に、不要な部分を切り抜いて形状を修正します。</p>
+        <p id="spaceAdjustmentGuide" class="setup-note setup-status-note">先に「レイアウトスペース」でサイズを設定してください。</p>
+        <div class="dialog-actions setup-tab-actions">
+          <button id="backToLayoutSpaceBtn" class="button ghost" type="button">レイアウトスペースへ戻る</button>
+          <button id="startSpaceAdjustmentBtn" class="button primary" type="button" disabled>スペース修正を開始</button>
+        </div>
+      </section>
+      <section id="interferencePanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="interferenceTab" hidden>
+        <h3>干渉物設定</h3>
+        <p class="setup-tab-description">スペース内にある柱や固定設備など、コース配置に影響するものを設定します。</p>
+        <p class="setup-note setup-status-note"><strong>準備中</strong><br />次の開発で対応します。</p>
+        <div class="dialog-actions setup-tab-actions">
+          <button class="button ghost" type="button" disabled>準備中</button>
+        </div>
+      </section>
     </form>
   </dialog>
 
@@ -278,6 +304,7 @@
   <script src="fast-path-placement.js"></script>
   <script src="corner-direction.js"></script>
   <script src="snap-toggle.js"></script>
+  <script src="new-layout-tabs.js"></script>
   <script src="persistence.js"></script>
   <script src="part-seams.js"></script>
   <script src="lane-change-visual.js"></script>

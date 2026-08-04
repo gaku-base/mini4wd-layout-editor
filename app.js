@@ -32,6 +32,8 @@
   if (!FAST_PATH) throw new Error('fast-path-placement.js must be loaded before app.js');
   const SNAP_TOGGLE = window.M4WD_SNAP_TOGGLE;
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
+  const NEW_LAYOUT_TABS = window.M4WD_NEW_LAYOUT_TABS;
+  if (!NEW_LAYOUT_TABS) throw new Error('new-layout-tabs.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
@@ -115,6 +117,7 @@
     history: [],
     future: [],
     setupStarted: false,
+    newLayoutModalTab: NEW_LAYOUT_TABS.DEFAULT_TAB,
     dirty: false,
     bankWarnings: [],
     layoutWarnings: [],
@@ -158,6 +161,7 @@
     const ids = [
       'courseCanvas','canvasWrap','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
       'newBtn','saveBtn','loadInput','exportBtn','cancelSetupBtn','instruction','toast','partsList','partsSummary',
+      'layoutSpacePanel','spaceAdjustmentPanel','interferencePanel','spaceAdjustmentGuide','backToLayoutSpaceBtn','startSpaceAdjustmentBtn',
       'modeBadge','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
@@ -328,6 +332,26 @@
 
     els.setupForm.addEventListener('submit', e => { e.preventDefault(); applySetup(); });
     els.cancelSetupBtn.addEventListener('click', () => { if (state.setupStarted) els.setupDialog.close(); });
+    document.querySelectorAll('[data-setup-tab]').forEach(tab => {
+      tab.addEventListener('click', () => setNewLayoutModalTab(tab.dataset.setupTab));
+      tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const nextTab = event.key === 'Home'
+          ? NEW_LAYOUT_TABS.DEFAULT_TAB
+          : event.key === 'End'
+            ? NEW_LAYOUT_TABS.TABS.at(-1).id
+            : NEW_LAYOUT_TABS.moveTab(tab.dataset.setupTab, event.key === 'ArrowLeft' ? -1 : 1);
+        setNewLayoutModalTab(nextTab, { focus: true });
+      });
+    });
+    els.backToLayoutSpaceBtn.addEventListener('click', () => setNewLayoutModalTab('layout-space', { focus: true }));
+    els.startSpaceAdjustmentBtn.addEventListener('click', () => {
+      if (!NEW_LAYOUT_TABS.canStartSpaceAdjustment(state)) return;
+      els.setupDialog.close();
+      setMode('cutout');
+      toast('スペース修正を開始しました');
+    });
     document.querySelectorAll('[data-preset]').forEach(btn => {
       btn.addEventListener('click', () => {
         const [w, h] = btn.dataset.preset.split(',');
@@ -426,8 +450,26 @@
       els.cancelSetupBtn.style.visibility = 'visible';
     }
     els.setupDialog.dataset.reset = reset ? 'true' : 'false';
+    setNewLayoutModalTab(NEW_LAYOUT_TABS.DEFAULT_TAB);
     els.setupDialog.showModal();
     setTimeout(() => els.fieldWidthInput.focus(), 50);
+  }
+
+  function setNewLayoutModalTab(tabId, { focus = false } = {}) {
+    const view = NEW_LAYOUT_TABS.panelView(tabId, state);
+    state.newLayoutModalTab = view.selected;
+    view.tabs.forEach(tab => {
+      const tabButton = document.querySelector(`[data-setup-tab="${tab.id}"]`);
+      const panel = document.getElementById(tab.panelId);
+      if (tabButton) {
+        tabButton.setAttribute('aria-selected', String(tab.selected));
+        tabButton.tabIndex = tab.selected ? 0 : -1;
+        if (focus && tab.selected) tabButton.focus();
+      }
+      if (panel) panel.hidden = !tab.selected;
+    });
+    els.startSpaceAdjustmentBtn.disabled = !view.canAdjustSpace;
+    els.spaceAdjustmentGuide.hidden = view.canAdjustSpace;
   }
 
   function applySetup() {
