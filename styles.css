@@ -302,6 +302,16 @@ kbd {
 .eyebrow { color: var(--primary) !important; font-weight: 900; letter-spacing: .12em; font-size: 9px !important; }
 .setup-header h2 { margin: 0; font-size: 22px; }
 .setup-header p { color: var(--muted); margin: 5px 0 0; font-size: 11px; }
+.setup-tabs { display: flex; gap: 4px; margin-top: 20px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.setup-tab { appearance: none; flex: 1 0 max-content; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 10px; font-weight: 800; padding: 10px 8px 9px; white-space: nowrap; }
+.setup-tab:hover { color: var(--text); }
+.setup-tab[aria-selected="true"] { border-bottom-color: var(--primary); color: var(--primary); }
+.setup-tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 6px 6px 0 0; }
+.setup-tab-panel { min-height: 244px; padding-top: 16px; }
+.setup-tab-panel h3 { margin: 0; font-size: 16px; }
+.setup-tab-description { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 6px 0 0; }
+.setup-status-note { margin: 20px 0 0; }
+.setup-tab-actions { margin-top: 20px; }
 .setup-fields { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .setup-fields label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .setup-fields input, .setup-fields select {
