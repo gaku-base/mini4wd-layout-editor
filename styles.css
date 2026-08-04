@@ -312,6 +312,17 @@ kbd {
 .setup-tab-description { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 6px 0 0; }
 .setup-status-note { margin: 20px 0 0; }
 .setup-tab-actions { margin-top: 20px; }
+.obstacle-create-fields { grid-template-columns: 1.3fr 1fr 1fr; }
+.form-error { color: #ff9da5; font-size: 11px; line-height: 1.5; margin: 10px 0 0; }
+.obstacle-list-section { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 15px; }
+.obstacle-list-section h4 { font-size: 12px; margin: 0 0 8px; }
+.obstacle-list { display: grid; gap: 6px; max-height: 130px; overflow-y: auto; }
+.obstacle-list button { align-items: center; background: #18212c; border: 1px solid var(--line); border-radius: 8px; color: var(--text); cursor: pointer; display: flex; gap: 7px; justify-content: space-between; padding: 8px; text-align: left; }
+.obstacle-list button:hover { border-color: var(--primary); }
+.obstacle-list small { color: var(--muted); }
+.obstacle-panel { border-color: rgba(226, 118, 89, .55); }
+.check-label { align-items: center; display: flex !important; gap: 7px; }
+.check-label input { width: auto !important; }
 .setup-fields { margin-top: 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .setup-fields label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; font-weight: 700; }
 .setup-fields input, .setup-fields select {
