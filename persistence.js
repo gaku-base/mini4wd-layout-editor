@@ -14,7 +14,7 @@
   const SUPPORTED_LEGACY_VERSIONS = Object.freeze(['1.0.0-RC1']);
   const PERSISTED_FIELDS = [
     'app', 'version', 'field', 'parts', 'start', 'startPhase',
-    'selectedType', 'rotation', 'activeConnection', 'connections', 'siteBoundary', 'roomCutouts'
+    'selectedType', 'rotation', 'activeConnection', 'connections', 'siteBoundary', 'roomCutouts', 'obstacles'
   ];
 
   function isRecord(value) {
@@ -117,6 +117,18 @@
           || cutout.width <= 0 || cutout.height <= 0 || ![0, 90, 180, 270].includes(cutout.rotation)
           || typeof cutout.locked !== 'boolean' || typeof cutout.visible !== 'boolean') return false;
         cutoutIds.add(cutout.id);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(layout, 'obstacles')) {
+      if (!Array.isArray(layout.obstacles)) return false;
+      const obstacleIds = new Set();
+      for (const obstacle of layout.obstacles) {
+        if (!isRecord(obstacle) || typeof obstacle.id !== 'string' || !obstacle.id || obstacleIds.has(obstacle.id)
+          || typeof obstacle.name !== 'string' || !isFiniteNumber(obstacle.x) || !isFiniteNumber(obstacle.y)
+          || !isFiniteNumber(obstacle.widthCm) || !isFiniteNumber(obstacle.depthCm) || obstacle.widthCm <= 0 || obstacle.depthCm <= 0
+          || obstacle.widthCm > 5000 || obstacle.depthCm > 5000 || !isFiniteNumber(obstacle.rotation)
+          || obstacle.rotation < 0 || obstacle.rotation >= 360 || typeof obstacle.visible !== 'boolean' || typeof obstacle.locked !== 'boolean') return false;
+        obstacleIds.add(obstacle.id);
       }
     }
 

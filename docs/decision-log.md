@@ -24,6 +24,14 @@
 - 旧JSONおよび旧localStorageには既存fieldからsiteBoundaryを補い、切り抜きは空配列
   とする。元のfield項目は保存し続けるため、既存データを破壊的に変換しない。
 
+### Interference obstacle editor (2026-08-04)
+
+- The third tab of the new-layout dialog creates interference obstacles only from a name, width, and depth. Position, rotation, visibility, and locking are intentionally available only after placement in the editor sidebar.
+- Obstacles are independent layout annotations, stored as `obstacles[]` in JSON and localStorage. Layouts saved before this field existed remain valid and restore with an empty obstacle collection.
+- An obstacle must stay completely inside the layout-space rectangle and must not overlap a visible room cutout. Rotated corners and polygon intersections, rather than an axis-aligned bounding box, determine validity.
+- Overlap with a course part is a 2D warning rather than a placement block. This feature does not claim a 3D collision decision or establish an unknown physical dimension.
+- Obstacle placement ghosts and selection outlines are editor-only. PNG export includes only visible placed obstacles.
+
 ### Canvas navigation is zoom-only (2026-07-31)
 
 ### Course editing wheel rotation restored (2026-07-31)

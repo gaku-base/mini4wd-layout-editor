@@ -331,3 +331,29 @@ test('15. both concrete corner types are accepted without a runtime mirror', () 
   const restored = createLayoutStore(storage, options).restore();
   assert.equal(restored.layout.parts[2].type, 'corner-45-right');
 });
+
+test('16. interference obstacles round-trip while older layouts without them remain valid', () => {
+  const layout = layoutFixture();
+  layout.obstacles = [{
+    id: 'obstacle-1', name: 'desk', x: 120, y: 140,
+    widthCm: 80, depthCm: 60, rotation: 45, visible: true, locked: false
+  }];
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, options);
+  store.restore();
+  assert.equal(store.save(layout).status, 'saved');
+  assert.deepEqual(createLayoutStore(storage, options).restore().layout.obstacles, layout.obstacles);
+  assert.equal(createLayoutStore(new MemoryStorage([[STORAGE_KEY, JSON.stringify(layoutFixture())]]), options).restore().status, 'restored');
+});
+
+test('17. invalid persisted interference obstacles are rejected', () => {
+  const layout = layoutFixture();
+  layout.obstacles = [{
+    id: 'obstacle-1', name: 'desk', x: 120, y: 140,
+    widthCm: 0, depthCm: 60, rotation: 0, visible: true, locked: false
+  }];
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, options);
+  store.restore();
+  assert.equal(store.save(layout).status, 'failed');
+});

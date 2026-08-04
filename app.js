@@ -34,6 +34,10 @@
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const NEW_LAYOUT_TABS = window.M4WD_NEW_LAYOUT_TABS;
   if (!NEW_LAYOUT_TABS) throw new Error('new-layout-tabs.jsが読み込まれていません');
+  const OBSTACLE_GEOMETRY = window.M4WD_OBSTACLE_GEOMETRY;
+  if (!OBSTACLE_GEOMETRY) throw new Error('obstacle-geometry.jsが読み込まれていません');
+  const INTERFERENCE_OBSTACLES = window.M4WD_INTERFERENCE_OBSTACLES;
+  if (!INTERFERENCE_OBSTACLES) throw new Error('interference-obstacles.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
@@ -67,6 +71,10 @@
     field: { originX: 0, originY: 0, widthCm: 600, heightCm: 400, gridCm: 10 },
     siteBoundary: ROOM_BOUNDARY.defaultSiteBoundary({ originX: 0, originY: 0, widthCm: 600, heightCm: 400 }),
     roomCutouts: [],
+    obstacles: [],
+    selectedObstacleId: null,
+    obstaclePlacement: null,
+    obstacleDrag: null,
     cad: { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null },
     parts: [],
     start: null,
@@ -111,7 +119,7 @@
       draggingParts: false, dragStart: null,
       dragBase: null, dragSnapshotTaken: false,
       marquee: false, marqueeStart: null, marqueeEnd: null, marqueeAdd: false,
-      groupSnap: null, pendingPlacement: false, pendingPlacementProposal: null
+      groupSnap: null, pendingPlacement: false, pendingPlacementProposal: null, pendingObstaclePlacement: false
     },
     layoutMove: { active: false, anchor: null, base: null, previousMode: 'place', pointer: null },
     history: [],
@@ -162,6 +170,8 @@
       'courseCanvas','canvasWrap','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
       'newBtn','saveBtn','loadInput','exportBtn','cancelSetupBtn','instruction','toast','partsList','partsSummary',
       'layoutSpacePanel','spaceAdjustmentPanel','interferencePanel','spaceAdjustmentGuide','backToLayoutSpaceBtn','startSpaceAdjustmentBtn',
+      'newObstacleNameInput','newObstacleWidthInput','newObstacleDepthInput','newObstacleGuide','newObstacleError','startObstaclePlacementBtn','backToLayoutSpaceFromObstacleBtn','obstacleList',
+      'obstacleEditorPanel','clearObstacleSelectionBtn','obstacleCollisionWarning','obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput','obstacleVisibleInput','obstacleLockedInput','obstacleEditorError','duplicateObstacleBtn','deleteObstacleBtn',
       'modeBadge','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
@@ -352,6 +362,15 @@
       setMode('cutout');
       toast('スペース修正を開始しました');
     });
+    els.backToLayoutSpaceFromObstacleBtn?.addEventListener('click', () => setNewLayoutModalTab('layout-space', { focus: true }));
+    els.startObstaclePlacementBtn?.addEventListener('click', startObstaclePlacement);
+    els.clearObstacleSelectionBtn?.addEventListener('click', () => clearObstacleSelection());
+    els.duplicateObstacleBtn?.addEventListener('click', duplicateSelectedObstacle);
+    els.deleteObstacleBtn?.addEventListener('click', deleteSelectedObstacle);
+    ['change', 'blur'].forEach(eventName => {
+      ['obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput','obstacleVisibleInput','obstacleLockedInput']
+        .forEach(id => on(els[id], eventName, applyObstacleEditorInputs));
+    });
     document.querySelectorAll('[data-preset]').forEach(btn => {
       btn.addEventListener('click', () => {
         const [w, h] = btn.dataset.preset.split(',');
@@ -470,6 +489,9 @@
     });
     els.startSpaceAdjustmentBtn.disabled = !view.canAdjustSpace;
     els.spaceAdjustmentGuide.hidden = view.canAdjustSpace;
+    if (els.startObstaclePlacementBtn) els.startObstaclePlacementBtn.disabled = !view.canAdjustSpace;
+    if (els.newObstacleGuide) els.newObstacleGuide.hidden = view.canAdjustSpace;
+    updateObstacleList();
   }
 
   function applySetup() {
@@ -502,6 +524,10 @@
       state.rotation = 0;
       state.mode = 'start';
       state.roomCutouts = [];
+      state.obstacles = [];
+      state.selectedObstacleId = null;
+      state.obstaclePlacement = null;
+      state.obstacleDrag = null;
       state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
       resetCornerVariantSession();
       resetFastPathSession();
@@ -593,6 +619,7 @@
       field: { ...state.field },
       siteBoundary: { ...state.siteBoundary },
       roomCutouts: state.roomCutouts.map(cutout => ({ ...cutout })),
+      obstacles: state.obstacles.map(obstacle => ({ ...obstacle })),
       parts: state.parts.map(p => ({ ...p })),
       start: state.start ? { ...state.start } : null,
       startPhase: state.startPhase,
@@ -615,6 +642,10 @@
     state.siteBoundary = ROOM_BOUNDARY.normalizeSiteBoundary(data.siteBoundary || ROOM_BOUNDARY.defaultSiteBoundary(state.field));
     state.field = FIELD_BOUNDARY.normalizeField(ROOM_BOUNDARY.fieldFromSiteBoundary(state.siteBoundary, state.field));
     state.roomCutouts = ROOM_BOUNDARY.normalizeRoomCutouts(data.roomCutouts || []);
+    state.obstacles = INTERFERENCE_OBSTACLES.normalizeObstacles(data.obstacles || []);
+    state.selectedObstacleId = null;
+    state.obstaclePlacement = null;
+    state.obstacleDrag = null;
     state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
     state.parts = data.parts.map((p, index) => {
       const type = migratedPartType(p);
@@ -903,6 +934,7 @@
     // CAD-only dimensions, handles, previews, and selection frames are drawn
     // separately and never reach this export path.
     drawRoomShape(c);
+    drawObstacles(c, { exportMode: true });
     if (state.start) drawStartLane(c, state.start, true, false, { connectedConnectorIds: connectedConnectorIdsForPart('start') });
     drawPartsInLayerOrder(c, { exportMode: true });
   }
@@ -977,11 +1009,13 @@
     ctx.scale(state.view.scale, state.view.scale);
     drawField(ctx);
     drawRoomShape(ctx);
+    drawObstacles(ctx);
     if (state.start) drawStartLane(ctx, state.start, false, false, { connectedConnectorIds: connectedConnectorIdsForPart('start'), selected: isSelected('start') });
     drawPartsInLayerOrder(ctx, { selected: true });
     drawMissingStartWarning(ctx);
     if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
     drawCursorAndGhost(ctx);
+    drawObstaclePlacementGhost(ctx);
     drawMarquee(ctx);
     drawCadInteraction(ctx);
     ctx.restore();
@@ -1094,6 +1128,72 @@
       c.stroke();
     });
     c.restore();
+  }
+
+  function obstacleSpaceBoundary() {
+    return {
+      left: state.siteBoundary.x / 10,
+      top: state.siteBoundary.y / 10,
+      right: (state.siteBoundary.x + state.siteBoundary.width) / 10,
+      bottom: (state.siteBoundary.y + state.siteBoundary.height) / 10
+    };
+  }
+
+  function obstacleCutoutBounds() {
+    return ROOM_BOUNDARY.visibleCutoutIntersections(state.siteBoundary, state.roomCutouts)
+      .map(bounds => ({ left: bounds.left / 10, top: bounds.top / 10, right: bounds.right / 10, bottom: bounds.bottom / 10 }));
+  }
+
+  function obstaclePlacementValidity(obstacle) {
+    return OBSTACLE_GEOMETRY.placementValidity(obstacle, obstacleSpaceBoundary(), obstacleCutoutBounds());
+  }
+
+  function obstacleOverlapsCourse(obstacle) {
+    if (!obstacle.visible) return false;
+    const polygon = OBSTACLE_GEOMETRY.corners(obstacle);
+    return allLayoutParts().some(part => OBSTACLE_GEOMETRY.polygonsIntersect(
+      polygon, LAYOUT_GRAPH.occupancyPolygon(part, PARTS[part.type])
+    ));
+  }
+
+  function drawObstacleShape(c, obstacle, options = {}) {
+    const selected = !options.exportMode && obstacle.id === state.selectedObstacleId;
+    const overlap = !options.exportMode && obstacleOverlapsCourse(obstacle);
+    const unit = Math.max(state.view.scale, .15);
+    c.save();
+    c.translate(obstacle.x, obstacle.y);
+    c.rotate(obstacle.rotation * Math.PI / 180);
+    c.fillStyle = options.ghost ? (options.valid ? 'rgba(244, 180, 43, .28)' : 'rgba(236, 82, 93, .30)') : 'rgba(226, 118, 89, .30)';
+    c.strokeStyle = options.ghost ? (options.valid ? '#f7c657' : '#ff6f78') : overlap ? '#ff6f78' : '#e27659';
+    c.lineWidth = (selected ? 2.8 : 1.7) / unit;
+    c.setLineDash(options.ghost ? [7 / unit, 4 / unit] : []);
+    c.fillRect(-obstacle.widthCm / 2, -obstacle.depthCm / 2, obstacle.widthCm, obstacle.depthCm);
+    c.strokeRect(-obstacle.widthCm / 2, -obstacle.depthCm / 2, obstacle.widthCm, obstacle.depthCm);
+    c.setLineDash([]);
+    if (selected) {
+      c.strokeStyle = '#ffd15c';
+      c.lineWidth = 1.2 / unit;
+      c.strokeRect(-obstacle.widthCm / 2 - 3 / unit, -obstacle.depthCm / 2 - 3 / unit, obstacle.widthCm + 6 / unit, obstacle.depthCm + 6 / unit);
+    }
+    if (!options.exportMode && obstacle.locked) {
+      c.fillStyle = '#fff2c8'; c.font = `700 ${12 / unit}px sans-serif`; c.textAlign = 'right'; c.textBaseline = 'top';
+      c.fillText('🔒', obstacle.widthCm / 2 - 3 / unit, -obstacle.depthCm / 2 + 3 / unit);
+    }
+    if (obstacle.widthCm >= 28 / unit && obstacle.depthCm >= 16 / unit) {
+      c.fillStyle = '#fff3e8'; c.font = `700 ${10 / unit}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(obstacle.name, 0, 0, Math.max(0, obstacle.widthCm - 8 / unit));
+    }
+    c.restore();
+  }
+
+  function drawObstacles(c, options = {}) {
+    state.obstacles.filter(obstacle => obstacle.visible).forEach(obstacle => drawObstacleShape(c, obstacle, options));
+  }
+
+  function drawObstaclePlacementGhost(c) {
+    if (state.mode !== 'obstacle-edit' || !state.obstaclePlacement) return;
+    const ghost = { ...state.obstaclePlacement, x: state.cursor.x, y: state.cursor.y };
+    drawObstacleShape(c, ghost, { ghost: true, valid: obstaclePlacementValidity(ghost).valid });
   }
 
   function drawCadInteraction(c) {
@@ -2903,6 +3003,11 @@
       onCadPointerDown(e, world);
       return;
     }
+    if (state.mode === 'obstacle-edit') {
+      state.pointer.pendingObstaclePlacement = true;
+      updateUI(); render();
+      return;
+    }
     const fastPathResult = state.mode === 'place'
       ? updateFastPathPointer(physicalPointer)
       : { phase: FAST_PATH.FREE };
@@ -2950,7 +3055,17 @@
           els.courseCanvas.classList.add('is-moving');
         }
       } else {
-        beginMarquee(world, e.shiftKey);
+        const obstacle = obstacleHitTest(world.x, world.y);
+        if (obstacle) {
+          selectObstacle(obstacle.id, { mode: false });
+          if (!obstacle.locked) {
+            state.obstacleDrag = {
+              pointerId: e.pointerId, id: obstacle.id,
+              offsetX: world.x - obstacle.x, offsetY: world.y - obstacle.y,
+              original: { ...obstacle }, historyState: JSON.stringify(serializeState()), moved: false, invalid: false
+            };
+          }
+        } else beginMarquee(world, e.shiftKey);
       }
     } else if (state.mode === 'delete') {
       if (hit) {
@@ -2998,6 +3113,23 @@
 
     if (state.mode === 'boundary' || state.mode === 'cutout') {
       onCadPointerMove(e, world);
+      return;
+    }
+
+    if (state.obstacleDrag?.pointerId === e.pointerId && state.pointer.down) {
+      const obstacle = selectedObstacle();
+      if (!obstacle || obstacle.locked) return;
+      const next = INTERFERENCE_OBSTACLES.updateObstacle(obstacle, {
+        x: snap(world.x - state.obstacleDrag.offsetX),
+        y: snap(world.y - state.obstacleDrag.offsetY)
+      });
+      const validity = next && obstaclePlacementValidity(next);
+      state.obstacleDrag.invalid = !validity?.valid;
+      if (validity?.valid) {
+        state.obstacleDrag.moved = state.obstacleDrag.moved || next.x !== state.obstacleDrag.original.x || next.y !== state.obstacleDrag.original.y;
+        replaceObstacle(next, false);
+      }
+      updateUI(); render();
       return;
     }
 
@@ -3118,6 +3250,24 @@
       try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
       return;
     }
+    if (state.mode === 'obstacle-edit') {
+      const pendingObstaclePlacement = state.pointer.pendingObstaclePlacement;
+      state.pointer.pendingObstaclePlacement = false;
+      if (pendingObstaclePlacement) placeObstacleAtCursor();
+      state.pointer.down = false;
+      try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      return;
+    }
+    if (state.obstacleDrag?.pointerId === e.pointerId) {
+      const drag = state.obstacleDrag;
+      if (drag.invalid) replaceObstacle(drag.original, false);
+      else if (drag.moved) snapshotSerialized(drag.historyState);
+      state.obstacleDrag = null;
+      state.pointer.down = false;
+      try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      persistLocal(); updateUI(); render();
+      return;
+    }
     const pendingPlacementProposal = state.pointer.pendingPlacementProposal;
     const pendingPlacement = state.pointer.pendingPlacement;
     // Consume the event before any placement code. Duplicate pointerup/click
@@ -3216,6 +3366,9 @@
     // Cancellation is not a click.  Discard its captured proposal so touch
     // cancellation cannot later become a second placement.
     if (state.mode === 'cutout') cancelCadDrag();
+    if (state.obstacleDrag) replaceObstacle(state.obstacleDrag.original, false);
+    state.obstacleDrag = null;
+    state.pointer.pendingObstaclePlacement = false;
     state.pointer.down = false;
     state.pointer.pendingPlacement = false;
     state.pointer.pendingPlacementProposal = null;
@@ -3306,6 +3459,18 @@
     }
 
     const key = e.key.toLowerCase();
+
+    if (state.mode === 'obstacle-edit' && key === 'escape') {
+      e.preventDefault();
+      cancelObstaclePlacement();
+      return;
+    }
+
+    if (selectedObstacle() && key === 'escape') {
+      e.preventDefault();
+      clearObstacleSelection();
+      return;
+    }
 
     if (state.mode === 'cutout') {
       const selected = selectedCutout();
@@ -3670,6 +3835,7 @@
 
   function setSelection(ids) {
     state.selectedIds = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
+    if (state.selectedIds.length) state.selectedObstacleId = null;
   }
 
   function toggleSelection(id) {
@@ -3679,7 +3845,151 @@
 
   function clearSelection(refresh = true) {
     state.selectedIds = [];
+    state.selectedObstacleId = null;
     if (refresh) { updateUI(); render(); }
+  }
+
+  function selectedObstacle() {
+    return state.obstacles.find(obstacle => obstacle.id === state.selectedObstacleId) || null;
+  }
+
+  function clearObstacleSelection(refresh = true) {
+    state.selectedObstacleId = null;
+    state.obstacleDrag = null;
+    if (refresh) { updateUI(); render(); }
+  }
+
+  function selectObstacle(id, options = {}) {
+    const obstacle = state.obstacles.find(item => item.id === id);
+    if (!obstacle) return false;
+    state.selectedObstacleId = obstacle.id;
+    state.selectedIds = [];
+    state.hoveredPartId = null;
+    if (options.closeSetup) els.setupDialog.close();
+    if (options.mode !== false) state.mode = state.start ? 'place' : 'start';
+    updateUI(); render();
+    return true;
+  }
+
+  function obstacleFromCreateInputs() {
+    const widthCm = Number(els.newObstacleWidthInput?.value) * 100;
+    const depthCm = Number(els.newObstacleDepthInput?.value) * 100;
+    const name = String(els.newObstacleNameInput?.value || '').trim();
+    const candidate = INTERFERENCE_OBSTACLES.createObstacle({ name, x: state.cursor.x, y: state.cursor.y, widthCm, depthCm, rotation: 0 }, makeId, state.obstacles.length);
+    return candidate;
+  }
+
+  function setNewObstacleError(message = '') {
+    if (!els.newObstacleError) return;
+    els.newObstacleError.hidden = !message;
+    els.newObstacleError.textContent = message;
+  }
+
+  function startObstaclePlacement() {
+    if (!state.setupStarted) return;
+    const candidate = obstacleFromCreateInputs();
+    if (!candidate) {
+      setNewObstacleError('名前、横幅、奥行を確認してください。横幅と奥行は0より大きく、50m以下にします。');
+      return;
+    }
+    setNewObstacleError('');
+    state.obstaclePlacement = { ...candidate, id: 'ghost', visible: true, locked: false };
+    state.selectedObstacleId = null;
+    clearSelection(false);
+    state.mode = 'obstacle-edit';
+    els.setupDialog.close();
+    toast('干渉物を配置する位置をクリックしてください。Escでキャンセルできます');
+    updateUI(); render();
+    els.courseCanvas.focus();
+  }
+
+  function cancelObstaclePlacement() {
+    if (!state.obstaclePlacement) return;
+    state.obstaclePlacement = null;
+    state.mode = state.start ? 'place' : 'start';
+    toast('干渉物の配置をキャンセルしました');
+    updateUI(); render();
+  }
+
+  function placeObstacleAtCursor() {
+    const ghost = state.obstaclePlacement;
+    if (!ghost) return;
+    const obstacle = INTERFERENCE_OBSTACLES.updateObstacle(ghost, { id: makeId(), x: state.cursor.x, y: state.cursor.y });
+    const validity = obstacle && obstaclePlacementValidity(obstacle);
+    if (!obstacle || !validity?.valid) {
+      toast(validity?.reason === 'room-cutout' ? '切り抜き領域には干渉物を配置できません' : 'レイアウトスペース内へ配置してください');
+      return;
+    }
+    snapshot();
+    state.obstacles.push(obstacle);
+    state.obstaclePlacement = null;
+    state.mode = state.start ? 'place' : 'start';
+    selectObstacle(obstacle.id, { mode: false });
+    if (obstacleOverlapsCourse(obstacle)) toast('干渉物を配置しました。コースパーツと重なっています');
+    else toast('干渉物を配置しました');
+    persistLocal(); updateUI(); render();
+  }
+
+  function obstacleHitTest(x, y) {
+    return [...state.obstacles].reverse().find(obstacle => obstacle.visible && OBSTACLE_GEOMETRY.pointInPolygon({ x, y }, OBSTACLE_GEOMETRY.corners(obstacle))) || null;
+  }
+
+  function replaceObstacle(next, sync = true) {
+    state.obstacles = state.obstacles.map(obstacle => obstacle.id === next.id ? next : obstacle);
+    if (sync) { persistLocal(); updateUI(); render(); }
+  }
+
+  function setObstacleEditorError(message = '') {
+    if (!els.obstacleEditorError) return;
+    els.obstacleEditorError.hidden = !message;
+    els.obstacleEditorError.textContent = message;
+  }
+
+  function applyObstacleEditorInputs() {
+    const obstacle = selectedObstacle();
+    if (!obstacle) return;
+    const next = INTERFERENCE_OBSTACLES.updateObstacle(obstacle, {
+      name: els.obstacleNameInput.value,
+      x: Number(els.obstacleXInput.value) * 100,
+      y: Number(els.obstacleYInput.value) * 100,
+      widthCm: Number(els.obstacleWidthInput.value) * 100,
+      depthCm: Number(els.obstacleDepthInput.value) * 100,
+      rotation: Number(els.obstacleRotationInput.value),
+      visible: els.obstacleVisibleInput.checked,
+      locked: els.obstacleLockedInput.checked
+    });
+    if (!next) return setObstacleEditorError('数値を確認してください。横幅と奥行は0より大きく、50m以下にします。');
+    const geometryChanged = next.x !== obstacle.x || next.y !== obstacle.y
+      || next.widthCm !== obstacle.widthCm || next.depthCm !== obstacle.depthCm || next.rotation !== obstacle.rotation;
+    if (obstacle.locked && geometryChanged) return setObstacleEditorError('ロック中の干渉物は位置・寸法・回転を変更できません。ロックを解除してから編集してください。');
+    if (!obstaclePlacementValidity(next).valid) return setObstacleEditorError('レイアウトスペースまたは切り抜き領域との関係で、この変更は保存できません。');
+    if (next.name === obstacle.name && next.x === obstacle.x && next.y === obstacle.y
+      && next.widthCm === obstacle.widthCm && next.depthCm === obstacle.depthCm && next.rotation === obstacle.rotation
+      && next.visible === obstacle.visible && next.locked === obstacle.locked) return setObstacleEditorError('');
+    snapshot();
+    replaceObstacle(next);
+    setObstacleEditorError('');
+  }
+
+  function duplicateSelectedObstacle() {
+    const obstacle = selectedObstacle();
+    if (!obstacle) return;
+    const copy = INTERFERENCE_OBSTACLES.duplicateObstacle(obstacle, makeId, candidate => obstaclePlacementValidity(candidate).valid);
+    if (!copy) return toast('複製できる位置がありません');
+    snapshot();
+    state.obstacles.push(copy);
+    selectObstacle(copy.id);
+    persistLocal(); updateUI(); render();
+  }
+
+  function deleteSelectedObstacle() {
+    const obstacle = selectedObstacle();
+    if (!obstacle) return;
+    if (obstacle.locked) return toast('ロック中の干渉物は削除できません');
+    snapshot();
+    state.obstacles = state.obstacles.filter(item => item.id !== obstacle.id);
+    state.selectedObstacleId = null;
+    persistLocal(); updateUI(); render();
   }
 
   function resetPointerInteraction() {
@@ -4279,6 +4589,49 @@
   }
   function makeId() { return globalThis.crypto?.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
+  function updateObstacleList() {
+    if (!els.obstacleList) return;
+    els.obstacleList.replaceChildren();
+    if (!state.obstacles.length) {
+      els.obstacleList.textContent = '設定済みの干渉物はありません。';
+      els.obstacleList.className = 'obstacle-list empty-summary';
+      return;
+    }
+    els.obstacleList.className = 'obstacle-list';
+    state.obstacles.forEach(obstacle => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      const label = document.createElement('strong'); label.textContent = obstacle.name;
+      const status = document.createElement('small'); status.textContent = `${obstacle.visible ? '表示' : '非表示'}${obstacle.locked ? ' / ロック' : ''}`;
+      button.append(label, status);
+      button.addEventListener('click', () => selectObstacle(obstacle.id, { closeSetup: true }));
+      els.obstacleList.append(button);
+    });
+  }
+
+  function updateObstacleEditor() {
+    const obstacle = selectedObstacle();
+    if (els.obstacleEditorPanel) els.obstacleEditorPanel.hidden = !obstacle;
+    if (!obstacle) return;
+    const values = {
+      obstacleNameInput: obstacle.name,
+      obstacleXInput: (obstacle.x / 100).toFixed(2),
+      obstacleYInput: (obstacle.y / 100).toFixed(2),
+      obstacleWidthInput: (obstacle.widthCm / 100).toFixed(2),
+      obstacleDepthInput: (obstacle.depthCm / 100).toFixed(2),
+      obstacleRotationInput: String(obstacle.rotation)
+    };
+    Object.entries(values).forEach(([id, value]) => {
+      if (els[id] && document.activeElement !== els[id]) els[id].value = value;
+    });
+    els.obstacleVisibleInput.checked = obstacle.visible;
+    els.obstacleLockedInput.checked = obstacle.locked;
+    ['obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput'].forEach(id => { if (els[id]) els[id].disabled = obstacle.locked; });
+    if (els.deleteObstacleBtn) els.deleteObstacleBtn.disabled = obstacle.locked;
+    if (els.duplicateObstacleBtn) els.duplicateObstacleBtn.disabled = false;
+    if (els.obstacleCollisionWarning) els.obstacleCollisionWarning.hidden = !obstacleOverlapsCourse(obstacle);
+  }
+
   function updateUI() {
     document.querySelectorAll('[data-mode]').forEach(button => button.classList.toggle('active', button.dataset.mode === state.mode));
     document.querySelectorAll('[data-part]').forEach(button => {
@@ -4290,6 +4643,8 @@
 
     const modeLabel = state.layoutMove.active
       ? 'レイアウト全体移動'
+      : state.mode === 'obstacle-edit'
+        ? '干渉物配置'
       : state.mode === 'start'
         ? 'スタート配置'
         : MODE_LABELS[state.mode];
@@ -4383,11 +4738,16 @@
         els.deleteCutoutBtn.disabled = cutout.locked;
       }
     }
+    const canStartObstaclePlacement = NEW_LAYOUT_TABS.canStartSpaceAdjustment(state);
+    if (els.startObstaclePlacementBtn) els.startObstaclePlacementBtn.disabled = !canStartObstaclePlacement;
+    if (els.newObstacleGuide) els.newObstacleGuide.hidden = canStartObstaclePlacement;
+    updateObstacleList();
+    updateObstacleEditor();
     updateCutoutDimensionOverlay();
     updateFastPathGuide();
     updateSnapCandidatePanel(proposal);
 
-    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color','boundary','cutout'].includes(state.mode);
+    const showInstruction = state.layoutMove.active || state.mode === 'start' || state.mode === 'place' || ['move','delete','color','boundary','cutout','obstacle-edit'].includes(state.mode);
     els.instruction.classList.toggle('hidden', !showInstruction);
     if (state.layoutMove.active) {
       els.instruction.innerHTML = '<strong>レイアウト全体を移動中</strong><span>マウスで移動 → クリックで固定・Esc／右クリックで取消</span>';
@@ -4405,6 +4765,8 @@
       els.instruction.innerHTML = '<strong>設置範囲設定</strong><span>左パネルのmm入力で設置範囲を変更。既存コースは移動しません。</span>';
     } else if (state.mode === 'cutout') {
       els.instruction.innerHTML = '<strong>部屋形状作成</strong><span>ドラッグで切り抜きを作成。選択後はドラッグ移動・矢印10mm・Shift+矢印100mm。</span>';
+    } else if (state.mode === 'obstacle-edit') {
+      els.instruction.innerHTML = '<strong>干渉物を配置</strong><span>カーソル位置をクリックして配置・Escでキャンセル</span>';
     }
 
     els.gridBtn.classList.toggle('active', state.showGrid);
@@ -4414,7 +4776,11 @@
     els.deleteSelectionBtn.disabled = !state.selectedIds.length;
     els.colorSelectionBtn.disabled = !state.selectedIds.length;
 
-    if (state.selectedIds.length) {
+    if (selectedObstacle()) {
+      const obstacle = selectedObstacle();
+      els.selectionInfo.className = 'selection-info';
+      els.selectionInfo.innerHTML = `<strong>干渉物：${obstacle.name}</strong><br>${(obstacle.widthCm / 100).toFixed(2)}m × ${(obstacle.depthCm / 100).toFixed(2)}m / ${obstacle.rotation}°${obstacle.locked ? '<br>ロック中' : ''}`;
+    } else if (state.selectedIds.length) {
       const names = selectedParts().reduce((acc, p) => {
         const name = partDisplayName(p);
         acc[name] = (acc[name] || 0) + 1;
