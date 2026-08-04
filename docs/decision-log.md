@@ -283,3 +283,14 @@
 
 - Each cyan CAD dimension line now owns its exact world start/end points. Canvas drawing and the HTML label both consume that one line object; the label position is the midpoint after those endpoints are transformed into canvas-wrap CSS pixels. The centered CSS transform remains the only label-origin correction.
 - Effective-room cache entries include normalized horizontal and vertical boundary segments as well as corners. Wall snapping projects to a segment only within its finite extent, uses 8px/14px enter/exit hysteresis, and is secondary to 12px/18px corner snapping. A moved cutout can align matching vertical or horizontal edges while retaining free movement along the wall.
+
+### Connection-face authority and dimension audit (2026-08-04)
+
+- The verified 370mm JCJC outer end-face width is now connector data
+  (`connectionWidthMm`), separate from the legacy 36cm raster/visual lane
+  width. Existing image and collision dimensions were not inferred or changed.
+- Dynamic connection faces use world connector positions and headings in all
+  render paths. Persisted graph edges own one seam, so a connected pair cannot
+  render a double line; unconnected faces remain visible.
+- The complete observed catalog audit and outstanding physical measurements are
+  recorded in `docs/part-dimension-audit-2026-08-04.md`.

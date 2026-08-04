@@ -11,8 +11,34 @@
     selectedColor: 'rgba(30, 121, 158, .78)',
     lineWidth: 0.52,
     selectedLineWidth: 0.72,
-    edgeInset: 1.4
+    edgeInset: 0
   });
+
+  const DEFAULT_CONNECTION_WIDTH_MM = 370;
+
+  function finite(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+  }
+
+  // The heading points along travel; the connection face is perpendicular to
+  // it and therefore remains correct for mirrored and rotated corners.
+  function connectorFace(endpoint, options = {}) {
+    const widthMm = finite(endpoint?.connectionWidthMm, finite(options.connectionWidthMm, DEFAULT_CONNECTION_WIDTH_MM));
+    const insetCm = Math.max(0, finite(options.edgeInsetCm));
+    const halfWidthCm = Math.max(0, widthMm / 20 - insetCm);
+    const headingDeg = finite(endpoint?.heading ?? endpoint?.directionDeg);
+    const headingRad = headingDeg * Math.PI / 180;
+    const perpendicular = { x: -Math.sin(headingRad), y: Math.cos(headingRad) };
+    const center = { x: finite(endpoint?.x), y: finite(endpoint?.y) };
+    return {
+      center,
+      headingDeg,
+      widthMm,
+      start: { x: center.x - perpendicular.x * halfWidthCm, y: center.y - perpendicular.y * halfWidthCm },
+      end: { x: center.x + perpendicular.x * halfWidthCm, y: center.y + perpendicular.y * halfWidthCm }
+    };
+  }
 
   function findConnectedSeams(endpoints, connects) {
     if (!Array.isArray(endpoints) || typeof connects !== 'function') return [];
@@ -65,5 +91,5 @@
     };
   }
 
-  return Object.freeze({ DEFAULT_STYLE, findConnectedSeams, resolveStyle });
+  return Object.freeze({ DEFAULT_STYLE, DEFAULT_CONNECTION_WIDTH_MM, connectorFace, findConnectedSeams, resolveStyle });
 });

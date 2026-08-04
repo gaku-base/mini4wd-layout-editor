@@ -825,7 +825,8 @@
       drawPart(c, part, {
         exportMode: !!options.exportMode,
         selected: options.selected ? isSelected(part.id) : false,
-        hovered: options.selected && state.hoveredPartId === part.id
+        hovered: options.selected && state.hoveredPartId === part.id,
+        connectedConnectorIds: connectedConnectorIdsForPart(part.id)
       });
       drawCornerJointsForPart(c, part, earlier);
       drawOwnedConnectionSeams(c, part, options);
@@ -841,7 +842,7 @@
     for (const seam of seams) {
       const style = PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams, selected: !!options.selected && isSelected(owner.id), exportMode: !!options.exportMode });
       if (!style) continue;
-      const halfWidth = TRACK_WIDTH_CM / 2 - style.edgeInset;
+      const halfWidth = (Number(seam.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM) / 20 - style.edgeInset;
       c.save(); c.translate(seam.point.x, seam.point.y); c.rotate(seam.heading * Math.PI / 180);
       c.strokeStyle = style.color; c.lineWidth = style.lineWidth; c.lineCap = 'butt';
       c.beginPath(); c.moveTo(0, -halfWidth); c.lineTo(0, halfWidth); c.stroke(); c.restore();
@@ -860,7 +861,7 @@
     // CAD-only dimensions, handles, previews, and selection frames are drawn
     // separately and never reach this export path.
     drawRoomShape(c);
-    if (state.start) drawStartLane(c, state.start, true);
+    if (state.start) drawStartLane(c, state.start, true, false, { connectedConnectorIds: connectedConnectorIdsForPart('start') });
     drawPartsInLayerOrder(c, { exportMode: true });
   }
 
@@ -934,7 +935,7 @@
     ctx.scale(state.view.scale, state.view.scale);
     drawField(ctx);
     drawRoomShape(ctx);
-    if (state.start) drawStartLane(ctx, state.start, false);
+    if (state.start) drawStartLane(ctx, state.start, false, false, { connectedConnectorIds: connectedConnectorIdsForPart('start'), selected: isSelected('start') });
     drawPartsInLayerOrder(ctx, { selected: true });
     drawMissingStartWarning(ctx);
     if (state.layoutMove.active) drawLayoutMoveOverlay(ctx);
@@ -1429,6 +1430,32 @@
     if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
     if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
+    drawPartConnectionFaces(c, part, opts);
+  }
+
+  // Connection positions and headings come from the same world connectors as
+  // snapping, never from raster image bounds or transparent padding.
+  function drawPartConnectionFaces(c, part, options = {}) {
+    const hidden = new Set(options.connectedConnectorIds || []);
+    const style = PART_SEAMS.resolveStyle({
+      enabled: RENDER_FEATURES.partSeams,
+      selected: !!options.selected,
+      exportMode: !!options.exportMode
+    });
+    if (!style) return;
+    for (const endpoint of partEndpoints(part)) {
+      if (hidden.has(endpoint.connectorId)) continue;
+      const face = PART_SEAMS.connectorFace(endpoint, { edgeInsetCm: style.edgeInset });
+      c.save();
+      c.strokeStyle = style.color;
+      c.lineWidth = style.lineWidth;
+      c.lineCap = 'butt';
+      c.beginPath();
+      c.moveTo(face.start.x, face.start.y);
+      c.lineTo(face.end.x, face.end.y);
+      c.stroke();
+      c.restore();
+    }
   }
 
 
@@ -1979,7 +2006,7 @@
   }
 
 
-  function drawStartLane(c, start, exportMode, ghost = false) {
+  function drawStartLane(c, start, exportMode, ghost = false, options = {}) {
     c.save();
     c.translate(start.x, start.y);
     c.rotate(start.rotation * Math.PI / 180);
@@ -2020,6 +2047,7 @@
       c.beginPath(); c.moveTo(START_DEF.w / 2 - 2, 0); c.lineTo(START_DEF.w / 2 - 7, -3.5); c.lineTo(START_DEF.w / 2 - 7, 3.5); c.closePath(); c.fill();
     }
     c.restore();
+    drawPartConnectionFaces(c, { ...start, id: 'start', type: 'start' }, { ...options, exportMode });
   }
 
 
@@ -2084,7 +2112,7 @@
         y: start.y + offset.y,
         heading: normalizeRotation(ep.heading + start.rotation),
         zMm: (Number(start.zMm) || 0) + (Number(ep.localZMm) || 0), pitchDeg: Number(ep.pitchDeg) || 0,
-        bankAngleDeg: Number(ep.bankAngleDeg) || 0, shape: ep.shape, laneCount: ep.laneCount,
+        bankAngleDeg: Number(ep.bankAngleDeg) || 0, connectionWidthMm: ep.connectionWidthMm, shape: ep.shape, laneCount: ep.laneCount,
         connectorId: ep.id, connectorRole: ep.connectorRole || null, sourceId: 'start', partId: 'start', sourceType: 'start', endpointIndex, label: ep.label,
         connectionState: endpointState()
       };
@@ -2101,7 +2129,7 @@
         y: world.y,
         heading: world.directionDeg,
         zMm: world.zMm, pitchDeg: world.pitchDeg,
-        bankAngleDeg: world.bankAngleDeg, shape: ep.shape, laneCount: ep.laneCount,
+        bankAngleDeg: world.bankAngleDeg, connectionWidthMm: ep.connectionWidthMm, shape: ep.shape, laneCount: ep.laneCount,
         connectorId: ep.id, connectorRole: ep.connectorRole || null, sourceId: part.id, partId: part.id,
         sourceType: part.type,
         endpointIndex,
@@ -2124,6 +2152,15 @@
     if (state.start) endpoints.push(...startEndpoints(state.start));
     state.parts.forEach(part => endpoints.push(...partEndpoints(part)));
     return endpoints;
+  }
+
+  function connectedConnectorIdsForPart(partId) {
+    const ids = new Set();
+    for (const edge of LAYOUT_GRAPH.dedupeEdges(state.connections)) {
+      if (edge.partAId === partId) ids.add(edge.connectorAId);
+      if (edge.partBId === partId) ids.add(edge.connectorBId);
+    }
+    return [...ids];
   }
 
   function allLayoutParts() {
