@@ -181,6 +181,24 @@ kbd {
 .toolbar-button { padding: 0 10px; }
 .toolbar-button:hover, .toolbar-button.active { border-color: var(--accent); }
 .toolbar-button.accent { color: var(--primary); border-color: #554817; }
+.drag-trash {
+  min-height: 42px;
+  margin: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed #52616d;
+  border-radius: 8px;
+  background: #111922;
+  color: #b9c5ce;
+  font-size: 13px;
+  pointer-events: none;
+  transition: background .12s ease, border-color .12s ease, color .12s ease, transform .12s ease;
+}
+.drag-trash-icon { font-size: 20px; line-height: 1; }
+.drag-trash.is-dragging { border-color: #d1a32c; background: #2a2411; color: #ffe4a0; }
+.drag-trash.is-delete-target { border-color: #ff6072; background: #481823; color: #fff1f3; transform: scale(1.01); }
 .canvas-wrap { flex: 1; min-height: 0; position: relative; overflow: hidden; }
 #courseCanvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
 .cutout-dimension-overlay { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
@@ -268,6 +286,7 @@ kbd {
   overflow-x: auto;
   white-space: nowrap;
 }
+.statusbar[hidden] { display: none; }
 .statusbar > div { display: flex; align-items: center; gap: 6px; font-size: 9px; }
 .status-label { color: #5f6e80; font-weight: 900; letter-spacing: .08em; }
 .statusbar strong { color: #dce4ed; font-size: 10px; }

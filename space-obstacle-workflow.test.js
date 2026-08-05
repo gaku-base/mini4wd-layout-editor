@@ -21,9 +21,8 @@ test('sub-edit mode bar has return and finish controls that clear transient edit
   assert.match(html, /id="returnToSetupBtn"/);
   assert.match(html, /id="finishSubEditBtn"/);
   const exitSection = app.slice(app.indexOf('function exitSubEditMode'), app.indexOf('function applySetup'));
-  assert.match(exitSection, /state\.obstaclePlacement = null/);
-  assert.match(exitSection, /state\.cad\.selectedCutoutId = null/);
-  assert.match(exitSection, /clearSelection\(false\)/);
+  assert.match(exitSection, /cleanupEditorModeState\(\)/);
+  assert.match(exitSection, /state\.subEditMode = null/);
   assert.match(exitSection, /setNewLayoutModalTab\(tab\)/);
   assert.doesNotMatch(exitSection, /snapshot\(/);
 });

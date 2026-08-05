@@ -320,3 +320,20 @@
   render a double line; unconnected faces remain visible.
 - The complete observed catalog audit and outstanding physical measurements are
   recorded in `docs/part-dimension-audit-2026-08-04.md`.
+
+### Initial-setup draft isolation and drag-to-trash deletion (2026-08-05)
+
+- Starting a new layout creates a fresh, transient setup draft with no room
+  cutouts or interference obstacles. Editing initial settings for an existing
+  layout retains its current values, and cancellation restores the serialized
+  baseline without persisting wizard changes.
+- Cutouts and unlocked obstacles can be deleted by dragging them to the DOM
+  trash target above the canvas. The target is intentionally outside canvas
+  rendering, is not exported to PNG, and a completed drag-to-trash operation
+  records one undo entry from the pre-drag state. Escape and pointer
+  cancellation restore the original item instead of committing the drag.
+- New-layout wizard confirmation always resets the view from the confirmed
+  field dimensions; field coordinates remain centimetres while the wizard
+  converts metres to centimetres once. The bottom status footer is hidden only
+  while a sub-editor is active, and its canvas backing size is refreshed when
+  the footer visibility changes.
