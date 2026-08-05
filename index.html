@@ -13,7 +13,7 @@
         <div class="brand-mark" aria-hidden="true">M4</div>
         <div>
           <h1>COURSE LAYOUT</h1>
-          <p>2D Course Layout Release Candidate <span class="version">v1.1 RC2</span></p>
+          <p>2D Course Layout Release Candidate <span class="version">v1.1 RC3</span></p>
         </div>
       </div>
       <div class="top-actions">
@@ -119,6 +119,11 @@
           </div>
         </div>
 
+        <div id="dragTrash" class="drag-trash" aria-live="polite">
+          <span class="drag-trash-icon" aria-hidden="true">🗑</span>
+          <strong id="dragTrashLabel">削除</strong>
+        </div>
+
         <div id="canvasWrap" class="canvas-wrap">
           <div id="subEditModeBar" class="sub-edit-mode-bar" hidden>
             <strong id="subEditModeTitle"></strong>
@@ -140,7 +145,7 @@
           <div id="toast" class="toast" role="status" aria-live="polite"></div>
         </div>
 
-        <footer class="statusbar">
+        <footer id="statusBar" class="statusbar">
           <div><span class="status-label">MODE</span><strong id="statusMode">スタート配置</strong></div>
           <div><span class="status-label">PART</span><strong id="statusPart">スタートレーン</strong></div>
           <div><span class="status-label">ROT</span><strong id="statusRotation">0°</strong></div>
@@ -159,7 +164,7 @@
         <section class="panel">
           <div class="panel-heading">
             <h2>作成範囲</h2>
-            <button id="editFieldBtn" class="text-button" type="button">変更</button>
+            <button id="editFieldBtn" class="text-button" type="button">初期設定を編集</button>
           </div>
           <dl class="metric-list">
             <div><dt>横幅</dt><dd id="fieldWidthText">6.00 m</dd></div>
@@ -259,6 +264,7 @@
         </div>
       </div>
       <div class="setup-tabs" role="tablist" aria-label="新規レイアウトの設定">
+      <div class="setup-note setup-status-note"><strong id="wizardStageLabel">初期設定ウィザード</strong><span id="wizardProgress">1 レイアウトスペース</span></div>
         <button id="layoutSpaceTab" class="setup-tab" type="button" role="tab" aria-selected="true" aria-controls="layoutSpacePanel" data-setup-tab="layout-space">レイアウトスペース</button>
         <button id="spaceAdjustmentTab" class="setup-tab" type="button" role="tab" aria-selected="false" aria-controls="spaceAdjustmentPanel" data-setup-tab="space-adjustment" tabindex="-1">スペース修正</button>
         <button id="interferenceTab" class="setup-tab" type="button" role="tab" aria-selected="false" aria-controls="interferencePanel" data-setup-tab="interference" tabindex="-1">干渉物設定</button>
@@ -290,7 +296,7 @@
         </div>
         <div class="dialog-actions">
           <button id="cancelSetupBtn" class="button ghost" value="cancel" type="button">キャンセル</button>
-          <button class="button primary large" value="default" type="submit">サイズを決定</button>
+          <button id="wizardNextLayoutBtn" class="button primary large" value="default" type="submit">次へ</button>
         </div>
       </section>
       <section id="spaceAdjustmentPanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="spaceAdjustmentTab" hidden>
@@ -298,7 +304,7 @@
         <p class="setup-tab-description">レイアウトスペースが長方形以外の場合に、不要な部分を切り抜いて形状を修正します。</p>
         <p id="spaceAdjustmentGuide" class="setup-note setup-status-note">先に「レイアウトスペース」でサイズを設定してください。</p>
         <div class="dialog-actions setup-tab-actions">
-          <button id="backToLayoutSpaceBtn" class="button ghost" type="button">レイアウトスペースへ戻る</button>
+          <button id="backToLayoutSpaceBtn" class="button ghost" type="button">戻る</button>
           <button id="startSpaceAdjustmentBtn" class="button primary" type="button" disabled>スペース修正を開始</button>
         </div>
       </section>
@@ -313,12 +319,20 @@
         <p id="newObstacleGuide" class="setup-note setup-status-note">先に「レイアウトスペース」でサイズを設定してください。</p>
         <p id="newObstacleError" class="form-error" hidden></p>
         <div class="dialog-actions setup-tab-actions">
-          <button id="backToLayoutSpaceFromObstacleBtn" class="button ghost" type="button">レイアウトスペースへ戻る</button>
+          <button id="backToLayoutSpaceFromObstacleBtn" class="button ghost" type="button">スペース修正へ戻る</button>
           <button id="startObstaclePlacementBtn" class="button primary" type="button" disabled>配置を開始</button>
         </div>
         <div class="obstacle-list-section">
           <h4>設定済みの干渉物</h4>
           <div id="obstacleList" class="obstacle-list empty-summary">設定済みの干渉物はありません。</div>
+        </div>
+      </section>
+      <section id="setupConfirmPanel" class="setup-tab-panel" hidden>
+        <h3>確認</h3>
+        <p id="wizardConfirmSummary" class="setup-note setup-status-note"></p>
+        <div class="dialog-actions setup-tab-actions">
+          <button id="wizardBackConfirmBtn" class="button ghost" type="button">戻る</button>
+          <button id="wizardCreateBtn" class="button primary" type="button">レイアウトを作成</button>
         </div>
       </section>
     </form>
