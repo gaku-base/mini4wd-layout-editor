@@ -350,3 +350,20 @@
   intermediate wizard-transition frame.
 - Field dimensions, view fitting, persistence, export, and editor-mode state are
   unchanged; existing render requests remain coalesced into one animation frame.
+
+### Square-space initial setup branching (2026-08-05)
+
+- New layouts begin with one "square space" form for both squares and
+  rectangles. Width, depth, and grid keep the existing metre-to-centimetre
+  conversion; two transient checkboxes select room-shape adjustment and
+  interference-obstacle setup.
+- With neither option selected, the confirmed dimensions are fitted and Start
+  placement begins immediately. Optional stages are selected by one pure flow
+  function; a confirmation screen appears only after at least one optional
+  stage, so the ordinary path has no extra confirmation step.
+- Interference setup remains active after each placement. Its sub-editor bar
+  owns the placed count, same-size repeat, different-obstacle entry, and next
+  actions; the former always-visible return-to-space action is removed.
+- Wizard options and obstacle-creation form state remain transient. JSON,
+  localStorage, undo records, PNG output, collision behavior, and established
+  unit values are unchanged.

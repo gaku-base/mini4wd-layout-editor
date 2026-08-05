@@ -34,6 +34,8 @@
   if (!SNAP_TOGGLE) throw new Error('snap-toggle.jsが読み込まれていません');
   const NEW_LAYOUT_TABS = window.M4WD_NEW_LAYOUT_TABS;
   if (!NEW_LAYOUT_TABS) throw new Error('new-layout-tabs.jsが読み込まれていません');
+  const INITIAL_LAYOUT_FLOW = window.M4WD_INITIAL_LAYOUT_FLOW;
+  if (!INITIAL_LAYOUT_FLOW) throw new Error('initial-layout-flow.jsが読み込まれていません');
   const OBSTACLE_GEOMETRY = window.M4WD_OBSTACLE_GEOMETRY;
   if (!OBSTACLE_GEOMETRY) throw new Error('obstacle-geometry.jsが読み込まれていません');
   const OBSTACLE_COURSE_WARNINGS = window.M4WD_OBSTACLE_COURSE_WARNINGS;
@@ -126,7 +128,7 @@
       groupSnap: null, pendingPlacement: false, pendingPlacementProposal: null, pendingObstaclePlacement: false
     },
     layoutMove: { active: false, anchor: null, base: null, previousMode: 'place', pointer: null },
-    wizard: { active: false, step: 'layout-space', isNew: false, baseline: null },
+    wizard: { active: false, step: 'layout-space', isNew: false, baseline: null, adjustRoomShape: false, configureObstacles: false },
     history: [],
     future: [],
     setupStarted: false,
@@ -174,8 +176,8 @@
     const ids = [
       'courseCanvas','canvasWrap','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
       'newBtn','saveBtn','loadInput','exportBtn','cancelSetupBtn','instruction','toast','partsList','partsSummary',
-      'layoutSpacePanel','spaceAdjustmentPanel','interferencePanel','spaceAdjustmentGuide','backToLayoutSpaceBtn','startSpaceAdjustmentBtn',
-      'newObstacleNameInput','newObstacleWidthInput','newObstacleDepthInput','newObstacleGuide','newObstacleError','startObstaclePlacementBtn','backToLayoutSpaceFromObstacleBtn','obstacleList',
+      'layoutSpacePanel','spaceAdjustmentPanel','interferencePanel','spaceAdjustmentGuide','backToLayoutSpaceBtn','startSpaceAdjustmentBtn','configureObstaclesInput','adjustRoomShapeInput',
+      'newObstacleNameInput','newObstacleWidthInput','newObstacleDepthInput','newObstacleRotationInput','newObstacleGuide','newObstacleError','startObstaclePlacementBtn','finishObstacleSetupBtn','obstacleList',
       'obstacleEditorPanel','clearObstacleSelectionBtn','obstacleCollisionWarning','obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput','obstacleVisibleInput','obstacleLockedInput','obstacleEditorError','rotateObstacleLeftBtn','rotateObstacleRightBtn','duplicateObstacleBtn','deleteObstacleBtn',
       'modeBadge','statusBar','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
@@ -186,7 +188,7 @@
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
       'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
       'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','rotateCutoutLeftBtn','rotateCutoutRightBtn','clearCutoutSelectionBtn','cutoutRotationNote','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay',
-      'subEditModeBar','subEditModeTitle','returnToSetupBtn','finishSubEditBtn','dragTrash','dragTrashLabel',
+      'subEditModeBar','subEditModeTitle','subEditObstacleCount','repeatObstaclePlacementBtn','addObstacleFromBarBtn','returnToSetupBtn','finishSubEditBtn','dragTrash','dragTrashLabel',
       'wizardProgress','wizardStageLabel','setupConfirmPanel','wizardConfirmSummary','wizardBackConfirmBtn','wizardCreateBtn'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
@@ -364,17 +366,11 @@
       });
     });
     els.backToLayoutSpaceBtn.addEventListener('click', () => setNewLayoutModalTab('layout-space', { focus: true }));
-    els.startSpaceAdjustmentBtn.addEventListener('click', () => {
-      if (!state.wizard.active) return;
-      ensureSetupDialogClosed();
-      enterSubEditMode('space-adjustment', 'cutout');
-      toast('スペース修正を開始しました');
-      updateUI();
-      render();
-      els.courseCanvas.focus();
-    });
-    els.backToLayoutSpaceFromObstacleBtn?.addEventListener('click', () => setNewLayoutModalTab('space-adjustment', { focus: true }));
+    els.startSpaceAdjustmentBtn.addEventListener('click', beginWizardSpaceAdjustment);
     els.startObstaclePlacementBtn?.addEventListener('click', startObstaclePlacement);
+    els.finishObstacleSetupBtn?.addEventListener('click', () => continueInitialSetupAfter('interference'));
+    els.repeatObstaclePlacementBtn?.addEventListener('click', repeatObstaclePlacement);
+    els.addObstacleFromBarBtn?.addEventListener('click', () => openWizardObstacleCreator({ resetForm: true }));
     els.clearObstacleSelectionBtn?.addEventListener('click', () => clearObstacleSelection());
     els.rotateObstacleLeftBtn?.addEventListener('click', () => rotateSelectedObstacle(-45));
     els.rotateObstacleRightBtn?.addEventListener('click', () => rotateSelectedObstacle(45));
@@ -472,11 +468,13 @@
     });
     els.returnToSetupBtn?.addEventListener('click', () => exitSubEditMode({ returnToSetup: true }));
     els.finishSubEditBtn?.addEventListener('click', () => exitSubEditMode({ returnToSetup: false }));
-    els.wizardBackConfirmBtn?.addEventListener('click', () => setNewLayoutModalTab('interference', { focus: true }));
+    els.wizardBackConfirmBtn?.addEventListener('click', () => setNewLayoutModalTab(NEW_LAYOUT_TABS.DEFAULT_TAB, { focus: true }));
     els.wizardCreateBtn?.addEventListener('click', finalizeInitialSetup);
   }
 
   function openSetup(reset) {
+    const adjustRoomShape = !reset && state.roomCutouts.length > 0;
+    const configureObstacles = !reset && state.obstacles.length > 0;
     if (reset) {
       els.fieldWidthInput.value = '6.0';
       els.fieldHeightInput.value = '4.0';
@@ -488,8 +486,18 @@
       els.gridInput.value = String(state.field.gridCm);
       els.cancelSetupBtn.style.visibility = 'visible';
     }
-    state.wizard = { active: true, step: 'layout-space', isNew: !!reset, baseline: JSON.stringify(serializeState()) };
+    state.wizard = {
+      active: true,
+      step: 'layout-space',
+      isNew: !!reset,
+      baseline: JSON.stringify(serializeState()),
+      adjustRoomShape,
+      configureObstacles
+    };
     if (reset) prepareNewInitialSetupDraft();
+    if (els.adjustRoomShapeInput) els.adjustRoomShapeInput.checked = adjustRoomShape;
+    if (els.configureObstaclesInput) els.configureObstaclesInput.checked = configureObstacles;
+    prepareObstacleCreateForm();
     els.setupDialog.dataset.reset = reset ? 'true' : 'false';
     setNewLayoutModalTab(NEW_LAYOUT_TABS.DEFAULT_TAB);
     ensureSetupDialogOpen();
@@ -532,9 +540,9 @@
     els.spaceAdjustmentGuide.hidden = configured;
     if (els.startObstaclePlacementBtn) els.startObstaclePlacementBtn.disabled = !configured;
     if (els.newObstacleGuide) els.newObstacleGuide.hidden = configured;
-    if (els.wizardProgress) els.wizardProgress.textContent = selected === 'confirm' ? '4 確認' : `${NEW_LAYOUT_TABS.TABS.findIndex(tab => tab.id === selected) + 1} ${NEW_LAYOUT_TABS.TABS.find(tab => tab.id === selected)?.label || ''}`;
+    if (els.wizardProgress) els.wizardProgress.textContent = selected === 'confirm' ? '確認' : (NEW_LAYOUT_TABS.TABS.find(tab => tab.id === selected)?.label || '四角形スペース');
     if (els.wizardStageLabel) els.wizardStageLabel.textContent = state.wizard.isNew ? '初期設定ウィザード' : '初期設定を編集';
-    if (selected === 'confirm' && els.wizardConfirmSummary) els.wizardConfirmSummary.textContent = `レイアウトスペース: ${(state.field.widthCm / 100).toFixed(1)}m × ${(state.field.heightCm / 100).toFixed(1)}m / グリッド ${state.field.gridCm}cm\nスペース修正: ${state.roomCutouts.length}件\n干渉物: ${state.obstacles.length}件${state.obstacles.length ? `（${state.obstacles.map(item => item.name).join('、')}）` : ''}`;
+    if (selected === 'confirm' && els.wizardConfirmSummary) els.wizardConfirmSummary.textContent = `四角形スペース: ${(state.field.widthCm / 100).toFixed(1)}m × ${(state.field.heightCm / 100).toFixed(1)}m / グリッド ${state.field.gridCm}cm\n部屋形状調整: ${state.wizard.adjustRoomShape ? `あり（修正範囲 ${state.roomCutouts.length}件）` : 'なし'}\n干渉物: ${state.obstacles.length}件${state.obstacles.length ? `（${state.obstacles.map(item => item.name).join('、')}）` : ''}`;
     updateObstacleList();
     if (els.spaceAdjustmentGuide && view.selected === 'space-adjustment' && view.canAdjustSpace) {
       els.spaceAdjustmentGuide.hidden = false;
@@ -544,17 +552,22 @@
 
   function exitSubEditMode({ returnToSetup }) {
     const tab = state.subEditMode || NEW_LAYOUT_TABS.DEFAULT_TAB;
-    if (state.wizard.active) endInitialSetupSubEditor();
-    else {
+    if (state.wizard.active) {
+      endInitialSetupSubEditor();
+      if (returnToSetup) {
+        setNewLayoutModalTab(NEW_LAYOUT_TABS.DEFAULT_TAB);
+        ensureSetupDialogOpen();
+        updateUI(); render();
+        return;
+      }
+      continueInitialSetupAfter(tab);
+      return;
+    } else {
       cleanupEditorModeState();
       state.subEditMode = null;
       state.mode = 'move';
     }
-    if (state.wizard.active && !returnToSetup) {
-      state.wizard.step = tab === 'space-adjustment' ? 'interference' : 'confirm';
-      setNewLayoutModalTab(state.wizard.step);
-      ensureSetupDialogOpen();
-    } else if (returnToSetup) {
+    if (returnToSetup) {
       setNewLayoutModalTab(tab);
       ensureSetupDialogOpen();
     }
@@ -596,6 +609,32 @@
       gridCm
     };
     state.siteBoundary = ROOM_BOUNDARY.defaultSiteBoundary(state.field);
+    state.wizard.adjustRoomShape = els.adjustRoomShapeInput?.checked === true;
+    state.wizard.configureObstacles = els.configureObstaclesInput?.checked === true;
+    if (state.wizard.isNew) fitView();
+    continueInitialSetupAfter('layout-space');
+  }
+
+  function continueInitialSetupAfter(completedStep) {
+    if (!state.wizard.active) return;
+    const nextStep = INITIAL_LAYOUT_FLOW.nextStep(completedStep, state.wizard);
+    if (nextStep === INITIAL_LAYOUT_FLOW.STEPS.SPACE_ADJUSTMENT) {
+      beginWizardSpaceAdjustment();
+      return;
+    }
+    if (nextStep === INITIAL_LAYOUT_FLOW.STEPS.INTERFERENCE) {
+      openWizardObstacleCreator({ resetForm: state.obstacles.length === 0 });
+      return;
+    }
+    if (nextStep === INITIAL_LAYOUT_FLOW.STEPS.CONFIRM) {
+      openWizardConfirmation();
+      return;
+    }
+    finalizeInitialSetup();
+  }
+
+  function beginWizardSpaceAdjustment() {
+    if (!state.wizard.active) return;
     state.wizard.step = 'space-adjustment';
     ensureSetupDialogClosed();
     enterSubEditMode('space-adjustment', 'cutout');
@@ -603,8 +642,28 @@
     // A new draft must never inherit the previous layout's pan or zoom while
     // its room boundary is being edited.
     if (state.wizard.isNew) fitView();
-    toast('スペース修正を開始しました');
+    toast('部屋形状調整を開始しました');
     render(); els.courseCanvas.focus();
+  }
+
+  function openWizardObstacleCreator({ resetForm = false } = {}) {
+    if (!state.wizard.active) return;
+    endInitialSetupSubEditor();
+    state.selectedObstacleId = null;
+    state.wizard.step = 'interference';
+    if (resetForm) prepareObstacleCreateForm();
+    setNewLayoutModalTab('interference');
+    ensureSetupDialogOpen();
+    updateUI(); render();
+  }
+
+  function openWizardConfirmation() {
+    if (!state.wizard.active) return;
+    endInitialSetupSubEditor();
+    state.wizard.step = 'confirm';
+    setNewLayoutModalTab('confirm');
+    ensureSetupDialogOpen();
+    updateUI(); render();
   }
 
   function finalizeInitialSetup() {
@@ -623,7 +682,7 @@
     } else if (wizard.baseline) {
       snapshotSerialized(wizard.baseline);
     }
-    state.wizard = { active: false, step: 'layout-space', isNew: false, baseline: null };
+    state.wizard = { active: false, step: 'layout-space', isNew: false, baseline: null, adjustRoomShape: false, configureObstacles: false };
     ensureSetupDialogClosed();
     recalculateLayoutWarnings();
     persistLocal();
@@ -641,7 +700,7 @@
     if (!wizard.active) return;
     cleanupEditorModeState();
     if (wizard.baseline) applySerialized(JSON.parse(wizard.baseline), false, { persist: false });
-    state.wizard = { active: false, step: 'layout-space', isNew: false, baseline: null };
+    state.wizard = { active: false, step: 'layout-space', isNew: false, baseline: null, adjustRoomShape: false, configureObstacles: false };
     state.mode = 'move';
     ensureSetupDialogClosed();
     updateUI(); render(); els.courseCanvas.focus();
@@ -4266,9 +4325,18 @@
   function obstacleFromCreateInputs() {
     const widthCm = Number(els.newObstacleWidthInput?.value) * 100;
     const depthCm = Number(els.newObstacleDepthInput?.value) * 100;
+    const rotation = Number(els.newObstacleRotationInput?.value) || 0;
     const name = String(els.newObstacleNameInput?.value || '').trim();
-    const candidate = INTERFERENCE_OBSTACLES.createObstacle({ name, x: state.cursor.x, y: state.cursor.y, widthCm, depthCm, rotation: 0 }, makeId, state.obstacles.length);
+    const candidate = INTERFERENCE_OBSTACLES.createObstacle({ name, x: state.cursor.x, y: state.cursor.y, widthCm, depthCm, rotation }, makeId, state.obstacles.length);
     return candidate;
+  }
+
+  function prepareObstacleCreateForm(source = null) {
+    if (els.newObstacleNameInput) els.newObstacleNameInput.value = INITIAL_LAYOUT_FLOW.nextObstacleName(state.obstacles);
+    if (els.newObstacleWidthInput) els.newObstacleWidthInput.value = source ? (source.widthCm / 100).toFixed(2) : '0.40';
+    if (els.newObstacleDepthInput) els.newObstacleDepthInput.value = source ? (source.depthCm / 100).toFixed(2) : '0.40';
+    if (els.newObstacleRotationInput) els.newObstacleRotationInput.value = String(source?.rotation || 0);
+    setNewObstacleError('');
   }
 
   function setNewObstacleError(message = '') {
@@ -4290,8 +4358,32 @@
     state.obstaclePlacement = { ...candidate, id: 'ghost', visible: true, locked: false };
     ensureSetupDialogClosed();
     toast('干渉物を配置する位置をクリックしてください。Escでキャンセルできます');
-    updateUI(); render();
+    updateUI();
+    if (state.wizard.isNew) fitView();
+    render();
     els.courseCanvas.focus();
+  }
+
+  function repeatObstaclePlacement() {
+    if (!state.wizard.active || state.subEditMode !== 'interference') return;
+    const source = selectedObstacle() || state.obstacles.at(-1);
+    if (!source) {
+      openWizardObstacleCreator({ resetForm: true });
+      return;
+    }
+    enterSubEditMode('interference', 'obstacle-edit');
+    state.selectedObstacleId = null;
+    state.obstaclePlacement = {
+      ...source,
+      id: 'ghost',
+      name: INITIAL_LAYOUT_FLOW.nextObstacleName(state.obstacles),
+      x: state.cursor.x,
+      y: state.cursor.y,
+      visible: true,
+      locked: false
+    };
+    toast('同じサイズの干渉物を配置する位置をクリックしてください');
+    updateUI(); render(); els.courseCanvas.focus();
   }
 
   function cancelObstaclePlacement() {
@@ -5141,13 +5233,23 @@
       // store immediately so a sub-editor cannot leave a stale canvas edge.
       if (statusVisibilityChanged) resizeCanvas();
     }
-    if (state.subEditMode === 'space-adjustment' && els.subEditModeTitle) els.subEditModeTitle.textContent = 'スペース修正中';
+    if (state.subEditMode === 'space-adjustment' && els.subEditModeTitle) els.subEditModeTitle.textContent = '部屋形状調整中';
     if (state.subEditMode === 'interference' && els.subEditModeTitle) els.subEditModeTitle.textContent = '干渉物設定中';
+    const wizardInterference = state.wizard.active && state.subEditMode === 'interference';
+    if (els.subEditObstacleCount) {
+      els.subEditObstacleCount.hidden = !wizardInterference;
+      els.subEditObstacleCount.textContent = `配置済み ${state.obstacles.length}件`;
+    }
+    if (els.repeatObstaclePlacementBtn) els.repeatObstaclePlacementBtn.hidden = !wizardInterference || state.obstacles.length === 0 || !!state.obstaclePlacement;
+    if (els.addObstacleFromBarBtn) {
+      els.addObstacleFromBarBtn.hidden = !wizardInterference;
+      els.addObstacleFromBarBtn.textContent = state.obstacles.length ? '別の干渉物を追加' : '＋干渉物を追加';
+    }
+    if (els.returnToSetupBtn) els.returnToSetupBtn.hidden = wizardInterference;
     if (state.wizard.active && state.subEditMode === 'space-adjustment') {
       if (els.returnToSetupBtn) els.returnToSetupBtn.textContent = '初期設定へ戻る';
       if (els.finishSubEditBtn) els.finishSubEditBtn.textContent = '次へ';
     } else if (state.wizard.active && state.subEditMode === 'interference') {
-      if (els.returnToSetupBtn) els.returnToSetupBtn.textContent = 'スペース修正へ戻る';
       if (els.finishSubEditBtn) els.finishSubEditBtn.textContent = '次へ';
     } else {
       if (els.returnToSetupBtn) els.returnToSetupBtn.textContent = '初期設定へ戻る';

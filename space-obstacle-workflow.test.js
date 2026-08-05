@@ -25,6 +25,9 @@ test('sub-edit mode bar has return and finish controls that clear transient edit
   assert.match(exitSection, /state\.subEditMode = null/);
   assert.match(exitSection, /setNewLayoutModalTab\(tab\)/);
   assert.doesNotMatch(exitSection, /snapshot\(/);
+  assert.match(html, /id="addObstacleFromBarBtn"/);
+  assert.match(html, /id="repeatObstaclePlacementBtn"/);
+  assert.doesNotMatch(html, />スペース修正へ戻る</);
 });
 
 test('selected cutouts and obstacles expose clear, rotate, duplicate, and delete controls', () => {

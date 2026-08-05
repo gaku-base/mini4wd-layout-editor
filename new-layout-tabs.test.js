@@ -16,6 +16,9 @@ test('new layout dialog keeps the required three tabs and layout-space default',
   assert.match(indexHtml, /id="fieldWidthInput"/);
   assert.match(indexHtml, /id="fieldHeightInput"/);
   assert.match(indexHtml, /id="gridInput"/);
+  assert.match(indexHtml, /四角形スペース/);
+  assert.equal(NEW_LAYOUT_TABS.TABS[0].label, '四角形スペース');
+  assert.equal(NEW_LAYOUT_TABS.TABS[1].label, '部屋形状調整');
 });
 
 test('tab movement wraps and space adjustment remains guarded', () => {
@@ -27,13 +30,14 @@ test('tab movement wraps and space adjustment remains guarded', () => {
   assert.match(appSource, /setMode\('cutout'\)/);
 });
 
-test('interference tab begins placement with only name and dimensions', () => {
+test('interference tab collects name, dimensions, and rotation before placement', () => {
   const interferencePanel = indexHtml.match(/<section id="interferencePanel"[\s\S]*?<\/section>/)?.[0] || '';
   assert.match(interferencePanel, /id="newObstacleNameInput"/);
   assert.match(interferencePanel, /id="newObstacleWidthInput"/);
   assert.match(interferencePanel, /id="newObstacleDepthInput"/);
+  assert.match(interferencePanel, /id="newObstacleRotationInput"/);
   assert.match(interferencePanel, /id="startObstaclePlacementBtn"/);
-  assert.doesNotMatch(interferencePanel, /newObstacle(?:X|Y|Rotation|Visible|Locked)Input/);
+  assert.doesNotMatch(interferencePanel, /newObstacle(?:X|Y|Visible|Locked)Input/);
   assert.match(indexHtml, /id="obstacleList"/);
   assert.match(indexHtml, /id="obstacleEditorPanel"/);
 });
