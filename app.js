@@ -366,7 +366,7 @@
     els.backToLayoutSpaceBtn.addEventListener('click', () => setNewLayoutModalTab('layout-space', { focus: true }));
     els.startSpaceAdjustmentBtn.addEventListener('click', () => {
       if (!state.wizard.active) return;
-      els.setupDialog.close();
+      ensureSetupDialogClosed();
       enterSubEditMode('space-adjustment', 'cutout');
       toast('スペース修正を開始しました');
       updateUI();
@@ -492,8 +492,23 @@
     if (reset) prepareNewInitialSetupDraft();
     els.setupDialog.dataset.reset = reset ? 'true' : 'false';
     setNewLayoutModalTab(NEW_LAYOUT_TABS.DEFAULT_TAB);
-    els.setupDialog.showModal();
+    ensureSetupDialogOpen();
     setTimeout(() => els.fieldWidthInput.focus(), 50);
+  }
+
+  // Wizard transitions sometimes revisit the dialog from a canvas sub-editor.
+  // Guarding its state avoids releasing and recreating the modal backdrop when
+  // the requested visibility is already active.
+  function ensureSetupDialogOpen() {
+    if (els.setupDialog.open) return false;
+    els.setupDialog.showModal();
+    return true;
+  }
+
+  function ensureSetupDialogClosed() {
+    if (!els.setupDialog.open) return false;
+    els.setupDialog.close();
+    return true;
   }
 
   function setNewLayoutModalTab(tabId, { focus = false } = {}) {
@@ -538,10 +553,10 @@
     if (state.wizard.active && !returnToSetup) {
       state.wizard.step = tab === 'space-adjustment' ? 'interference' : 'confirm';
       setNewLayoutModalTab(state.wizard.step);
-      els.setupDialog.showModal();
+      ensureSetupDialogOpen();
     } else if (returnToSetup) {
       setNewLayoutModalTab(tab);
-      els.setupDialog.showModal();
+      ensureSetupDialogOpen();
     }
     updateUI();
     render();
@@ -582,7 +597,7 @@
     };
     state.siteBoundary = ROOM_BOUNDARY.defaultSiteBoundary(state.field);
     state.wizard.step = 'space-adjustment';
-    els.setupDialog.close();
+    ensureSetupDialogClosed();
     enterSubEditMode('space-adjustment', 'cutout');
     updateUI();
     // A new draft must never inherit the previous layout's pan or zoom while
@@ -609,7 +624,7 @@
       snapshotSerialized(wizard.baseline);
     }
     state.wizard = { active: false, step: 'layout-space', isNew: false, baseline: null };
-    els.setupDialog.close();
+    ensureSetupDialogClosed();
     recalculateLayoutWarnings();
     persistLocal();
     if (wizard.isNew) beginStartPlacement();
@@ -628,7 +643,7 @@
     if (wizard.baseline) applySerialized(JSON.parse(wizard.baseline), false, { persist: false });
     state.wizard = { active: false, step: 'layout-space', isNew: false, baseline: null };
     state.mode = 'move';
-    els.setupDialog.close();
+    ensureSetupDialogClosed();
     updateUI(); render(); els.courseCanvas.focus();
   }
 
@@ -720,7 +735,7 @@
       resetPointerInteraction();
     }
     state.setupStarted = true;
-    els.setupDialog.close();
+    ensureSetupDialogClosed();
     fitView();
     updateUI();
     render();
@@ -1139,31 +1154,42 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  function resizeCanvas() {
+  function measureCanvasFrame() {
     const rect = els.canvasWrap.getBoundingClientRect();
     const nextDpr = Math.min(window.devicePixelRatio || 1, 2);
-    const nextWidth = Math.max(1, Math.floor(rect.width * nextDpr));
-    const nextHeight = Math.max(1, Math.floor(rect.height * nextDpr));
-    const nextStyleWidth = `${rect.width}px`;
-    const nextStyleHeight = `${rect.height}px`;
-    const dprChanged = Math.abs(dpr - nextDpr) > .001;
-    const sizeChanged = dprChanged
-      || els.courseCanvas.width !== nextWidth
-      || els.courseCanvas.height !== nextHeight
-      || els.courseCanvas.style.width !== nextStyleWidth
-      || els.courseCanvas.style.height !== nextStyleHeight;
-    // A no-op resize previously still scheduled paint work. During interactive
-    // CAD edits that extra frame made the visible canvas more susceptible to
-    // a transient cleared bitmap, so only paint after an actual size/DPR change.
-    if (!sizeChanged) return false;
-    dpr = nextDpr;
-    // Assigning canvas.width/height clears its bitmap.  Only do that when the
-    // physical drawing size has actually changed, never during pointer input.
-    if (els.courseCanvas.width !== nextWidth) els.courseCanvas.width = nextWidth;
-    if (els.courseCanvas.height !== nextHeight) els.courseCanvas.height = nextHeight;
-    if (els.courseCanvas.style.width !== nextStyleWidth) els.courseCanvas.style.width = nextStyleWidth;
-    if (els.courseCanvas.style.height !== nextStyleHeight) els.courseCanvas.style.height = nextStyleHeight;
+    return {
+      dpr: nextDpr,
+      width: Math.max(1, Math.floor(rect.width * nextDpr)),
+      height: Math.max(1, Math.floor(rect.height * nextDpr)),
+      styleWidth: `${rect.width}px`,
+      styleHeight: `${rect.height}px`
+    };
+  }
+
+  function canvasFrameNeedsResize(frame) {
+    return Math.abs(dpr - frame.dpr) > .001
+      || els.courseCanvas.width !== frame.width
+      || els.courseCanvas.height !== frame.height
+      || els.courseCanvas.style.width !== frame.styleWidth
+      || els.courseCanvas.style.height !== frame.styleHeight;
+  }
+
+  function resizeCanvas() {
+    if (!canvasFrameNeedsResize(measureCanvasFrame())) return false;
+    // Do not assign canvas.width/height here: either assignment clears the
+    // bitmap. The scheduled frame resizes and fully repaints synchronously.
     render();
+    return true;
+  }
+
+  function syncCanvasSizeForFrame() {
+    const frame = measureCanvasFrame();
+    if (!canvasFrameNeedsResize(frame)) return false;
+    dpr = frame.dpr;
+    if (els.courseCanvas.width !== frame.width) els.courseCanvas.width = frame.width;
+    if (els.courseCanvas.height !== frame.height) els.courseCanvas.height = frame.height;
+    if (els.courseCanvas.style.width !== frame.styleWidth) els.courseCanvas.style.width = frame.styleWidth;
+    if (els.courseCanvas.style.height !== frame.styleHeight) els.courseCanvas.style.height = frame.styleHeight;
     return true;
   }
 
@@ -1184,6 +1210,9 @@
   }
 
   function drawFrame() {
+    // Resizing clears the backing bitmap, so resize and replacement drawing
+    // must happen in this one animation-frame callback without an exposed gap.
+    syncCanvasSizeForFrame();
     const canvas = els.courseCanvas;
     const w = canvas.width / dpr;
     const h = canvas.height / dpr;
@@ -4228,7 +4257,7 @@
     state.selectedObstacleId = obstacle.id;
     state.selectedIds = [];
     state.hoveredPartId = null;
-    if (options.closeSetup) els.setupDialog.close();
+    if (options.closeSetup) ensureSetupDialogClosed();
     if (options.mode !== false) state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
     updateUI(); render();
     return true;
@@ -4259,7 +4288,7 @@
     state.wizard.step = 'interference';
     enterSubEditMode('interference', 'obstacle-edit');
     state.obstaclePlacement = { ...candidate, id: 'ghost', visible: true, locked: false };
-    els.setupDialog.close();
+    ensureSetupDialogClosed();
     toast('干渉物を配置する位置をクリックしてください。Escでキャンセルできます');
     updateUI(); render();
     els.courseCanvas.focus();
