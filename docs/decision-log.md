@@ -337,3 +337,16 @@
   converts metres to centimetres once. The bottom status footer is hidden only
   while a sub-editor is active, and its canvas backing size is refreshed when
   the footer visibility changes.
+
+### Initial-setup transition paint atomicity (2026-08-05)
+
+- Setup-dialog visibility changes are idempotent: a wizard transition opens or
+  closes the modal only when its current state differs, avoiding redundant
+  backdrop release and recreation.
+- Canvas CSS-size and DPR changes are measured when requested, but backing-store
+  dimensions are assigned only at the start of the scheduled render callback.
+  Because resizing and the complete replacement drawing run synchronously in
+  that callback, the browser cannot present the cleared bitmap as an
+  intermediate wizard-transition frame.
+- Field dimensions, view fitting, persistence, export, and editor-mode state are
+  unchanged; existing render requests remain coalesced into one animation frame.

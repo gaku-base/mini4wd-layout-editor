@@ -109,8 +109,8 @@ test('CAD model is loaded before app code and persisted field names remain addit
   assert.match(app, /c\.rect\(box\.x, box\.y, box\.w, box\.h\); c\.closePath\(\);/);
   assert.match(app, /ctx\.globalCompositeOperation = 'source-over';/);
   assert.match(app, /c\.clip\('nonzero'\)/);
-  assert.match(app, /if \(els\.courseCanvas\.width !== nextWidth\)/);
-  assert.match(app, /if \(els\.courseCanvas\.height !== nextHeight\)/);
+  assert.match(app, /if \(els\.courseCanvas\.width !== frame\.width\)/);
+  assert.match(app, /if \(els\.courseCanvas\.height !== frame\.height\)/);
   assert.match(app, /renderScheduler\.request\(drawFrame\)/);
   assert.doesNotMatch(app, /cancelAnimationFrame\(raf\)/);
   assert.match(app, /beginCutoutDrag\(hit, point, e\.pointerId\)/);
@@ -185,15 +185,18 @@ test('screen corner snapping uses enter/exit hysteresis and stable ordering', ()
   assert.equal(ROOM.selectScreenCornerSnap({ x: 31, y: 0 }, candidates, { activeKey: 'a', enterPx: 12, exitPx: 18 }), null);
 });
 
-test('CAD pointer moves do not rebuild the sidebar or persist, and no-op resize does not paint', () => {
+test('CAD pointer moves do not rebuild the sidebar or persist, and canvas resize is deferred to paint', () => {
   const app = fs.readFileSync('app.js', 'utf8');
   const move = app.slice(app.indexOf('function onCadPointerMove'), app.indexOf('function onCadPointerUp'));
-  const resize = app.slice(app.indexOf('function resizeCanvas'), app.indexOf('function fitView'));
+  const resize = app.slice(app.indexOf('function resizeCanvas'), app.indexOf('function syncCanvasSizeForFrame'));
+  const sync = app.slice(app.indexOf('function syncCanvasSizeForFrame'), app.indexOf('function fitView'));
   assert.doesNotMatch(move, /updateUI\(\)/);
   assert.doesNotMatch(move, /persistLocal\(\)/);
   assert.match(move, /updateCutoutDimensionOverlay\(\);\s*render\(\);/);
-  assert.match(resize, /if \(!sizeChanged\) return false;/);
-  assert.match(resize, /Math\.abs\(dpr - nextDpr\) > \.001/);
+  assert.match(resize, /if \(!canvasFrameNeedsResize\(measureCanvasFrame\(\)\)\) return false;/);
+  assert.doesNotMatch(resize, /courseCanvas\.(?:width|height)\s*=/);
+  assert.match(sync, /courseCanvas\.width = frame\.width/);
+  assert.match(sync, /courseCanvas\.height = frame\.height/);
   assert.match(app, /renderScheduler\.request\(drawFrame\)/);
   assert.doesNotMatch(app, /new ResizeObserver/);
 });
