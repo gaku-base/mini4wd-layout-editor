@@ -26,3 +26,21 @@ test('automatic venue-area names fill the first available numbered slot', () => 
   assert.equal(FLOW.nextObstacleName([]), '設置不可エリア1');
   assert.equal(FLOW.nextObstacleName([{ name: '設置不可エリア1' }, { name: '柱' }, { name: '設置不可エリア3' }]), '設置不可エリア2');
 });
+
+test('mouse drag creates a clamped unavailable-area rectangle in course centimetres', () => {
+  const field = { originX: 0, originY: 0, widthCm: 1000, heightCm: 600 };
+  assert.deepEqual(
+    FLOW.unavailableAreaFromDrag({ x: 100, y: 150 }, { x: 500, y: 350 }, field),
+    { x: 300, y: 250, widthCm: 400, depthCm: 200 }
+  );
+  assert.deepEqual(
+    FLOW.unavailableAreaFromDrag({ x: -100, y: 200 }, { x: 1200, y: 800 }, field),
+    { x: 500, y: 400, widthCm: 1000, depthCm: 400 }
+  );
+});
+
+test('mouse drag rejects unavailable areas below the existing one-centimetre minimum', () => {
+  const field = { originX: 0, originY: 0, widthCm: 1000, heightCm: 600 };
+  assert.equal(FLOW.MIN_UNAVAILABLE_AREA_CM, 1);
+  assert.equal(FLOW.unavailableAreaFromDrag({ x: 10, y: 10 }, { x: 10.5, y: 40 }, field), null);
+});

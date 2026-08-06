@@ -72,13 +72,13 @@
             <label>Y (mm)<input id="cutoutY" type="number" step="10" /></label>
             <label>幅 (mm)<input id="cutoutWidth" type="number" min="10" step="10" /></label>
             <label>高さ (mm)<input id="cutoutHeight" type="number" min="10" step="10" /></label>
-            <label>回転<select id="cutoutRotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
+            <label>角度（°）<input id="cutoutRotation" type="number" min="0" max="355" step="5" /></label>
             <label class="checkbox-row"><input id="cutoutVisible" type="checkbox" />表示・除外を有効</label>
             <label class="checkbox-row"><input id="cutoutLocked" type="checkbox" />ロック</label>
             <button id="applyCutoutBtn" class="button full-button" type="button">エリアを適用</button>
             <div id="cutoutDistances" class="cad-distances" aria-live="polite"></div>
             <p id="cutoutRotationNote" class="cad-help" hidden>現在、スペース修正範囲の回転には対応していません。</p>
-            <div class="cad-actions"><button id="rotateCutoutLeftBtn" class="button ghost" type="button">左へ90°回転</button><button id="rotateCutoutRightBtn" class="button ghost" type="button">右へ90°回転</button></div>
+            <div class="cad-actions"><button id="rotateCutoutLeftBtn" class="button ghost" type="button">左へ5°回転</button><button id="rotateCutoutRightBtn" class="button ghost" type="button">右へ5°回転</button></div>
             <div class="cad-actions"><button id="clearCutoutSelectionBtn" class="button ghost" type="button">選択を解除</button></div>
             <div class="cad-actions"><button id="duplicateCutoutBtn" class="button ghost" type="button">複製</button><button id="deleteCutoutBtn" class="button danger-button" type="button">削除</button></div>
           </div>
@@ -126,27 +126,31 @@
 
         <div id="canvasWrap" class="canvas-wrap">
           <div id="subEditModeBar" class="sub-edit-mode-bar" hidden>
-            <strong id="subEditModeTitle"></strong>
-            <div>
-              <span id="subEditObstacleCount" class="sub-edit-count" hidden></span>
-              <button id="repeatObstaclePlacementBtn" class="button ghost" type="button" hidden>同じものをもう1個</button>
-              <button id="addObstacleFromBarBtn" class="button ghost" type="button" hidden>設置不可エリアを追加</button>
-              <button id="returnToSetupBtn" class="button ghost" type="button">新規レイアウト設定へ戻る</button>
-              <button id="finishSubEditBtn" class="button primary" type="button">編集を完了</button>
+            <div class="sub-edit-heading">
+              <strong id="subEditModeTitle"></strong>
+              <span id="subEditModeDescription" class="sub-edit-description" hidden>柱・机・壁の凹みなど、コースを置けない場所を追加します</span>
             </div>
+            <div class="sub-edit-actions">
+              <span id="subEditObstacleCount" class="sub-edit-count" hidden></span>
+              <button id="drawUnavailableAreaBtn" class="button ghost" type="button" hidden>マウス指定</button>
+              <button id="repeatObstaclePlacementBtn" class="button ghost" type="button" hidden>同じものをもう1個</button>
+              <button id="addObstacleFromBarBtn" class="button ghost" type="button" hidden>寸法指定</button>
+              <button id="returnToSetupBtn" class="button ghost" type="button">戻る</button>
+              <button id="finishSubEditBtn" class="button primary" type="button">レイアウト開始</button>
+            </div>
+            <div id="obstacleList" class="obstacle-list sub-edit-area-list" hidden></div>
           </div>
           <section id="venueAreaCreatePanel" class="venue-area-create-panel" hidden>
-            <h3>コース設置不可エリア</h3>
-            <p>柱・机・壁の凹みなど、コースを置けない場所を追加します</p>
+            <h3>寸法指定</h3>
+            <p>横幅と奥行を入力し、キャンバス上へ配置します。</p>
             <div class="setup-fields obstacle-create-fields">
-              <label>名前<input id="newObstacleNameInput" type="text" maxlength="80" value="設置不可エリア1" /></label>
               <label>横幅（m）<input id="newObstacleWidthInput" type="number" min="0.01" max="50" step="0.01" value="0.40" /></label>
               <label>奥行（m）<input id="newObstacleDepthInput" type="number" min="0.01" max="50" step="0.01" value="0.40" /></label>
             </div>
             <p id="newObstacleError" class="form-error" hidden></p>
             <div class="dialog-actions setup-tab-actions">
               <button id="cancelVenueAreaCreateBtn" class="button ghost" type="button">閉じる</button>
-              <button id="startObstaclePlacementBtn" class="button primary" type="button">配置する</button>
+              <button id="startObstaclePlacementBtn" class="button primary" type="button">ゴースト配置を開始</button>
             </div>
           </section>
           <canvas id="courseCanvas" tabindex="0" aria-label="コース編集キャンバス"></canvas>

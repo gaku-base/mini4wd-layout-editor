@@ -32,9 +32,10 @@ test('creating the space enters unified canvas venue setup', () => {
 });
 
 test('venue setup can finish without areas and enters exclusive Start placement', () => {
-  const exit = section('function exitSubEditMode', 'function prepareNewInitialSetupDraft');
+  const startLayout = section('function startLayoutFromUnavailableAreaScreen', 'function exitSubEditMode');
   const finalize = section('function finalizeInitialSetup', 'function cancelInitialSetup');
-  assert.match(exit, /if \(state\.wizard\.active\)[\s\S]*finalizeInitialSetup\(\)/);
+  assert.match(startLayout, /layout-start-clicked/);
+  assert.match(startLayout, /finalizeInitialSetup\(\)/);
   assert.match(finalize, /endInitialSetupSubEditor\(\)/);
   assert.match(finalize, /persistLocal\(\);[\s\S]*if \(wizard\.isNew\) beginStartPlacement\(\)/);
   assert.match(finalize, /if \(wizard\.isNew\) fitView\(\)/);
@@ -60,7 +61,9 @@ test('new-layout metric inputs retain exact square and rectangle ratios and rese
 test('venue setup uses a non-modal form and repeated placement never reopens setup dialog', () => {
   assert.match(html, /id="venueAreaCreatePanel"/);
   assert.match(html, /id="repeatObstaclePlacementBtn"[^>]*>同じものをもう1個</);
-  assert.match(html, /id="addObstacleFromBarBtn"[^>]*>設置不可エリアを追加</);
+  assert.match(html, /id="drawUnavailableAreaBtn"[^>]*>マウス指定</);
+  assert.match(html, /id="addObstacleFromBarBtn"[^>]*>寸法指定</);
+  assert.match(html, /id="obstacleList"/);
   const open = section('function openVenueAreaCreator', 'function setVenueAreaCreatorVisible');
   const repeat = section('function repeatObstaclePlacement', 'function cancelObstaclePlacement');
   const placement = section('function placeObstacleAtCursor', 'function obstacleHitTest');
@@ -104,7 +107,7 @@ test('plain wheel is suppressed only when a rotatable canvas target is active', 
   const wheel = section('function onWheel', 'function onKeyDown');
   assert.match(wheel, /!hasWheelRotatableTarget\(\)/);
   assert.match(wheel, /e\.preventDefault\(\)/);
-  assert.match(wheel, /!!state\.obstaclePlacement \|\| !!selectedObstacle\(\)/);
+  assert.match(wheel, /state\.obstaclePlacement \|\| selectedObstacle\(\)/);
 });
 
 test('new setup draft stays independent and cancellation restores the baseline', () => {
@@ -115,7 +118,13 @@ test('new setup draft stays independent and cancellation restores the baseline',
   assert.match(open, /if \(reset\) prepareNewInitialSetupDraft\(\)/);
   assert.match(fresh, /state\.roomCutouts = \[\]/);
   assert.match(fresh, /state\.obstacles = \[\]/);
+  assert.match(fresh, /state\.parts = \[\]/);
+  assert.match(fresh, /state\.start = null/);
+  assert.match(fresh, /state\.history = \[\]/);
+  assert.match(fresh, /state\.future = \[\]/);
+  assert.match(fresh, /new-layout-state-reset/);
   assert.match(cancel, /applySerialized\(JSON\.parse\(wizard\.baseline\), false, \{ persist: false \}\)/);
+  assert.match(cancel, /state\.history = \[\.\.\.wizard\.runtimeBaseline\.history\]/);
   assert.doesNotMatch(cancel, /snapshot\(/);
 });
 
@@ -123,8 +132,60 @@ test('Start placement clears venue-area transient state and the RC3 label remain
   const start = section('function beginStartPlacement', 'function applySetup');
   assert.match(start, /state\.subEditMode = null/);
   assert.match(start, /state\.obstaclePlacement = null/);
+  assert.match(start, /state\.unavailableAreaDraw = null/);
   assert.match(start, /state\.selectedObstacleId = null/);
   assert.match(start, /state\.pointer\.pendingObstaclePlacement = false/);
   assert.match(start, /state\.mode = 'start'/);
+  assert.match(start, /toast\('スタートレーンを配置してください'\)/);
   assert.match(html, /v1\.1 RC3/);
+});
+
+test('the unavailable-area screen exposes both creation methods, list, back, and direct layout start', () => {
+  const bar = html.slice(html.indexOf('id="subEditModeBar"'), html.indexOf('id="venueAreaCreatePanel"'));
+  assert.match(bar, /id="drawUnavailableAreaBtn"[^>]*>マウス指定</);
+  assert.match(bar, /id="addObstacleFromBarBtn"[^>]*>寸法指定</);
+  assert.match(bar, /id="obstacleList"/);
+  assert.match(bar, /id="returnToSetupBtn"[^>]*>戻る</);
+  assert.match(bar, /id="finishSubEditBtn"[^>]*>レイアウト開始</);
+  const dimensionPanel = html.slice(html.indexOf('id="venueAreaCreatePanel"'), html.indexOf('id="courseCanvas"'));
+  assert.match(dimensionPanel, /id="newObstacleWidthInput"/);
+  assert.match(dimensionPanel, /id="newObstacleDepthInput"/);
+  assert.doesNotMatch(dimensionPanel, /rotation|回転角|newObstacleNameInput/);
+});
+
+test('screen back and re-entry keep one listener per button and restore an actionable venue screen', () => {
+  const binding = section('function bindEvents', 'function openSetup');
+  ['drawUnavailableAreaBtn', 'addObstacleFromBarBtn', 'returnToSetupBtn', 'finishSubEditBtn'].forEach(id => {
+    assert.equal((binding.match(new RegExp(`els\\.${id}\\?\\.addEventListener`, 'g')) || []).length, 1, id);
+  });
+  const back = section('function returnToInitialSpaceScreen', 'function startLayoutFromUnavailableAreaScreen');
+  const venue = section('function beginVenueSetup', 'function openVenueAreaCreator');
+  assert.match(back, /cleanupEditorModeState\(\)/);
+  assert.match(back, /state\.wizard\.step = INITIAL_LAYOUT_FLOW\.STEPS\.LAYOUT_SPACE/);
+  assert.match(back, /ensureSetupDialogOpen\(\)/);
+  assert.match(venue, /state\.wizard\.step = 'venue-setup'/);
+  assert.match(venue, /unavailable-area-screen-opened/);
+});
+
+test('mouse and dimension methods remain mutually reusable on the same screen', () => {
+  const mouse = section('function beginUnavailableAreaDraw', 'function obstacleFromCreateInputs');
+  const dimensions = section('function startObstaclePlacement', 'function repeatObstaclePlacement');
+  const pointerDown = section('function onPointerDown', 'function onPointerMove');
+  const pointerUp = section('function onPointerUp', 'function partsInRect');
+  assert.match(mouse, /unavailable-area-method-selected'[\s\S]*method: 'mouse'/);
+  assert.match(mouse, /unavailableAreaFromDrag/);
+  assert.match(mouse, /unavailable-area-draw-completed/);
+  assert.match(pointerDown, /state\.mode === 'unavailable-draw'/);
+  assert.match(pointerUp, /completeUnavailableAreaDraw\(e\)/);
+  assert.match(dimensions, /unavailable-area-dimension-placement-started/);
+  assert.match(dimensions, /state\.wizard\.step = INITIAL_LAYOUT_FLOW\.STEPS\.VENUE_SETUP/);
+});
+
+test('required diagnostic events cover reset, both methods, navigation, and blocked transitions', () => {
+  [
+    'initial-space-screen-opened', 'unavailable-area-screen-opened', 'unavailable-area-method-selected',
+    'unavailable-area-draw-started', 'unavailable-area-draw-completed',
+    'unavailable-area-dimension-placement-started', 'unavailable-area-placement-completed',
+    'unavailable-area-screen-back', 'layout-start-clicked', 'new-layout-state-reset', 'screen-transition-blocked'
+  ].forEach(eventName => assert.match(app, new RegExp(`['"]${eventName}['"]`), eventName));
 });

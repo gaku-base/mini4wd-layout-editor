@@ -133,7 +133,7 @@ test('canvas wheel keeps Ctrl zoom while reserving plain wheel rotation for cour
   assert.match(wheel, /if \(state\.pointer\.down\) return;/);
   assert.match(wheel, /const before = screenToWorld\(sx, sy\);/);
   assert.match(wheel, /state\.view\.offsetX = sx - before\.x \* state\.view\.scale;/);
-  assert.match(app, /function hasWheelRotatableTarget\(\) \{[\s\S]*state\.mode === 'cutout'[\s\S]*state\.mode === 'boundary'[\s\S]*selectedParts\(\)\.length > 0;/);
+  assert.match(app, /function hasWheelRotatableTarget\(\) \{[\s\S]*state\.mode === 'boundary'[\s\S]*state\.mode === 'cutout'[\s\S]*selectedParts\(\)\.length > 0;/);
   assert.match(app, /function rotateCurrent\(delta, inputMethod = 'button'\) \{[\s\S]*snapshot\(\);[\s\S]*p\.rotation = normalizeRotation\(p\.rotation \+ delta\);/);
   assert.doesNotMatch(app, /spaceDown|pointer\.panning|is-panning|function onKeyUp/);
   assert.match(app, /if \(e\.button !== 0 && !state\.layoutMove\.active\) return;/);

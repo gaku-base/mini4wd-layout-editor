@@ -399,3 +399,23 @@
 - Diagnostic data is never included in layout JSON or localStorage. It is
   downloaded only through the explicit diagnostic-log export action, and the
   clear action starts a new diagnostic session after confirmation.
+
+### Re-entrant unavailable-area setup screens (2026-08-06)
+
+- Starting a new layout now clears the course, Start, unavailable areas,
+  selections, history, placement ghosts, drags, and editor modes immediately
+  inside the transient draft. Cancelling restores the serialized layout and
+  its runtime history/view baseline; no draft arrays are shared with it.
+- The first setup screen owns only width, depth, grid, and space creation. The
+  second screen owns both mouse-drag and dimension-ghost unavailable-area
+  creation, the unified obstacle/cutout list, Back, and direct layout start.
+  Returning clears only transient screen-two interactions and keeps confirmed
+  dimensions and placed unavailable areas.
+- Mouse-drag rectangles are clamped to the current field and use the existing
+  one-centimetre minimum accepted by unavailable-area input. Dimension ghosts
+  keep automatic names and the existing 5-degree wheel/Z/X rotation. Course
+  parts retain 45-degree rotation.
+- Event handlers remain bound once at application initialization. Screen
+  re-entry changes explicit wizard/mode state and DOM visibility instead of
+  recreating controls. Layout JSON/localStorage fields, unit conversion, PNG,
+  collision behavior, and existing undo record format remain unchanged.

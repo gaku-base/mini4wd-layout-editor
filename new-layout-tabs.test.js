@@ -24,15 +24,16 @@ test('the internal setup view remains stable for existing callers', () => {
   assert.equal(NEW_LAYOUT_TABS.moveTab('layout-space', -1), 'layout-space');
 });
 
-test('non-modal venue-area input collects only name and dimensions', () => {
+test('non-modal venue-area input collects only dimensions and uses an automatic name', () => {
   const panel = indexHtml.match(/<section id="venueAreaCreatePanel"[\s\S]*?<\/section>/)?.[0] || '';
-  assert.match(panel, /コース設置不可エリア/);
-  assert.match(panel, /柱・机・壁の凹みなど、コースを置けない場所を追加します/);
-  assert.match(panel, /id="newObstacleNameInput"/);
+  assert.match(panel, /寸法指定/);
+  assert.match(indexHtml, /柱・机・壁の凹みなど、コースを置けない場所を追加します/);
+  assert.doesNotMatch(panel, /id="newObstacleNameInput"/);
   assert.match(panel, /id="newObstacleWidthInput"/);
   assert.match(panel, /id="newObstacleDepthInput"/);
   assert.doesNotMatch(panel, /newObstacleRotationInput|回転（°）/);
   assert.match(panel, /id="startObstaclePlacementBtn"/);
+  assert.match(appSource, /const name = INITIAL_LAYOUT_FLOW\.nextObstacleName\(state\.obstacles\)/);
   assert.doesNotMatch(indexHtml, /id="obstacleRotationInput"/);
 });
 
