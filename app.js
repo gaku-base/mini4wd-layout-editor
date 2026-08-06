@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const VERSION = '1.1.0-RC2';
+  const VERSION = '1.1.0-RC3';
   const CATALOG = window.M4WD_PART_CATALOG;
   if (!CATALOG) throw new Error('part-catalog.jsが読み込まれていません');
   const PERSISTENCE = window.M4WD_LAYOUT_PERSISTENCE;
@@ -1210,7 +1210,7 @@
     if (restored.status === 'restored') {
       applySerialized(restored.layout, true, { persist: false });
       toast(restored.versionStatus === 'supportedLegacy'
-        ? '旧RC1レイアウトを復元しました。次の保存からRC2形式になります'
+        ? '旧レイアウトを復元しました。次の保存からRC3形式になります'
         : '保存済みレイアウトを復元しました');
       logDiagnostic('local-restore-succeeded', { versionStatus: restored.versionStatus }, { category: 'persistence' });
       return true;

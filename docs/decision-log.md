@@ -431,3 +431,14 @@
 - Diagnostic snapshots include wizard position, selection identifiers, DPR,
   and localStorage availability. Mouse-drag preview events are coalesced to
   avoid an unbounded high-frequency event stream.
+
+### RC3 persistence for five-degree room cutouts (2026-08-07)
+
+- The current persisted version is `1.1.0-RC3`. RC3 accepts room-cutout
+  rotations from 0 through 355 degrees in 5-degree increments; RC2 validation
+  remains limited to its historical 0/90/180/270-degree values.
+- `1.0.0-RC1` and `1.1.0-RC2` remain supported legacy inputs and are rewritten
+  as RC3 only after a confirmed save. The localStorage key remains unchanged.
+- An RC2 build classifies RC3 as an unsupported future version, preserves the
+  stored bytes, and blocks overwriting instead of deleting the layout as
+  corrupt. JSON fields and millimetre units are otherwise unchanged.
