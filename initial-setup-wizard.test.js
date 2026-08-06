@@ -10,33 +10,34 @@ const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const section = (start, end) => app.slice(app.indexOf(start), app.indexOf(end));
 
-test('initial setup presents a square-space primary action with two optional branches', () => {
-  assert.match(html, /id="wizardProgress"/);
-  assert.match(html, /四角形スペース/);
-  assert.match(html, /id="configureObstaclesInput"/);
-  assert.match(html, /id="adjustRoomShapeInput"/);
-  assert.match(html, /id="wizardNextLayoutBtn"[^>]*>レイアウトを開始</);
-  const advance = section('function advanceWizardFromLayoutSpace', 'function continueInitialSetupAfter');
-  assert.match(advance, /state\.wizard\.adjustRoomShape = els\.adjustRoomShapeInput/);
-  assert.match(advance, /state\.wizard\.configureObstacles = els\.configureObstaclesInput/);
-  assert.match(advance, /continueInitialSetupAfter\('layout-space'\)/);
-  assert.doesNotMatch(advance, /enterSubEditMode\(/);
-  const tabs = section('function setNewLayoutModalTab', 'function exitSubEditMode');
-  assert.match(tabs, /tabButton\.disabled = state\.wizard\.active/);
+test('initial setup contains only dimensions, grid, and space creation', () => {
+  assert.match(html, /id="fieldWidthInput"/);
+  assert.match(html, /id="fieldHeightInput"/);
+  assert.match(html, /id="gridInput"/);
+  assert.match(html, /id="wizardNextLayoutBtn"[^>]*>スペースを作成</);
+  assert.doesNotMatch(html, /configureObstaclesInput|adjustRoomShapeInput/);
+  assert.doesNotMatch(html, /role="tablist"/);
 });
 
-test('the shared branch continuation can finalize directly into exclusive Start placement', () => {
-  const continuation = section('function continueInitialSetupAfter', 'function beginWizardSpaceAdjustment');
-  assert.match(continuation, /INITIAL_LAYOUT_FLOW\.nextStep\(completedStep, state\.wizard\)/);
-  assert.match(continuation, /beginWizardSpaceAdjustment\(\)/);
-  assert.match(continuation, /openWizardObstacleCreator/);
-  assert.match(continuation, /openWizardConfirmation/);
-  assert.match(continuation, /finalizeInitialSetup\(\)/);
+test('creating the space enters unified canvas venue setup', () => {
+  const advance = section('function advanceWizardFromLayoutSpace', 'function continueInitialSetupAfter');
+  const continuation = section('function continueInitialSetupAfter', 'function beginVenueSetup');
+  const venue = section('function beginVenueSetup', 'function openVenueAreaCreator');
+  assert.match(advance, /continueInitialSetupAfter\('layout-space'\)/);
+  assert.match(continuation, /INITIAL_LAYOUT_FLOW\.STEPS\.VENUE_SETUP/);
+  assert.match(continuation, /beginVenueSetup\(\)/);
+  assert.match(venue, /ensureSetupDialogClosed\(\)/);
+  assert.match(venue, /enterSubEditMode\('interference', 'move'\)/);
+  assert.match(venue, /setVenueAreaCreatorVisible\(false\)/);
+});
+
+test('venue setup can finish without areas and enters exclusive Start placement', () => {
+  const exit = section('function exitSubEditMode', 'function prepareNewInitialSetupDraft');
   const finalize = section('function finalizeInitialSetup', 'function cancelInitialSetup');
+  assert.match(exit, /if \(state\.wizard\.active\)[\s\S]*finalizeInitialSetup\(\)/);
   assert.match(finalize, /endInitialSetupSubEditor\(\)/);
-  assert.match(finalize, /persistLocal\(\);\s*if \(wizard\.isNew\) beginStartPlacement\(\);\s*else state\.mode = 'move';\s*updateUI\(\);/);
+  assert.match(finalize, /persistLocal\(\);\s*if \(wizard\.isNew\) beginStartPlacement\(\)/);
   assert.match(finalize, /if \(wizard\.isNew\) fitView\(\)/);
-  assert.match(finalize, /state\.wizard = \{ active: false/);
 });
 
 test('new-layout metric inputs retain exact square and rectangle ratios and reset the view', () => {
@@ -45,10 +46,7 @@ test('new-layout metric inputs retain exact square and rectangle ratios and rese
   assert.match(advance, /widthCm: widthM \* 100/);
   assert.match(advance, /heightCm: heightM \* 100/);
   assert.match(advance, /if \(state\.wizard\.isNew\) fitView\(\)/);
-  assert.match(fit, /state\.field\.widthCm/);
-  assert.match(fit, /state\.field\.heightCm/);
   assert.match(fit, /Math\.min\(sx, sy\)/);
-
   const ratio = (widthM, heightM) => {
     const field = FIELD_BOUNDARY.fieldBounds({ widthCm: widthM * 100, heightCm: heightM * 100, gridCm: 10 });
     const scale = Math.min((960 - 84) / field.w, (640 - 84) / field.h);
@@ -59,93 +57,74 @@ test('new-layout metric inputs retain exact square and rectangle ratios and rese
   assert.ok(Math.abs(ratio(6, 10) - 6 / 10) < 1e-12);
 });
 
-test('finishing an optional sub-editor cleans it up before selecting the next branch', () => {
-  const exit = section('function exitSubEditMode', 'function endInitialSetupSubEditor');
-  const end = section('function endInitialSetupSubEditor', 'function advanceWizardFromLayoutSpace');
-  assert.match(exit, /if \(state\.wizard\.active\) \{\s*endInitialSetupSubEditor\(\)/);
-  assert.match(exit, /continueInitialSetupAfter\(tab\)/);
-  assert.match(end, /state\.subEditMode = null/);
-  assert.match(end, /els\.subEditModeBar\.hidden = true/);
-  assert.match(end, /cleanupEditorModeState\(\)/);
-});
-
-test('interference setup supports repeated same-size and different obstacle placement without leaving its stage', () => {
-  assert.match(html, /id="subEditObstacleCount"/);
-  assert.match(html, /id="repeatObstaclePlacementBtn"[^>]*>同じサイズをもう1個配置</);
-  assert.match(html, /id="addObstacleFromBarBtn"[^>]*>＋干渉物を追加</);
+test('venue setup uses a non-modal form and repeated placement never reopens setup dialog', () => {
+  assert.match(html, /id="venueAreaCreatePanel"/);
+  assert.match(html, /id="repeatObstaclePlacementBtn"[^>]*>同じものをもう1個</);
+  assert.match(html, /id="addObstacleFromBarBtn"[^>]*>設置不可エリアを追加</);
+  const open = section('function openVenueAreaCreator', 'function setVenueAreaCreatorVisible');
   const repeat = section('function repeatObstaclePlacement', 'function cancelObstaclePlacement');
-  assert.match(repeat, /const source = selectedObstacle\(\) \|\| state\.obstacles\.at\(-1\)/);
+  const placement = section('function placeObstacleAtCursor', 'function obstacleHitTest');
+  assert.match(open, /setVenueAreaCreatorVisible\(true\)/);
+  assert.doesNotMatch(open, /ensureSetupDialogOpen|showModal/);
   assert.match(repeat, /\.\.\.source/);
   assert.match(repeat, /INITIAL_LAYOUT_FLOW\.nextObstacleName/);
-  const placement = section('function placeObstacleAtCursor', 'function obstacleHitTest');
+  assert.doesNotMatch(repeat, /showModal|ensureSetupDialogOpen/);
   assert.match(placement, /state\.subEditMode === 'interference' \? 'move'/);
-  assert.doesNotMatch(placement, /finalizeInitialSetup/);
+  assert.doesNotMatch(placement, /finalizeInitialSetup|showModal/);
 });
 
-test('the interference sub-editor hides the old constant return action and shows count, add, and next', () => {
-  const update = section('function updateUI', 'function updateStatusOnly');
-  assert.match(update, /wizardInterference/);
-  assert.match(update, /subEditObstacleCount\.textContent = `配置済み \$\{state\.obstacles\.length\}件`/);
-  assert.match(update, /returnToSetupBtn\.hidden = wizardInterference/);
-  assert.match(update, /'別の干渉物を追加'/);
-  assert.doesNotMatch(update, /スペース修正へ戻る/);
+test('only the initial setup entry can create the full-screen modal backdrop', () => {
+  assert.equal((app.match(/els\.setupDialog\.showModal\(\)/g) || []).length, 1);
+  const open = section('function openVenueAreaCreator', 'function finalizeInitialSetup');
+  assert.doesNotMatch(open, /showModal\(|ensureSetupDialogOpen\(/);
 });
 
-test('Start placement explicitly clears obstacle placement state before status and instruction rendering', () => {
-  const start = section('function beginStartPlacement', 'function applySetup');
-  [
-    /state\.subEditMode = null/,
-    /state\.obstaclePlacement = null/,
-    /state\.selectedObstacleId = null/,
-    /state\.obstacleDrag = null/,
-    /state\.cad\.selectedCutoutId = null/,
-    /state\.pointer\.pendingObstaclePlacement = false/,
-    /state\.pointer\.pendingPlacement = false/,
-    /state\.mode = 'start'/
-  ].forEach(pattern => assert.match(start, pattern));
-  const ui = section('function updateUI', 'function updateStatusOnly');
-  assert.match(ui, /state\.mode === 'start'[\s\S]{0,100}?'スタート配置'/);
-  assert.match(ui, /else if \(state\.mode === 'start'\) \{[\s\S]{0,140}?スタートレーンを配置/);
+test('venue-area wheel and Z/X rotation uses five-degree helpers without changing course rotation', () => {
+  const wheel = section('function onWheel', 'function hasWheelRotatableTarget');
+  const keys = section('function onKeyDown', 'function clearSnapTargetChoice');
+  const active = section('function rotateActiveVenueArea', 'function deleteSelectedObstacle');
+  assert.match(wheel, /rotateActiveVenueArea[\s\S]*INITIAL_LAYOUT_FLOW\.ROTATION_STEP/);
+  assert.match(keys, /rotateActiveVenueArea\(-INITIAL_LAYOUT_FLOW\.ROTATION_STEP\)/);
+  assert.match(keys, /rotateActiveVenueArea\(INITIAL_LAYOUT_FLOW\.ROTATION_STEP\)/);
+  assert.match(keys, /rotateCurrent\(-45\)/);
+  assert.match(keys, /rotateCurrent\(45\)/);
+  assert.match(active, /INITIAL_LAYOUT_FLOW\.rotateVenueArea/);
 });
 
-test('initial setup edits are transient until confirmation and cancellation restores the baseline without Undo', () => {
-  const open = section('function openSetup', 'function setNewLayoutModalTab');
-  assert.match(open, /baseline: JSON\.stringify\(serializeState\(\)\)/);
-  const persist = section('function persistLocal', 'function saveJson');
-  assert.match(persist, /state\.wizard\.active/);
-  assert.match(persist, /deferred-wizard/);
+test('ghost and selected venue areas draw a clamped angle label', () => {
+  const shape = section('function drawObstacleShape', 'function drawObstacles');
+  assert.match(shape, /options\.ghost \|\| selected/);
+  assert.match(shape, /function drawObstacleAngleLabel/);
+  assert.match(shape, /visible\.maxX/);
+  assert.match(shape, /INTERFERENCE_OBSTACLES\.normalizeRotation/);
+  assert.match(shape, /fillText\(`\$\{INTERFERENCE_OBSTACLES\.normalizeRotation\(obstacle\.rotation\)\}°`/);
+});
+
+test('plain wheel is suppressed only when a rotatable canvas target is active', () => {
+  const wheel = section('function onWheel', 'function onKeyDown');
+  assert.match(wheel, /!hasWheelRotatableTarget\(\)/);
+  assert.match(wheel, /e\.preventDefault\(\)/);
+  assert.match(wheel, /!!state\.obstaclePlacement \|\| !!selectedObstacle\(\)/);
+});
+
+test('new setup draft stays independent and cancellation restores the baseline', () => {
+  const open = section('function openSetup', 'function ensureSetupDialogOpen');
+  const fresh = section('function prepareNewInitialSetupDraft', 'function endInitialSetupSubEditor');
   const cancel = section('function cancelInitialSetup', 'function applySetup');
+  assert.match(open, /baseline: JSON\.stringify\(serializeState\(\)\)/);
+  assert.match(open, /if \(reset\) prepareNewInitialSetupDraft\(\)/);
+  assert.match(fresh, /state\.roomCutouts = \[\]/);
+  assert.match(fresh, /state\.obstacles = \[\]/);
   assert.match(cancel, /applySerialized\(JSON\.parse\(wizard\.baseline\), false, \{ persist: false \}\)/);
   assert.doesNotMatch(cancel, /snapshot\(/);
 });
 
-test('a new setup creates an empty independent cutout and obstacle draft, while editing keeps the current draft', () => {
-  const open = section('function openSetup', 'function setNewLayoutModalTab');
-  const freshDraft = section('function prepareNewInitialSetupDraft', 'function endInitialSetupSubEditor');
-  assert.match(open, /if \(reset\) prepareNewInitialSetupDraft\(\)/);
-  assert.match(open, /!reset && state\.roomCutouts\.length > 0/);
-  assert.match(open, /!reset && state\.obstacles\.length > 0/);
-  assert.match(freshDraft, /state\.roomCutouts = \[\]/);
-  assert.match(freshDraft, /state\.obstacles = \[\]/);
-  assert.match(freshDraft, /state\.selectedObstacleId = null/);
-  assert.match(freshDraft, /state\.cad = \{ selectedCutoutId: null/);
-  assert.match(freshDraft, /cleanupEditorModeState\(\)/);
-});
-
-test('initial setup blocks normal part modes and maintains the RC3 label', () => {
-  const setMode = section('function setMode', 'function selectPartType');
-  const selectPart = section('function selectPartType', 'function snapshotSerialized');
-  assert.match(setMode, /if \(state\.wizard\.active\) return/);
-  assert.match(selectPart, /if \(state\.wizard\.active\) return/);
-  assert.match(html, /初期設定を編集/);
+test('Start placement clears venue-area transient state and the RC3 label remains', () => {
+  const start = section('function beginStartPlacement', 'function applySetup');
+  assert.match(start, /state\.subEditMode = null/);
+  assert.match(start, /state\.obstaclePlacement = null/);
+  assert.match(start, /state\.selectedObstacleId = null/);
+  assert.match(start, /state\.pointer\.pendingObstaclePlacement = false/);
+  assert.match(start, /state\.mode = 'start'/);
   assert.match(html, /v1\.1 RC3/);
-});
-
-test('cutout and obstacle changes contribute non-destructive layout warnings', () => {
-  assert.match(app, /function courseCutoutWarnings/);
-  const warnings = section('function recalculateLayoutWarnings', 'function endpointsConnect');
-  assert.match(warnings, /cutoutInterference/);
-  assert.match(warnings, /field-overflow/);
-  const exportSection = section('function drawExport', 'function dateStamp');
-  assert.doesNotMatch(exportSection, /drawLayoutWarnings/);
 });

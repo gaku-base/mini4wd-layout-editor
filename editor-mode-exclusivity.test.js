@@ -34,7 +34,7 @@ test('finishing either sub-editor returns to neutral editing and hides the mode 
   assert.match(exit, /cleanupEditorModeState\(\)/);
   assert.match(exit, /state\.subEditMode = null/);
   assert.match(exit, /state\.mode = 'move'/);
-  assert.match(exit, /setNewLayoutModalTab\(tab\)/);
+  assert.match(exit, /setNewLayoutModalTab\(NEW_LAYOUT_TABS\.DEFAULT_TAB\)/);
   assert.doesNotMatch(exit, /snapshot\(/);
   const update = section('function updateUI', 'function updateStatusOnly');
   assert.match(update, /els\.subEditModeBar\.hidden = !subEditorActive/);
@@ -72,10 +72,10 @@ test('Escape Start recovery also uses the shared Start entry path', () => {
   assert.match(keyDown, /else \{\s*beginStartPlacement\(\);\s*\}/);
 });
 
-test('each sub-editor starts through the shared exclusive entry path', () => {
-  const spaceStart = section("els.startSpaceAdjustmentBtn.addEventListener", "els.backToLayoutSpaceFromObstacleBtn");
+test('the unified venue sub-editor starts through the shared exclusive entry path', () => {
+  const venueStart = section('function beginVenueSetup', 'function openVenueAreaCreator');
   const obstacleStart = section('function startObstaclePlacement', 'function cancelObstaclePlacement');
-  assert.match(spaceStart, /enterSubEditMode\('space-adjustment', 'cutout'\)/);
+  assert.match(venueStart, /enterSubEditMode\('interference', 'move'\)/);
   assert.match(obstacleStart, /enterSubEditMode\('interference', 'obstacle-edit'\)/);
 });
 

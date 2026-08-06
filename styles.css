@@ -331,7 +331,11 @@ kbd {
 .setup-tab-description { color: var(--muted); font-size: 11px; line-height: 1.6; margin: 6px 0 0; }
 .setup-status-note { margin: 20px 0 0; }
 .setup-tab-actions { margin-top: 20px; }
-.obstacle-create-fields { grid-template-columns: 1.3fr 1fr 1fr 1fr; }
+.obstacle-create-fields { grid-template-columns: 1.3fr 1fr 1fr; }
+.venue-area-create-panel { background: rgba(17,24,33,.98); border: 1px solid #f4b62b; border-radius: 12px; box-shadow: 0 14px 36px rgba(0,0,0,.46); left: 50%; max-width: min(620px, calc(100% - 28px)); padding: 16px; position: absolute; top: 66px; transform: translateX(-50%); width: 620px; z-index: 6; }
+.venue-area-create-panel[hidden] { display: none; }
+.venue-area-create-panel h3 { color: var(--primary); margin: 0 0 5px; }
+.venue-area-create-panel > p { color: var(--muted); font-size: 11px; margin: 0 0 12px; }
 .form-error { color: #ff9da5; font-size: 11px; line-height: 1.5; margin: 10px 0 0; }
 .obstacle-list-section { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 15px; }
 .obstacle-list-section h4 { font-size: 12px; margin: 0 0 8px; }

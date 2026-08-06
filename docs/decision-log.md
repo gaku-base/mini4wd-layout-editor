@@ -367,3 +367,20 @@
 - Wizard options and obstacle-creation form state remain transient. JSON,
   localStorage, undo records, PNG output, collision behavior, and established
   unit values are unchanged.
+
+### Unified course-unavailable-area setup (2026-08-06)
+
+- The initial dialog now contains only square-space dimensions, grid size, and
+  the create-space action. After creation, one canvas sub-editor presents room
+  cutouts and interference obstacles to users as "course unavailable areas";
+  their existing internal models and serialized fields remain unchanged.
+- New unavailable-area dimensions are entered in a non-modal canvas panel.
+  Placing or repeating an area never reopens the full-screen setup dialog, so
+  its backdrop is not released and recreated for every placed item.
+- Unavailable-area placement ghosts and selected areas rotate in 5-degree
+  increments with wheel or Z/X, independently of the established 45-degree
+  course-part rotation. The current normalized angle is drawn beside the area
+  only in the interactive canvas and is omitted from PNG export.
+- fitView, Start placement, undo/redo, lock, duplicate/delete, JSON and
+  localStorage formats, PNG content, and metre/centimetre conversion are not
+  changed by this UI consolidation.

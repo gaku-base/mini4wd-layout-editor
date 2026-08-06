@@ -23,11 +23,13 @@ test('sub-edit mode bar has return and finish controls that clear transient edit
   const exitSection = app.slice(app.indexOf('function exitSubEditMode'), app.indexOf('function applySetup'));
   assert.match(exitSection, /cleanupEditorModeState\(\)/);
   assert.match(exitSection, /state\.subEditMode = null/);
-  assert.match(exitSection, /setNewLayoutModalTab\(tab\)/);
+  assert.match(exitSection, /setNewLayoutModalTab\(NEW_LAYOUT_TABS\.DEFAULT_TAB\)/);
   assert.doesNotMatch(exitSection, /snapshot\(/);
   assert.match(html, /id="addObstacleFromBarBtn"/);
   assert.match(html, /id="repeatObstaclePlacementBtn"/);
   assert.doesNotMatch(html, />スペース修正へ戻る</);
+  assert.match(html, />同じものをもう1個</);
+  assert.match(html, />設置不可エリアを追加</);
 });
 
 test('selected cutouts and obstacles expose clear, rotate, duplicate, and delete controls', () => {

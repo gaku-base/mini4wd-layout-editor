@@ -37,7 +37,7 @@
             <button class="mode-button danger" data-mode="delete" type="button"><kbd>W</kbd><span>パーツ削除</span></button>
             <button class="mode-button color-mode" data-mode="color" type="button"><kbd>E</kbd><span>カラー変更</span></button>
             <button class="mode-button cad-mode" data-mode="boundary" type="button"><kbd>B</kbd><span>設置範囲</span></button>
-            <button class="mode-button cad-mode" data-mode="cutout" type="button"><kbd>H</kbd><span>部屋形状</span></button>
+            <button class="mode-button cad-mode" data-mode="cutout" type="button"><kbd>H</kbd><span>設置不可</span></button>
           </div>
         </section>
 
@@ -63,9 +63,9 @@
         </section>
 
         <section id="roomCutoutPanel" class="panel cad-panel" hidden>
-          <div class="panel-heading"><h2>部屋形状用切り抜き</h2><button id="newCutoutBtn" class="text-button" type="button">長方形を作成</button></div>
+          <div class="panel-heading"><h2>コース設置不可エリア</h2><button id="newCutoutBtn" class="text-button" type="button">エリアを作成</button></div>
           <p class="cad-help">キャンバスをドラッグして作成。選択後はドラッグ移動、矢印で10mm、Shift+矢印で100mm移動できます。</p>
-          <div id="roomCutoutEmpty" class="empty-summary">切り抜き未選択</div>
+          <div id="roomCutoutEmpty" class="empty-summary">設置不可エリア未選択</div>
           <div id="roomCutoutEditor" class="cad-form" hidden>
             <label>名称<input id="cutoutName" type="text" maxlength="80" /></label>
             <label>X (mm)<input id="cutoutX" type="number" step="10" /></label>
@@ -75,7 +75,7 @@
             <label>回転<select id="cutoutRotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></label>
             <label class="checkbox-row"><input id="cutoutVisible" type="checkbox" />表示・除外を有効</label>
             <label class="checkbox-row"><input id="cutoutLocked" type="checkbox" />ロック</label>
-            <button id="applyCutoutBtn" class="button full-button" type="button">切り抜きを適用</button>
+            <button id="applyCutoutBtn" class="button full-button" type="button">エリアを適用</button>
             <div id="cutoutDistances" class="cad-distances" aria-live="polite"></div>
             <p id="cutoutRotationNote" class="cad-help" hidden>現在、スペース修正範囲の回転には対応していません。</p>
             <div class="cad-actions"><button id="rotateCutoutLeftBtn" class="button ghost" type="button">左へ90°回転</button><button id="rotateCutoutRightBtn" class="button ghost" type="button">右へ90°回転</button></div>
@@ -129,12 +129,26 @@
             <strong id="subEditModeTitle"></strong>
             <div>
               <span id="subEditObstacleCount" class="sub-edit-count" hidden></span>
-              <button id="repeatObstaclePlacementBtn" class="button ghost" type="button" hidden>同じサイズをもう1個配置</button>
-              <button id="addObstacleFromBarBtn" class="button ghost" type="button" hidden>＋干渉物を追加</button>
+              <button id="repeatObstaclePlacementBtn" class="button ghost" type="button" hidden>同じものをもう1個</button>
+              <button id="addObstacleFromBarBtn" class="button ghost" type="button" hidden>設置不可エリアを追加</button>
               <button id="returnToSetupBtn" class="button ghost" type="button">新規レイアウト設定へ戻る</button>
               <button id="finishSubEditBtn" class="button primary" type="button">編集を完了</button>
             </div>
           </div>
+          <section id="venueAreaCreatePanel" class="venue-area-create-panel" hidden>
+            <h3>コース設置不可エリア</h3>
+            <p>柱・机・壁の凹みなど、コースを置けない場所を追加します</p>
+            <div class="setup-fields obstacle-create-fields">
+              <label>名前<input id="newObstacleNameInput" type="text" maxlength="80" value="設置不可エリア1" /></label>
+              <label>横幅（m）<input id="newObstacleWidthInput" type="number" min="0.01" max="50" step="0.01" value="0.40" /></label>
+              <label>奥行（m）<input id="newObstacleDepthInput" type="number" min="0.01" max="50" step="0.01" value="0.40" /></label>
+            </div>
+            <p id="newObstacleError" class="form-error" hidden></p>
+            <div class="dialog-actions setup-tab-actions">
+              <button id="cancelVenueAreaCreateBtn" class="button ghost" type="button">閉じる</button>
+              <button id="startObstaclePlacementBtn" class="button primary" type="button">配置する</button>
+            </div>
+          </section>
           <canvas id="courseCanvas" tabindex="0" aria-label="コース編集キャンバス"></canvas>
           <div id="cutoutDimensionOverlay" class="cutout-dimension-overlay" hidden aria-hidden="true">
             <span data-cutout-dimension="left"></span><span data-cutout-dimension="right"></span>
@@ -190,7 +204,7 @@
         </section>
 
         <section id="obstacleEditorPanel" class="panel obstacle-panel" hidden>
-          <div class="panel-heading"><h2>干渉物</h2><button id="clearObstacleSelectionBtn" class="text-button" type="button">解除</button></div>
+          <div class="panel-heading"><h2>コース設置不可エリア</h2><button id="clearObstacleSelectionBtn" class="text-button" type="button">解除</button></div>
           <p id="obstacleCollisionWarning" class="layout-warning-summary" hidden>コースパーツと重なっています</p>
           <div class="cad-form">
             <label>名前<input id="obstacleNameInput" type="text" maxlength="80" /></label>
@@ -198,18 +212,17 @@
             <label>Y（m）<input id="obstacleYInput" type="number" step="0.01" /></label>
             <label>横幅（m）<input id="obstacleWidthInput" type="number" min="0.01" max="50" step="0.01" /></label>
             <label>奥行（m）<input id="obstacleDepthInput" type="number" min="0.01" max="50" step="0.01" /></label>
-            <label>回転（°）<input id="obstacleRotationInput" type="number" step="1" /></label>
             <label class="check-label"><input id="obstacleVisibleInput" type="checkbox" /> 表示</label>
             <label class="check-label"><input id="obstacleLockedInput" type="checkbox" /> ロック</label>
           </div>
           <p id="obstacleEditorError" class="form-error" hidden></p>
           <div class="cad-actions">
-            <button id="rotateObstacleLeftBtn" class="button ghost" type="button">左へ45°</button>
-            <button id="rotateObstacleRightBtn" class="button ghost" type="button">右へ45°</button>
+            <button id="rotateObstacleLeftBtn" class="button ghost" type="button">左へ5°</button>
+            <button id="rotateObstacleRightBtn" class="button ghost" type="button">右へ5°</button>
           </div>
           <div class="cad-actions">
-            <button id="duplicateObstacleBtn" class="button full-button" type="button">干渉物を複製</button>
-            <button id="deleteObstacleBtn" class="button danger-button full-button" type="button">干渉物を削除</button>
+            <button id="duplicateObstacleBtn" class="button full-button" type="button">設置不可エリアを複製</button>
+            <button id="deleteObstacleBtn" class="button danger-button full-button" type="button">設置不可エリアを削除</button>
           </div>
         </section>
 
@@ -263,16 +276,11 @@
         <div>
           <p class="eyebrow">NEW LAYOUT</p>
           <h2>新規レイアウト</h2>
-          <p>四角形スペースを設定し、必要な追加設定だけを選んでレイアウトを開始します。</p>
+          <p>横幅・奥行・グリッドを指定して四角形スペースを作成します。</p>
         </div>
       </div>
-      <div class="setup-tabs" role="tablist" aria-label="新規レイアウトの設定">
-      <div class="setup-note setup-status-note"><strong id="wizardStageLabel">初期設定ウィザード</strong><span id="wizardProgress">1 レイアウトスペース</span></div>
-        <button id="layoutSpaceTab" class="setup-tab" type="button" role="tab" aria-selected="true" aria-controls="layoutSpacePanel" data-setup-tab="layout-space">四角形スペース</button>
-        <button id="spaceAdjustmentTab" class="setup-tab" type="button" role="tab" aria-selected="false" aria-controls="spaceAdjustmentPanel" data-setup-tab="space-adjustment" tabindex="-1">部屋形状調整</button>
-        <button id="interferenceTab" class="setup-tab" type="button" role="tab" aria-selected="false" aria-controls="interferencePanel" data-setup-tab="interference" tabindex="-1">干渉物設定</button>
-      </div>
-      <section id="layoutSpacePanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="layoutSpaceTab">
+      <div class="setup-note setup-status-note"><strong id="wizardStageLabel">会場スペース設定</strong><span id="wizardProgress">四角形スペース</span></div>
+      <section id="layoutSpacePanel" class="setup-tab-panel">
         <h3>四角形スペース</h3>
         <p class="setup-tab-description">横幅と奥行から、正方形または長方形のスペースを自動作成します。</p>
         <div class="setup-fields">
@@ -293,54 +301,13 @@
           <button type="button" data-preset="10,6">10 × 6m</button>
           <button type="button" data-preset="12,8">12 × 8m</button>
         </div>
-        <div class="setup-options" aria-label="追加設定">
-          <label class="check-label"><input id="configureObstaclesInput" type="checkbox" />干渉物を設定する</label>
-          <label class="check-label"><input id="adjustRoomShapeInput" type="checkbox" />部屋形状を調整する</label>
-        </div>
         <div class="setup-note">
           <strong>試作版の寸法</strong>
           <p>3レーン幅34.5cm、ストレート54cmを基準にしています。表示寸法は参照エディターの1px＝1cm基準へ合わせています。画像は後からCanva PNGへ差し替えできます。</p>
         </div>
         <div class="dialog-actions">
           <button id="cancelSetupBtn" class="button ghost" value="cancel" type="button">キャンセル</button>
-          <button id="wizardNextLayoutBtn" class="button primary large" value="default" type="submit">レイアウトを開始</button>
-        </div>
-      </section>
-      <section id="spaceAdjustmentPanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="spaceAdjustmentTab" hidden>
-        <h3>部屋形状調整</h3>
-        <p class="setup-tab-description">入力済みの四角形スペースを基準に、不要な部分の切り抜きや位置を調整します。</p>
-        <p id="spaceAdjustmentGuide" class="setup-note setup-status-note">先に「レイアウトスペース」でサイズを設定してください。</p>
-        <div class="dialog-actions setup-tab-actions">
-          <button id="backToLayoutSpaceBtn" class="button ghost" type="button">戻る</button>
-          <button id="startSpaceAdjustmentBtn" class="button primary" type="button" disabled>部屋形状調整を開始</button>
-        </div>
-      </section>
-      <section id="interferencePanel" class="setup-tab-panel" role="tabpanel" aria-labelledby="interferenceTab" hidden>
-        <h3>干渉物設定</h3>
-        <p class="setup-tab-description">スペース内にある柱や固定設備など、コース配置に影響するものを設定します。</p>
-        <div class="setup-fields obstacle-create-fields">
-          <label>名前<input id="newObstacleNameInput" type="text" maxlength="80" value="干渉物1" /></label>
-          <label>横幅（m）<input id="newObstacleWidthInput" type="number" min="0.01" max="50" step="0.01" value="0.40" /></label>
-          <label>奥行（m）<input id="newObstacleDepthInput" type="number" min="0.01" max="50" step="0.01" value="0.40" /></label>
-          <label>回転（°）<input id="newObstacleRotationInput" type="number" min="0" max="315" step="45" value="0" /></label>
-        </div>
-        <p id="newObstacleGuide" class="setup-note setup-status-note">先に「レイアウトスペース」でサイズを設定してください。</p>
-        <p id="newObstacleError" class="form-error" hidden></p>
-        <div class="dialog-actions setup-tab-actions">
-          <button id="finishObstacleSetupBtn" class="button ghost" type="button">次へ</button>
-          <button id="startObstaclePlacementBtn" class="button primary" type="button" disabled>配置する</button>
-        </div>
-        <div class="obstacle-list-section">
-          <h4>設定済みの干渉物</h4>
-          <div id="obstacleList" class="obstacle-list empty-summary">設定済みの干渉物はありません。</div>
-        </div>
-      </section>
-      <section id="setupConfirmPanel" class="setup-tab-panel" hidden>
-        <h3>確認</h3>
-        <p id="wizardConfirmSummary" class="setup-note setup-status-note"></p>
-        <div class="dialog-actions setup-tab-actions">
-          <button id="wizardBackConfirmBtn" class="button ghost" type="button">修正</button>
-          <button id="wizardCreateBtn" class="button primary" type="button">Start配置へ進む</button>
+          <button id="wizardNextLayoutBtn" class="button primary large" value="default" type="submit">スペースを作成</button>
         </div>
       </section>
     </form>
