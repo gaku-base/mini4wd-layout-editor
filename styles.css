@@ -304,6 +304,15 @@ kbd {
 .summary-row strong { color: var(--primary); }
 .empty-summary { color: var(--muted); font-size: 10px; }
 .keyboard-panel { padding-bottom: 13px; }
+.diagnostic-panel { color: var(--text); }
+.diagnostic-panel > summary { cursor: pointer; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+.diagnostic-panel[open] > summary { margin-bottom: 10px; }
+.diagnostic-note { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 0 0 10px; }
+.diagnostic-counts { display: grid; gap: 5px; margin: 0 0 10px; }
+.diagnostic-counts div { align-items: center; display: flex; justify-content: space-between; }
+.diagnostic-counts dt { color: var(--muted); font-size: 11px; }
+.diagnostic-counts dd { font-size: 12px; font-weight: 800; margin: 0; }
+.diagnostic-actions { display: grid; gap: 7px; }
 
 .setup-dialog {
   width: min(580px, calc(100vw - 30px));

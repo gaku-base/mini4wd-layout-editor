@@ -384,3 +384,18 @@
 - fitView, Start placement, undo/redo, lock, duplicate/delete, JSON and
   localStorage formats, PNG content, and metre/centimetre conversion are not
   changed by this UI consolidation.
+
+### Local diagnostic log export (2026-08-06)
+
+- A diagnostic-only, in-memory ring buffer records semantic setup, unavailable
+  area, course-part, mode, history, persistence, export, and runtime events.
+  Pointer movement, render frames, complete layout snapshots, storage contents,
+  file contents, secrets, full URLs, IP addresses, and local absolute paths are
+  excluded or redacted.
+- The buffer is capped at 1000 events and removes old informational events
+  before warnings or errors. Rapid wheel rotations for the same target are
+  coalesced; errors retain a bounded compact editor snapshot and at most 50
+  simplified part records.
+- Diagnostic data is never included in layout JSON or localStorage. It is
+  downloaded only through the explicit diagnostic-log export action, and the
+  clear action starts a new diagnostic session after confirmation.

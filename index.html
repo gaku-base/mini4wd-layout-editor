@@ -248,6 +248,20 @@
           <div id="partsSummary" class="summary-list empty-summary">まだ部品がありません</div>
         </section>
 
+        <details class="panel diagnostic-panel">
+          <summary>診断ログ</summary>
+          <p class="diagnostic-note">不具合調査用の操作記録です。端末内だけで保持し、書き出すまで送信されません。</p>
+          <dl class="diagnostic-counts">
+            <div><dt>記録件数</dt><dd id="diagnosticLogCount">0</dd></div>
+            <div><dt>エラー</dt><dd id="diagnosticErrorCount">0</dd></div>
+            <div><dt>警告</dt><dd id="diagnosticWarningCount">0</dd></div>
+          </dl>
+          <div class="diagnostic-actions">
+            <button id="exportDiagnosticLogBtn" class="button full-button" type="button">診断ログを書き出す</button>
+            <button id="clearDiagnosticLogBtn" class="button ghost full-button" type="button">ログを消去</button>
+          </div>
+        </details>
+
         <section class="panel keyboard-panel">
           <div class="panel-heading"><h2>キーボード操作</h2></div>
           <div class="keyboard-help">
@@ -350,6 +364,7 @@
   <script src="field-boundary.js"></script>
   <script src="room-boundary.js"></script>
   <script src="render-scheduler.js"></script>
+  <script src="diagnostic-logger.js"></script>
   <script src="wheel-rotation.js"></script>
   <script src="app.js"></script>
 </body>

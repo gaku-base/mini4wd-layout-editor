@@ -36,7 +36,7 @@ test('venue setup can finish without areas and enters exclusive Start placement'
   const finalize = section('function finalizeInitialSetup', 'function cancelInitialSetup');
   assert.match(exit, /if \(state\.wizard\.active\)[\s\S]*finalizeInitialSetup\(\)/);
   assert.match(finalize, /endInitialSetupSubEditor\(\)/);
-  assert.match(finalize, /persistLocal\(\);\s*if \(wizard\.isNew\) beginStartPlacement\(\)/);
+  assert.match(finalize, /persistLocal\(\);[\s\S]*if \(wizard\.isNew\) beginStartPlacement\(\)/);
   assert.match(finalize, /if \(wizard\.isNew\) fitView\(\)/);
 });
 
@@ -84,10 +84,10 @@ test('venue-area wheel and Z/X rotation uses five-degree helpers without changin
   const keys = section('function onKeyDown', 'function clearSnapTargetChoice');
   const active = section('function rotateActiveVenueArea', 'function deleteSelectedObstacle');
   assert.match(wheel, /rotateActiveVenueArea[\s\S]*INITIAL_LAYOUT_FLOW\.ROTATION_STEP/);
-  assert.match(keys, /rotateActiveVenueArea\(-INITIAL_LAYOUT_FLOW\.ROTATION_STEP\)/);
-  assert.match(keys, /rotateActiveVenueArea\(INITIAL_LAYOUT_FLOW\.ROTATION_STEP\)/);
-  assert.match(keys, /rotateCurrent\(-45\)/);
-  assert.match(keys, /rotateCurrent\(45\)/);
+  assert.match(keys, /rotateActiveVenueArea\(-INITIAL_LAYOUT_FLOW\.ROTATION_STEP, 'keyboard-z'\)/);
+  assert.match(keys, /rotateActiveVenueArea\(INITIAL_LAYOUT_FLOW\.ROTATION_STEP, 'keyboard-x'\)/);
+  assert.match(keys, /rotateCurrent\(-45, 'keyboard-z'\)/);
+  assert.match(keys, /rotateCurrent\(45, 'keyboard-x'\)/);
   assert.match(active, /INITIAL_LAYOUT_FLOW\.rotateVenueArea/);
 });
 

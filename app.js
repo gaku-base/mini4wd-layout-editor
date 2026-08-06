@@ -42,6 +42,8 @@
   if (!OBSTACLE_COURSE_WARNINGS) throw new Error('obstacle-course-warnings.jsが読み込まれていません');
   const INTERFERENCE_OBSTACLES = window.M4WD_INTERFERENCE_OBSTACLES;
   if (!INTERFERENCE_OBSTACLES) throw new Error('interference-obstacles.jsが読み込まれていません');
+  const DIAGNOSTIC_LOGGER = window.M4WD_DIAGNOSTIC_LOGGER;
+  if (!DIAGNOSTIC_LOGGER) throw new Error('diagnostic-logger.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
@@ -150,7 +152,110 @@
   let wheelRotation;
   let toastTimer = 0;
   let layoutStore;
+  let diagnosticLogger;
   const roomCornerCache = new Map();
+
+  function initializeDiagnosticLogger() {
+    try {
+      diagnosticLogger = DIAGNOSTIC_LOGGER.createDiagnosticLogger({
+        appVersion: VERSION,
+        build: document.documentElement.dataset.build || null,
+        environment: {
+          userAgent: navigator.userAgent,
+          language: navigator.language,
+          viewport: { width: window.innerWidth, height: window.innerHeight },
+          devicePixelRatio: window.devicePixelRatio || 1,
+          pathname: window.location.pathname
+        },
+        getState: diagnosticStateSnapshot
+      });
+      diagnosticLogger.attachGlobalErrorHandlers(window);
+    } catch (_) {
+      diagnosticLogger = null;
+    }
+  }
+
+  function diagnosticStateSnapshot({ includeParts = false } = {}) {
+    const selectedPart = state.selectedIds.length ? findLayoutPartById(state.selectedIds[0]) : null;
+    const obstacle = state.obstacles.find(item => item.id === state.selectedObstacleId) || null;
+    const selectedCutout = state.roomCutouts.find(item => item.id === state.cad.selectedCutoutId) || null;
+    const canvasRect = els.courseCanvas?.getBoundingClientRect?.();
+    const snapshot = {
+      currentMainMode: state.mode,
+      currentSubMode: state.subEditMode,
+      placementMode: state.obstaclePlacement ? 'unavailable-area' : state.mode === 'start' ? 'start' : state.mode === 'place' ? 'course-part' : null,
+      selectedItemId: obstacle?.id || selectedCutout?.id || selectedPart?.id || null,
+      selectedItemType: obstacle ? 'unavailable-area' : selectedCutout ? 'room-cutout' : selectedPart?.type || null,
+      spaceExists: Boolean(state.setupStarted),
+      spaceWidth: state.field.widthCm,
+      spaceDepth: state.field.heightCm,
+      gridSize: state.field.gridCm,
+      unavailableAreaCount: state.obstacles.length + state.roomCutouts.length,
+      coursePartCount: state.parts.length,
+      startPartExists: Boolean(state.start),
+      undoCount: state.history.length,
+      redoCount: state.future.length,
+      openDialog: els.setupDialog?.open ? 'initial-setup' : null,
+      openPanel: els.venueAreaCreatePanel && !els.venueAreaCreatePanel.hidden ? 'unavailable-area-create' : null,
+      viewportTransform: {
+        scale: Number(state.view.scale.toFixed(4)),
+        offsetX: Math.round(state.view.offsetX),
+        offsetY: Math.round(state.view.offsetY)
+      },
+      canvas: canvasRect ? {
+        visible: canvasRect.width > 0 && canvasRect.height > 0,
+        cssWidth: Math.round(canvasRect.width),
+        cssHeight: Math.round(canvasRect.height),
+        backingWidth: els.courseCanvas.width,
+        backingHeight: els.courseCanvas.height
+      } : null,
+      pointerActive: Boolean(state.pointer.down || state.obstacleDrag || state.cad.drag),
+      rotationActive: false
+    };
+    if (includeParts) {
+      snapshot.parts = [
+        ...(state.start ? [state.start] : []),
+        ...state.parts.slice(0, 49)
+      ].slice(0, 50).map(part => ({
+        id: part.id, type: part.type, x: part.x, y: part.y, rotation: part.rotation, locked: Boolean(part.locked)
+      }));
+      snapshot.partsTruncated = state.parts.length + (state.start ? 1 : 0) > 50;
+    }
+    return snapshot;
+  }
+
+  function logDiagnostic(eventName, details = {}, options = {}) {
+    try {
+      const entry = diagnosticLogger?.logAction(eventName, details, options) || null;
+      updateDiagnosticLogSummary();
+      return entry;
+    } catch (_) { return null; }
+  }
+
+  function logDiagnosticWarning(eventName, details = {}, options = {}) {
+    try {
+      const entry = diagnosticLogger?.logWarning(eventName, details, options) || null;
+      updateDiagnosticLogSummary();
+      return entry;
+    } catch (_) { return null; }
+  }
+
+  function logDiagnosticError(error, context = {}, options = {}) {
+    try {
+      const entry = diagnosticLogger?.logError(error, context, options) || null;
+      updateDiagnosticLogSummary();
+      return entry;
+    } catch (_) { return null; }
+  }
+
+  function checkDiagnosticModeConflict(context) {
+    const conflict = Boolean(state.subEditMode && ['start', 'place'].includes(state.mode))
+      || Boolean(state.obstaclePlacement && state.mode !== 'obstacle-edit');
+    if (conflict) logDiagnosticWarning('mode-conflict', {
+      context, currentMainMode: state.mode, currentSubMode: state.subEditMode,
+      obstaclePlacementActive: Boolean(state.obstaclePlacement)
+    }, { category: 'mode', captureState: true });
+  }
 
   function migrateLayoutCornerTypes(layout) {
     if (!layout || typeof layout !== 'object') return layout;
@@ -189,6 +294,7 @@
       'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
       'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','rotateCutoutLeftBtn','rotateCutoutRightBtn','clearCutoutSelectionBtn','cutoutRotationNote','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay',
       'subEditModeBar','subEditModeTitle','subEditObstacleCount','repeatObstaclePlacementBtn','addObstacleFromBarBtn','returnToSetupBtn','finishSubEditBtn','dragTrash','dragTrashLabel',
+      'diagnosticLogCount','diagnosticErrorCount','diagnosticWarningCount','exportDiagnosticLogBtn','clearDiagnosticLogBtn',
       'wizardProgress','wizardStageLabel'
     ];
     ids.forEach(id => { els[id] = document.getElementById(id); });
@@ -196,6 +302,7 @@
 
   function init() {
     cacheElements();
+    initializeDiagnosticLogger();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
     wheelRotation = WHEEL_ROTATION.createWheelRotationAccumulator(30);
@@ -213,6 +320,7 @@
     });
     const restored = restoreLocal();
     bindEvents();
+    logDiagnostic('app-ready', { restoredLayout: Boolean(restored) }, { category: 'session', captureState: true });
     if (!restored) {
       updateUI();
       render();
@@ -354,7 +462,10 @@
     els.startObstaclePlacementBtn?.addEventListener('click', startObstaclePlacement);
     els.cancelVenueAreaCreateBtn?.addEventListener('click', () => setVenueAreaCreatorVisible(false));
     els.repeatObstaclePlacementBtn?.addEventListener('click', repeatObstaclePlacement);
-    els.addObstacleFromBarBtn?.addEventListener('click', () => openVenueAreaCreator({ resetForm: true }));
+    els.addObstacleFromBarBtn?.addEventListener('click', () => {
+      logDiagnostic('unavailable-area-add-another', {}, { category: 'unavailable-area' });
+      openVenueAreaCreator({ resetForm: true });
+    });
     els.clearObstacleSelectionBtn?.addEventListener('click', () => clearObstacleSelection());
     els.rotateObstacleLeftBtn?.addEventListener('click', () => rotateSelectedObstacle(-INITIAL_LAYOUT_FLOW.ROTATION_STEP));
     els.rotateObstacleRightBtn?.addEventListener('click', () => rotateSelectedObstacle(INITIAL_LAYOUT_FLOW.ROTATION_STEP));
@@ -384,11 +495,13 @@
     els.saveBtn.addEventListener('click', saveJson);
     els.loadInput.addEventListener('change', loadJson);
     els.exportBtn.addEventListener('click', exportPng);
+    els.exportDiagnosticLogBtn?.addEventListener('click', exportDiagnosticLogFile);
+    els.clearDiagnosticLogBtn?.addEventListener('click', clearDiagnosticLogWithConfirmation);
     els.undoBtn.addEventListener('click', undo);
     els.redoBtn.addEventListener('click', redo);
     els.rewindBtn.addEventListener('click', rewindLastPart);
-    els.rotateLeftBtn.addEventListener('click', () => rotateCurrent(-45));
-    els.rotateRightBtn.addEventListener('click', () => rotateCurrent(45));
+    els.rotateLeftBtn.addEventListener('click', () => rotateCurrent(-45, 'button'));
+    els.rotateRightBtn.addEventListener('click', () => rotateCurrent(45, 'button'));
     els.gridBtn.addEventListener('click', toggleGrid);
     els.fitViewBtn.addEventListener('click', fitView);
     els.manualFitBtn.addEventListener('click', beginManualLayoutMove);
@@ -455,6 +568,10 @@
   }
 
   function openSetup(reset) {
+    logDiagnostic(reset ? 'new-layout-started' : 'initial-setup-edit-started', {
+      existingCoursePartCount: state.parts.length,
+      existingUnavailableAreaCount: state.obstacles.length + state.roomCutouts.length
+    }, { category: 'navigation' });
     if (reset) {
       els.fieldWidthInput.value = '6.0';
       els.fieldHeightInput.value = '4.0';
@@ -486,12 +603,14 @@
   function ensureSetupDialogOpen() {
     if (els.setupDialog.open) return false;
     els.setupDialog.showModal();
+    logDiagnostic('dialog-opened', { dialog: 'initial-setup' }, { category: 'ui' });
     return true;
   }
 
   function ensureSetupDialogClosed() {
     if (!els.setupDialog.open) return false;
     els.setupDialog.close();
+    logDiagnostic('dialog-closed', { dialog: 'initial-setup' }, { category: 'ui' });
     return true;
   }
 
@@ -504,6 +623,7 @@
   }
 
   function exitSubEditMode({ returnToSetup }) {
+    const previousSubMode = state.subEditMode;
     if (state.wizard.active) {
       endInitialSetupSubEditor();
       if (returnToSetup) {
@@ -526,6 +646,8 @@
     updateUI();
     render();
     if (!returnToSetup) els.courseCanvas.focus();
+    logDiagnostic('sub-mode-ended', { previousSubMode, returnToSetup: Boolean(returnToSetup) }, { category: 'mode' });
+    checkDiagnosticModeConflict('exit-sub-edit-mode');
   }
 
   // A new layout starts from a fresh setup draft. The prior layout remains in
@@ -561,6 +683,12 @@
       gridCm
     };
     state.siteBoundary = ROOM_BOUNDARY.defaultSiteBoundary(state.field);
+    logDiagnostic('layout-space-values-confirmed', {
+      widthCm: state.field.widthCm, depthCm: state.field.heightCm, gridCm: state.field.gridCm
+    }, { category: 'layout-space', captureState: true });
+    logDiagnostic('layout-space-created', {
+      widthCm: state.field.widthCm, depthCm: state.field.heightCm
+    }, { category: 'layout-space' });
     if (state.wizard.isNew) fitView();
     continueInitialSetupAfter('layout-space');
   }
@@ -580,6 +708,7 @@
     state.wizard.step = 'venue-setup';
     ensureSetupDialogClosed();
     enterSubEditMode('interference', 'move');
+    logDiagnostic('venue-setup-started', {}, { category: 'unavailable-area', captureState: true });
     setVenueAreaCreatorVisible(false);
     updateUI();
     if (state.wizard.isNew) fitView();
@@ -600,7 +729,9 @@
   }
 
   function setVenueAreaCreatorVisible(visible) {
+    const changed = Boolean(els.venueAreaCreatePanel) && els.venueAreaCreatePanel.hidden === Boolean(visible);
     if (els.venueAreaCreatePanel) els.venueAreaCreatePanel.hidden = !visible;
+    if (changed) logDiagnostic(visible ? 'unavailable-area-panel-opened' : 'unavailable-area-panel-closed', {}, { category: 'ui' });
     if (visible) setTimeout(() => els.newObstacleNameInput?.focus(), 0);
   }
 
@@ -624,6 +755,9 @@
     ensureSetupDialogClosed();
     recalculateLayoutWarnings();
     persistLocal();
+    logDiagnostic('course-creation-proceeded', {
+      isNew: Boolean(wizard.isNew), unavailableAreaCount: state.obstacles.length + state.roomCutouts.length
+    }, { category: 'navigation', captureState: true });
     if (wizard.isNew) beginStartPlacement();
     else state.mode = 'move';
     updateUI();
@@ -642,6 +776,7 @@
     state.mode = 'move';
     ensureSetupDialogClosed();
     updateUI(); render(); els.courseCanvas.focus();
+    logDiagnostic('initial-setup-cancelled', { wasNew: Boolean(wizard.isNew) }, { category: 'navigation' });
   }
 
   // Mode changes must not leave a placement ghost or a sub-editor interaction
@@ -664,15 +799,21 @@
   }
 
   function enterSubEditMode(subEditMode, mode) {
+    const previousSubMode = state.subEditMode;
+    const previousMode = state.mode;
     cleanupEditorModeState();
     state.subEditMode = subEditMode;
     state.mode = mode;
+    logDiagnostic('sub-mode-changed', { previousSubMode, nextSubMode: subEditMode, previousMode, nextMode: mode }, { category: 'mode' });
+    checkDiagnosticModeConflict('enter-sub-edit-mode');
   }
 
   function leaveSubEditModeForPlacement() {
     if (!state.subEditMode && state.mode !== 'obstacle-edit') return;
+    const previousSubMode = state.subEditMode;
     cleanupEditorModeState();
     state.subEditMode = null;
+    logDiagnostic('sub-mode-changed', { previousSubMode, nextSubMode: null }, { category: 'mode' });
   }
 
   // Both automatic (new-layout confirmation) and manual Start placement must
@@ -690,6 +831,8 @@
     state.pointer.pendingPlacementProposal = null;
     state.selectedType = 'start';
     state.mode = 'start';
+    logDiagnostic('start-placement-started', {}, { category: 'course-part', captureState: true });
+    checkDiagnosticModeConflict('begin-start-placement');
   }
 
   function applySetup() {
@@ -745,6 +888,7 @@
     if (state.wizard.active) return;
     if (state.layoutMove.active) cancelManualLayoutMove();
     if (!['place','move','delete','color','boundary','cutout'].includes(mode)) return;
+    const previousMode = state.mode;
     leaveSubEditModeForPlacement();
     state.mode = state.mode === mode && mode !== 'place' ? 'place' : mode;
     state.hoveredPartId = null;
@@ -755,11 +899,14 @@
     updateUI();
     render();
     els.courseCanvas.focus();
+    logDiagnostic('main-mode-changed', { previousMode, nextMode: state.mode }, { category: 'mode', captureState: true });
+    checkDiagnosticModeConflict('set-mode');
   }
 
   function selectPartType(type) {
     if (state.wizard.active) return;
     if (!PARTS[type]) return;
+    logDiagnostic('course-part-selected', { partType: type }, { category: 'course-part' });
     if (state.layoutMove.active) cancelManualLayoutMove();
     if (type === 'start') {
       if (state.start) {
@@ -777,6 +924,7 @@
     if (isCornerType(type)) state.activeCornerVariant = CORNER_VARIANT.variantForType(type);
     state.selectedType = isCornerType(type) ? activeCornerType() : type;
     state.mode = 'place';
+    logDiagnostic('course-part-placement-started', { partType: state.selectedType }, { category: 'course-part' });
     prepareCornerGhostForSelection();
     state.hoveredPartId = null;
     clearSelection(false);
@@ -795,18 +943,30 @@
   function snapshot() { snapshotSerialized(JSON.stringify(serializeState())); }
 
   function undo() {
-    if (!state.history.length) return toast('戻せる操作がありません');
+    const beforeUndo = state.history.length;
+    const beforeRedo = state.future.length;
+    if (!state.history.length) {
+      logDiagnosticWarning('undo-unavailable', { beforeUndo, beforeRedo }, { category: 'history' });
+      return toast('戻せる操作がありません');
+    }
     state.future.push(JSON.stringify(serializeState()));
     if (state.future.length > HISTORY_LIMIT) state.future.shift();
     applySerialized(JSON.parse(state.history.pop()), false);
+    logDiagnostic('undo', { beforeUndo, beforeRedo, afterUndo: state.history.length, afterRedo: state.future.length }, { category: 'history' });
     toast('元に戻しました');
   }
 
   function redo() {
-    if (!state.future.length) return toast('やり直せる操作がありません');
+    const beforeUndo = state.history.length;
+    const beforeRedo = state.future.length;
+    if (!state.future.length) {
+      logDiagnosticWarning('redo-unavailable', { beforeUndo, beforeRedo }, { category: 'history' });
+      return toast('やり直せる操作がありません');
+    }
     state.history.push(JSON.stringify(serializeState()));
     if (state.history.length > HISTORY_LIMIT) state.history.shift();
     applySerialized(JSON.parse(state.future.pop()), false);
+    logDiagnostic('redo', { beforeUndo, beforeRedo, afterUndo: state.history.length, afterRedo: state.future.length }, { category: 'history' });
     toast('やり直しました');
   }
 
@@ -921,7 +1081,14 @@
 
   function persistLocal() {
     if (state.wizard.active) return { status: 'deferred-wizard' };
-    return layoutStore?.save(serializeState()) || { status: 'not-ready' };
+    try {
+      const result = layoutStore?.save(serializeState()) || { status: 'not-ready' };
+      if (!['saved', 'not-ready'].includes(result.status)) logDiagnosticWarning('local-save-failed', { status: result.status }, { category: 'persistence' });
+      return result;
+    } catch (error) {
+      logDiagnosticError(error, { operation: 'local-save' }, { eventName: 'local-save-failed', category: 'persistence' });
+      return { status: 'failed' };
+    }
   }
 
   function restoreLocal() {
@@ -931,25 +1098,35 @@
       toast(restored.versionStatus === 'supportedLegacy'
         ? '旧RC1レイアウトを復元しました。次の保存からRC2形式になります'
         : '保存済みレイアウトを復元しました');
+      logDiagnostic('local-restore-succeeded', { versionStatus: restored.versionStatus }, { category: 'persistence' });
       return true;
     }
     if (restored.status === 'unsupported-version') {
       toast(`新しい保存形式（${restored.version}）を保持しています。この版では上書きしません`);
     }
+    if (restored.status !== 'empty') logDiagnosticWarning('local-restore-failed', { status: restored.status }, { category: 'persistence' });
     return false;
   }
 
   function saveJson() {
-    const data = JSON.stringify(serializeState(), null, 2);
-    downloadBlob(new Blob([data], { type: 'application/json' }), `mini4wd-layout-${dateStamp()}.json`);
-    persistLocal();
-    toast('JSONを保存しました');
+    logDiagnostic('layout-save-started', {}, { category: 'persistence' });
+    try {
+      const data = JSON.stringify(serializeState(), null, 2);
+      downloadBlob(new Blob([data], { type: 'application/json' }), `mini4wd-layout-${dateStamp()}.json`);
+      persistLocal();
+      logDiagnostic('layout-save-succeeded', { format: 'json' }, { category: 'persistence' });
+      toast('JSONを保存しました');
+    } catch (error) {
+      logDiagnosticError(error, { operation: 'layout-save', format: 'json' }, { eventName: 'layout-save-failed', category: 'persistence' });
+      toast('JSONを保存できませんでした');
+    }
   }
 
   async function loadJson(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    logDiagnostic('layout-load-started', { fileSize: Number(file.size) || null }, { category: 'persistence' });
     try {
       const text = await file.text();
       const parsed = migrateLayoutCornerTypes(JSON.parse(text));
@@ -957,9 +1134,11 @@
       const versionStatus = PERSISTENCE.classifyLayoutVersion(parsed?.version, validationOptions);
       if (!PERSISTENCE.validateLayout(parsed, validationOptions)) throw new Error('未対応または不正な保存形式です');
       applySerialized(PERSISTENCE.migrateSupportedLegacyLayout(parsed, versionStatus), true);
+      logDiagnostic('layout-load-succeeded', { versionStatus }, { category: 'persistence' });
       toast('レイアウトを読み込みました');
     } catch (err) {
       console.error(err);
+      logDiagnosticError(err, { operation: 'layout-load' }, { eventName: 'layout-load-failed', category: 'persistence' });
       toast('JSONを読み込めませんでした');
     }
   }
@@ -992,12 +1171,24 @@
   }
 
   function performPngExport() {
-    const canvas = createExportCanvas();
-    canvas.toBlob(blob => {
-      if (!blob) return;
-      downloadBlob(blob, `mini4wd-layout-${dateStamp()}.png`);
-      toast('PNGを書き出しました');
-    }, 'image/png');
+    logDiagnostic('png-export-started', {}, { category: 'export' });
+    try {
+      const canvas = createExportCanvas();
+      canvas.toBlob(blob => {
+        try {
+          if (!blob) throw new Error('PNG Blobを作成できませんでした');
+          downloadBlob(blob, `mini4wd-layout-${dateStamp()}.png`);
+          logDiagnostic('png-export-succeeded', { width: canvas.width, height: canvas.height }, { category: 'export' });
+          toast('PNGを書き出しました');
+        } catch (error) {
+          logDiagnosticError(error, { operation: 'png-export' }, { eventName: 'png-export-failed', category: 'export' });
+          toast('PNGを書き出せませんでした');
+        }
+      }, 'image/png');
+    } catch (error) {
+      logDiagnosticError(error, { operation: 'png-export' }, { eventName: 'png-export-failed', category: 'export' });
+      toast('PNGを書き出せませんでした');
+    }
   }
 
   function exportPng() {
@@ -1144,6 +1335,47 @@
     return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
   }
 
+  function diagnosticDateStamp() {
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}-${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}${String(d.getSeconds()).padStart(2,'0')}`;
+  }
+
+  function exportDiagnosticLogFile() {
+    try {
+      logDiagnostic('diagnostic-log-export', {}, { category: 'export' });
+      const payload = diagnosticLogger?.exportDiagnosticLog();
+      if (!payload) throw new Error('診断ログが初期化されていません');
+      const json = JSON.stringify(payload, null, 2);
+      downloadBlob(new Blob([json], { type: 'application/json' }), `mini4wd-layout-diagnostic-${diagnosticDateStamp()}.json`);
+      toast('診断ログを書き出しました');
+      updateDiagnosticLogSummary();
+    } catch (error) {
+      logDiagnosticError(error, { operation: 'diagnostic-log-export' }, { eventName: 'diagnostic-log-export-failed', category: 'export' });
+      toast('診断ログを書き出せませんでした');
+    }
+  }
+
+  function clearDiagnosticLogWithConfirmation() {
+    if (!window.confirm('このセッションの診断ログを消去しますか？')) return;
+    try {
+      diagnosticLogger?.clearDiagnosticLog();
+      updateDiagnosticLogSummary();
+      toast('診断ログを消去しました');
+    } catch (_) {
+      toast('診断ログを消去できませんでした');
+    }
+  }
+
+  function updateDiagnosticLogSummary() {
+    try {
+      const summary = diagnosticLogger?.getDiagnosticLogSummary();
+      if (!summary) return;
+      if (els.diagnosticLogCount) els.diagnosticLogCount.textContent = String(summary.totalEvents);
+      if (els.diagnosticErrorCount) els.diagnosticErrorCount.textContent = String(summary.errorCount);
+      if (els.diagnosticWarningCount) els.diagnosticWarningCount.textContent = String(summary.warningCount);
+    } catch (_) {}
+  }
+
   function downloadBlob(blob, filename) {
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -1199,6 +1431,13 @@
     state.view.scale = clamp(Math.min(sx, sy), 0.12, 5);
     state.view.offsetX = (rect.width - state.field.widthCm * state.view.scale) / 2 - state.field.originX * state.view.scale;
     state.view.offsetY = (rect.height - state.field.heightCm * state.view.scale) / 2 - state.field.originY * state.view.scale;
+    logDiagnostic('fit-view-executed', {
+      widthCm: state.field.widthCm,
+      depthCm: state.field.heightCm,
+      scale: Number(state.view.scale.toFixed(4)),
+      viewportWidth: Math.round(rect.width),
+      viewportHeight: Math.round(rect.height)
+    }, { category: 'layout-space', captureState: true });
     updateUI();
     render();
   }
@@ -2497,6 +2736,9 @@
       placementMeta.physicalPointerPosition || worldToScreen(state.cursor.x, state.cursor.y)
     );
     state.rotation = state.start.rotation;
+    logDiagnostic('start-part-placed', {
+      x: state.start.x, y: state.start.y, rotation: state.start.rotation, outside
+    }, { category: 'course-part', captureState: true });
     toast(outside ? 'スタートを作成範囲外へ配置しました（オレンジ枠で表示）' : 'スタートの前後どちら側からでも配置できます');
     persistLocal();
   }
@@ -3641,16 +3883,27 @@
     }
     if (state.obstacleDrag?.pointerId === e.pointerId) {
       const drag = state.obstacleDrag;
+      const current = state.obstacles.find(obstacle => obstacle.id === drag.id) || drag.original;
       const deleteObstacle = pointerIsOverDragTrash(e);
       if (deleteObstacle) {
         state.obstacles = state.obstacles.filter(obstacle => obstacle.id !== drag.id);
         state.selectedObstacleId = null;
         snapshotSerialized(drag.historyState);
+        logDiagnostic('unavailable-area-deleted', { targetId: drag.id, source: 'drag-trash' }, { category: 'unavailable-area' });
         toast('設置不可エリアを削除しました');
       } else if (drag.invalid) {
         replaceObstacle(drag.original, false);
+        logDiagnosticWarning('unavailable-area-drag-rejected', {
+          targetId: drag.id, reason: 'invalid-position'
+        }, { category: 'transform' });
       } else if (drag.moved) {
         snapshotSerialized(drag.historyState);
+        logDiagnostic('unavailable-area-drag-end', {
+          targetId: drag.id,
+          startX: drag.original.x, startY: drag.original.y,
+          endX: current.x, endY: current.y,
+          distance: Math.round(Math.hypot(current.x - drag.original.x, current.y - drag.original.y))
+        }, { category: 'transform' });
       }
       state.obstacleDrag = null;
       clearDragTrashState();
@@ -3705,6 +3958,7 @@
       toast(snappedAsGroup
         ? `${movedIds.length}個のパーツを接続して最前面へ移動しました`
         : `${movedIds.length}個のパーツを最前面へ移動しました`);
+      logDiagnostic('course-part-moved', { targetIds: movedIds, targetCount: movedIds.length, snapped: snappedAsGroup }, { category: 'transform' });
     }
 
     state.pointer.down = false;
@@ -3811,7 +4065,7 @@
     const direction = wheelRotation.push(e);
     if (!direction) return;
     if (state.obstaclePlacement || selectedObstacle()) {
-      rotateActiveVenueArea(direction < 0 ? -INITIAL_LAYOUT_FLOW.ROTATION_STEP : INITIAL_LAYOUT_FLOW.ROTATION_STEP);
+      rotateActiveVenueArea(direction < 0 ? -INITIAL_LAYOUT_FLOW.ROTATION_STEP : INITIAL_LAYOUT_FLOW.ROTATION_STEP, 'wheel');
       return;
     }
     if (state.mode === 'place') {
@@ -3821,7 +4075,7 @@
         return;
       }
     }
-    rotateCurrent(direction < 0 ? -45 : 45);
+    rotateCurrent(direction < 0 ? -45 : 45, 'wheel');
   }
 
   function hasWheelRotatableTarget() {
@@ -3919,12 +4173,12 @@
     if (key === 'h') { e.preventDefault(); setMode('cutout'); return; }
     if (key === 'z') {
       e.preventDefault();
-      if (!rotateActiveVenueArea(-INITIAL_LAYOUT_FLOW.ROTATION_STEP)) rotateCurrent(-45);
+      if (!rotateActiveVenueArea(-INITIAL_LAYOUT_FLOW.ROTATION_STEP, 'keyboard-z')) rotateCurrent(-45, 'keyboard-z');
       return;
     }
     if (key === 'x') {
       e.preventDefault();
-      if (!rotateActiveVenueArea(INITIAL_LAYOUT_FLOW.ROTATION_STEP)) rotateCurrent(45);
+      if (!rotateActiveVenueArea(INITIAL_LAYOUT_FLOW.ROTATION_STEP, 'keyboard-x')) rotateCurrent(45, 'keyboard-x');
       return;
     }
     if (key === 'f') {
@@ -4051,6 +4305,17 @@
     clearSnapTargetChoice();
     recalculateBankStates();
     recalculateLayoutWarnings();
+    logDiagnostic('course-part-placed', {
+      targetId: part.id, partType: part.type, x: part.x, y: part.y, rotation: part.rotation,
+      snapped: Boolean(proposal.snapped), outOfBounds: Boolean(proposal.outOfBounds)
+    }, { category: 'course-part', captureState: true });
+    logDiagnostic(proposal.snapped ? 'course-part-connection-succeeded' : 'course-part-connection-failed', {
+      targetId: part.id, partType: part.type, snapped: Boolean(proposal.snapped)
+    }, { category: 'course-part' });
+    const partWarningCount = state.layoutWarnings.filter(warning => warning.partId === part.id || warning.partAId === part.id || warning.partBId === part.id).length;
+    logDiagnostic(partWarningCount ? 'course-part-interference-detected' : 'course-part-interference-clear', {
+      targetId: part.id, warningCount: partWarningCount
+    }, { category: 'course-part' });
     // The next ghost must be a fresh proposal. It cannot share objects with
     // the part just committed from the captured proposal above.
     refreshFastPathGhostProposal();
@@ -4196,6 +4461,7 @@
       state.selectedType = 'straight';
       toast('スタートパーツを削除しました。開始位置が未設定です');
     } else toast(`${count}個のパーツを削除しました`);
+    logDiagnostic('course-part-deleted', { targetIds: unique, targetCount: count, includedStart: deletesStart }, { category: 'course-part' });
     persistLocal(); updateUI(); render();
   }
 
@@ -4214,17 +4480,25 @@
     persistLocal(); updateUI(); render();
   }
 
-  function rotateCurrent(delta) {
+  function rotateCurrent(delta, inputMethod = 'button') {
     if (state.wizard.active) return;
     if (state.mode === 'start' && !state.start) {
+      const beforeAngle = state.rotation;
       state.rotation = normalizeRotation(state.rotation + delta);
+      logDiagnostic('course-part-rotated', {
+        inputMethod, beforeAngle, afterAngle: state.rotation, step: Math.abs(delta), targetId: 'start-ghost', targetType: 'start'
+      }, { category: 'transform', coalesceKey: inputMethod === 'wheel' ? 'rotate:start-ghost:wheel' : null });
       toast(`スタートレーンを${delta < 0 ? '左' : '右'}へ回転しました`);
       updateUI(); render();
       return;
     }
 
     if (state.mode === 'place') {
+      const beforeAngle = state.rotation;
       state.rotation = normalizeRotation(state.rotation + delta);
+      logDiagnostic('course-part-rotated', {
+        inputMethod, beforeAngle, afterAngle: state.rotation, step: Math.abs(delta), targetId: 'course-part-ghost', targetType: state.selectedType
+      }, { category: 'transform', coalesceKey: inputMethod === 'wheel' ? `rotate:course-part-ghost:${state.selectedType}:wheel` : null });
       toast(`配置パーツを${delta < 0 ? '左' : '右'}へ回転しました`);
       updateUI(); render();
       return;
@@ -4232,12 +4506,17 @@
 
     const parts = selectedParts();
     if (!parts.length) return toast('回転するパーツを選択してください');
+    const beforeAngle = parts[0].rotation;
     snapshot();
     parts.forEach(p => { p.rotation = normalizeRotation(p.rotation + delta); });
     state.connections = LAYOUT_GRAPH.removeEdgesForParts(state.connections, parts.map(part => part.id));
     recalculateBankStates();
     recalculateLayoutWarnings();
     rebuildActiveConnectionFromTail();
+    logDiagnostic('course-part-rotated', {
+      inputMethod, beforeAngle, afterAngle: parts[0].rotation, step: Math.abs(delta),
+      targetId: parts.length === 1 ? parts[0].id : 'multiple', targetType: parts.length === 1 ? parts[0].type : 'course-part-group', targetCount: parts.length
+    }, { category: 'transform', coalesceKey: inputMethod === 'wheel' ? `rotate:${parts.map(part => part.id).join(',')}:wheel` : null });
     toast(`${parts.length}個のパーツを${delta < 0 ? '左' : '右'}へ回転しました`);
     persistLocal(); updateUI(); render();
   }
@@ -4276,19 +4555,27 @@
       offsetX: world.x - obstacle.x, offsetY: world.y - obstacle.y,
       original: { ...obstacle }, historyState: JSON.stringify(serializeState()), moved: false, invalid: false
     };
+    logDiagnostic('unavailable-area-drag-start', {
+      targetId: obstacle.id, startX: obstacle.x, startY: obstacle.y
+    }, { category: 'transform' });
     return true;
   }
 
   function cancelObstacleDrag() {
-    if (state.obstacleDrag) replaceObstacle(state.obstacleDrag.original, false);
+    if (state.obstacleDrag) {
+      logDiagnostic('unavailable-area-drag-cancelled', { targetId: state.obstacleDrag.id }, { category: 'transform' });
+      replaceObstacle(state.obstacleDrag.original, false);
+    }
     state.obstacleDrag = null;
     clearDragTrashState();
   }
 
   function clearObstacleSelection(refresh = true) {
+    const targetId = state.selectedObstacleId;
     state.selectedObstacleId = null;
     cancelObstacleDrag();
     if (refresh) { updateUI(); render(); }
+    if (targetId) logDiagnostic('unavailable-area-selection-cleared', { targetId }, { category: 'selection' });
   }
 
   function selectObstacle(id, options = {}) {
@@ -4299,6 +4586,7 @@
     state.hoveredPartId = null;
     if (options.closeSetup) ensureSetupDialogClosed();
     if (options.mode !== false) state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
+    logDiagnostic('unavailable-area-selected', { targetId: obstacle.id, targetType: 'unavailable-area' }, { category: 'selection' });
     updateUI(); render();
     return true;
   }
@@ -4332,9 +4620,15 @@
       return;
     }
     setNewObstacleError('');
+    logDiagnostic('unavailable-area-size-confirmed', {
+      widthCm: candidate.widthCm, depthCm: candidate.depthCm
+    }, { category: 'unavailable-area', captureState: true });
     state.wizard.step = 'interference';
     enterSubEditMode('interference', 'obstacle-edit');
     state.obstaclePlacement = { ...candidate, id: 'ghost', visible: true, locked: false };
+    logDiagnostic('unavailable-area-placement-started', {
+      widthCm: candidate.widthCm, depthCm: candidate.depthCm, rotation: candidate.rotation
+    }, { category: 'unavailable-area' });
     setVenueAreaCreatorVisible(false);
     toast('クリック：配置　ホイール／Z・X：5°回転　Esc：キャンセル');
     updateUI();
@@ -4361,6 +4655,9 @@
       visible: true,
       locked: false
     };
+    logDiagnostic('unavailable-area-repeat-started', {
+      sourceId: source.id, widthCm: source.widthCm, depthCm: source.depthCm, rotation: source.rotation
+    }, { category: 'unavailable-area' });
     toast('クリック：配置　ホイール／Z・X：5°回転　Esc：キャンセル');
     updateUI(); render(); els.courseCanvas.focus();
   }
@@ -4368,6 +4665,7 @@
   function cancelObstaclePlacement() {
     if (!state.obstaclePlacement) return;
     state.obstaclePlacement = null;
+    logDiagnostic('unavailable-area-placement-cancelled', {}, { category: 'unavailable-area' });
     state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
     toast('設置不可エリアの配置をキャンセルしました');
     updateUI(); render();
@@ -4387,7 +4685,15 @@
     state.obstaclePlacement = null;
     state.mode = state.subEditMode === 'interference' ? 'move' : (state.start ? 'place' : 'start');
     selectObstacle(obstacle.id, { mode: false });
-    if (obstacleOverlapsCourse(obstacle)) toast('設置不可エリアを配置しました。コースパーツと重なっています');
+    const overlapsCourse = obstacleOverlapsCourse(obstacle);
+    logDiagnostic('unavailable-area-placed', {
+      targetId: obstacle.id, x: obstacle.x, y: obstacle.y, widthCm: obstacle.widthCm,
+      depthCm: obstacle.depthCm, rotation: obstacle.rotation, overlapsCourse
+    }, { category: 'unavailable-area', captureState: true });
+    if (overlapsCourse) {
+      logDiagnosticWarning('unavailable-area-course-interference', { targetId: obstacle.id }, { category: 'unavailable-area' });
+      toast('設置不可エリアを配置しました。コースパーツと重なっています');
+    }
     else toast('設置不可エリアを配置しました');
     persistLocal(); updateUI(); render();
   }
@@ -4428,8 +4734,15 @@
     if (next.name === obstacle.name && next.x === obstacle.x && next.y === obstacle.y
       && next.widthCm === obstacle.widthCm && next.depthCm === obstacle.depthCm && next.rotation === obstacle.rotation
       && next.visible === obstacle.visible && next.locked === obstacle.locked) return setObstacleEditorError('');
+    const lockChanged = next.locked !== obstacle.locked;
     snapshot();
     replaceObstacle(next);
+    if (lockChanged) logDiagnostic(next.locked ? 'unavailable-area-locked' : 'unavailable-area-unlocked', {
+      targetId: next.id
+    }, { category: 'unavailable-area' });
+    else logDiagnostic('unavailable-area-properties-updated', {
+      targetId: next.id, geometryChanged, visible: next.visible
+    }, { category: 'unavailable-area' });
     setObstacleEditorError('');
   }
 
@@ -4440,11 +4753,12 @@
     if (!copy) return toast('複製できる位置がありません');
     snapshot();
     state.obstacles.push(copy);
+    logDiagnostic('unavailable-area-duplicated', { sourceId: obstacle.id, targetId: copy.id }, { category: 'unavailable-area' });
     selectObstacle(copy.id);
     persistLocal(); updateUI(); render();
   }
 
-  function rotateSelectedObstacle(delta) {
+  function rotateSelectedObstacle(delta, inputMethod = 'button') {
     const obstacle = selectedObstacle();
     if (!obstacle) return;
     if (obstacle.locked) return setObstacleEditorError('ロック中のため編集できません。');
@@ -4454,19 +4768,28 @@
     }
     snapshot();
     replaceObstacle(next);
+    logDiagnostic('unavailable-area-rotated', {
+      inputMethod, beforeAngle: obstacle.rotation, afterAngle: next.rotation,
+      step: Math.abs(delta), targetId: obstacle.id, targetType: 'unavailable-area'
+    }, { category: 'transform', coalesceKey: inputMethod === 'wheel' ? `rotate:${obstacle.id}:wheel` : null });
     setObstacleEditorError('');
   }
 
-  function rotateActiveVenueArea(delta) {
+  function rotateActiveVenueArea(delta, inputMethod = 'button') {
     if (state.obstaclePlacement) {
+      const beforeAngle = state.obstaclePlacement.rotation;
       const rotation = INITIAL_LAYOUT_FLOW.rotateVenueArea(state.obstaclePlacement.rotation, delta);
       state.obstaclePlacement = { ...state.obstaclePlacement, rotation };
+      logDiagnostic('unavailable-area-rotated', {
+        inputMethod, beforeAngle, afterAngle: rotation, step: Math.abs(delta),
+        targetId: 'unavailable-area-ghost', targetType: 'unavailable-area'
+      }, { category: 'transform', coalesceKey: inputMethod === 'wheel' ? 'rotate:unavailable-area-ghost:wheel' : null });
       toast(`設置不可エリア：${rotation}°`);
       updateUI(); render();
       return true;
     }
     if (!selectedObstacle()) return false;
-    rotateSelectedObstacle(delta);
+    rotateSelectedObstacle(delta, inputMethod);
     return true;
   }
 
@@ -4477,6 +4800,7 @@
     snapshot();
     state.obstacles = state.obstacles.filter(item => item.id !== obstacle.id);
     state.selectedObstacleId = null;
+    logDiagnostic('unavailable-area-deleted', { targetId: obstacle.id, source: 'delete-button' }, { category: 'unavailable-area' });
     persistLocal(); updateUI(); render();
   }
 
@@ -5346,6 +5670,7 @@
     els.courseCanvas.classList.toggle('mode-cad', boundaryMode || cutoutMode);
     updateStatusOnly();
     updateSummary();
+    updateDiagnosticLogSummary();
   }
 
   function updateStatusOnly() {

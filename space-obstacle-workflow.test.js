@@ -37,7 +37,7 @@ test('selected cutouts and obstacles expose clear, rotate, duplicate, and delete
     assert.match(html, new RegExp(`id="${id}"`));
   });
   assert.match(app, /function rotateSelectedCutout\(delta\)/);
-  assert.match(app, /function rotateSelectedObstacle\(delta\)/);
+  assert.match(app, /function rotateSelectedObstacle\(delta, inputMethod = 'button'\)/);
   assert.match(app, /obstacle\.locked\) return setObstacleEditorError/);
   assert.match(app, /e\.target instanceof HTMLInputElement/);
 });
