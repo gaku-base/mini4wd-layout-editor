@@ -50,6 +50,11 @@
     };
   }
 
+  function countInvalidUnavailableAreas(areas, validate) {
+    if (!Array.isArray(areas) || typeof validate !== 'function') return 0;
+    return areas.filter(area => validate(area)?.valid !== true).length;
+  }
+
   return Object.freeze({
     STEPS,
     ROTATION_STEP,
@@ -57,6 +62,7 @@
     nextStep,
     nextObstacleName,
     rotateVenueArea,
-    unavailableAreaFromDrag
+    unavailableAreaFromDrag,
+    countInvalidUnavailableAreas
   });
 }));

@@ -10,6 +10,7 @@
   // All persisted CAD values are millimetres; the app converts at its canvas edge.
   const GRID_MM = 10;
   const MIN_SIZE_MM = 10;
+  const ROTATION_STEP = 5;
   const RECTANGLE = 'rectangle';
   const CUTOUT_TYPE = 'room-cutout';
 
@@ -28,8 +29,8 @@
   }
 
   function normalizeRotation(value) {
-    const normalized = ((Math.round(number(value) / 90) * 90) % 360 + 360) % 360;
-    return [0, 90, 180, 270].includes(normalized) ? normalized : 0;
+    const normalized = ((Math.round(number(value) / ROTATION_STEP) * ROTATION_STEP) % 360 + 360) % 360;
+    return Object.is(normalized, -0) ? 0 : normalized;
   }
 
   function defaultSiteBoundary(field = {}) {
@@ -113,11 +114,24 @@
     if (item.rotation === 0 || item.rotation === 180) return rectFrom(item);
     const centerX = item.x + item.width / 2;
     const centerY = item.y + item.height / 2;
+    if (item.rotation === 90 || item.rotation === 270) {
+      return {
+        left: centerX - item.height / 2,
+        top: centerY - item.width / 2,
+        right: centerX + item.height / 2,
+        bottom: centerY + item.width / 2
+      };
+    }
+    const radians = item.rotation * Math.PI / 180;
+    const halfWidth = item.width / 2;
+    const halfHeight = item.height / 2;
+    const extentX = Math.abs(Math.cos(radians)) * halfWidth + Math.abs(Math.sin(radians)) * halfHeight;
+    const extentY = Math.abs(Math.sin(radians)) * halfWidth + Math.abs(Math.cos(radians)) * halfHeight;
     return {
-      left: centerX - item.height / 2,
-      top: centerY - item.width / 2,
-      right: centerX + item.height / 2,
-      bottom: centerY + item.width / 2
+      left: centerX - extentX,
+      top: centerY - extentY,
+      right: centerX + extentX,
+      bottom: centerY + extentY
     };
   }
 
@@ -433,7 +447,7 @@
   }
 
   return Object.freeze({
-    GRID_MM, MIN_SIZE_MM, RECTANGLE, CUTOUT_TYPE,
+    GRID_MM, MIN_SIZE_MM, ROTATION_STEP, RECTANGLE, CUTOUT_TYPE,
     round10mm, normalizeRotation, defaultSiteBoundary, normalizeSiteBoundary,
     normalizeCutout, normalizeRoomCutouts, nextCutoutId, rotatedBounds,
     intersection, unionArea, visibleCutoutIntersections, effectiveRoomMetrics, distancesToBoundary, wallDimensionGeometry,

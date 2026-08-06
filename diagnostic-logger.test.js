@@ -208,3 +208,13 @@ test('高頻度イベントはアプリ側から直接ロガーへ接続され�
     assert.doesNotMatch(app, new RegExp(`logDiagnostic\\(['\"]${eventName}`));
   }
 });
+
+test('設置不可エリアのドラッグプレビューは集約され、診断stateは再現に必要な環境を含む', () => {
+  const app = fs.readFileSync('app.js', 'utf8');
+  assert.match(app, /logDiagnostic\('unavailable-area-draw-preview',[\s\S]*coalesceKey: 'unavailable-area-draw-preview',[\s\S]*coalesceWindowMs: 300/);
+  const snapshot = app.slice(app.indexOf('function diagnosticStateSnapshot'), app.indexOf('function logDiagnostic'));
+  for (const field of ['wizardActive', 'wizardStep', 'selectedIds', 'selectedObstacleId', 'selectedCutoutId', 'devicePixelRatio', 'localStorageAvailable']) {
+    assert.match(snapshot, new RegExp(`\\b${field}\\b`), field);
+  }
+  assert.match(app, /localStorageAvailable = restored\.status !== 'unavailable'/);
+});

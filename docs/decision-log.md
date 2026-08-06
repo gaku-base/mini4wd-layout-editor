@@ -419,3 +419,15 @@
   re-entry changes explicit wizard/mode state and DOM visibility instead of
   recreating controls. Layout JSON/localStorage fields, unit conversion, PNG,
   collision behavior, and existing undo record format remain unchanged.
+
+### Five-degree room-cutout rotation and setup diagnostics (2026-08-06)
+
+- Room cutout rotation is normalized in 5-degree increments. Its existing
+  rectangular CAD mask, hit testing, and boundary calculations consistently
+  use the rotated rectangle's exterior axis-aligned bounds; the persisted
+  `rotation` field and millimetre coordinate format are unchanged.
+- New-layout draft reset also clears derived layout, bank, and corner warning
+  caches so warnings from the previous layout cannot survive into the draft.
+- Diagnostic snapshots include wizard position, selection identifiers, DPR,
+  and localStorage availability. Mouse-drag preview events are coalesced to
+  avoid an unbounded high-frequency event stream.

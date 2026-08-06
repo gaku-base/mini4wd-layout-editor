@@ -122,10 +122,18 @@ test('new setup draft stays independent and cancellation restores the baseline',
   assert.match(fresh, /state\.start = null/);
   assert.match(fresh, /state\.history = \[\]/);
   assert.match(fresh, /state\.future = \[\]/);
+  assert.match(fresh, /state\.layoutWarnings = \[\]/);
+  assert.match(fresh, /state\.bankWarnings = \[\]/);
+  assert.match(fresh, /state\.cornerDiagnostics = \[\]/);
   assert.match(fresh, /new-layout-state-reset/);
   assert.match(cancel, /applySerialized\(JSON\.parse\(wizard\.baseline\), false, \{ persist: false \}\)/);
   assert.match(cancel, /state\.history = \[\.\.\.wizard\.runtimeBaseline\.history\]/);
   assert.doesNotMatch(cancel, /snapshot\(/);
+});
+
+test('resizing the layout checks the validity flag returned for every existing unavailable area', () => {
+  const advance = section('function advanceWizardFromLayoutSpace', 'function continueInitialSetupAfter');
+  assert.match(advance, /INITIAL_LAYOUT_FLOW\.countInvalidUnavailableAreas\(state\.obstacles, obstaclePlacementValidity\)/);
 });
 
 test('Start placement clears venue-area transient state and the RC3 label remains', () => {
@@ -184,7 +192,7 @@ test('mouse and dimension methods remain mutually reusable on the same screen', 
 test('required diagnostic events cover reset, both methods, navigation, and blocked transitions', () => {
   [
     'initial-space-screen-opened', 'unavailable-area-screen-opened', 'unavailable-area-method-selected',
-    'unavailable-area-draw-started', 'unavailable-area-draw-completed',
+    'unavailable-area-draw-started', 'unavailable-area-draw-preview', 'unavailable-area-draw-completed',
     'unavailable-area-dimension-placement-started', 'unavailable-area-placement-completed',
     'unavailable-area-screen-back', 'layout-start-clicked', 'new-layout-state-reset', 'screen-transition-blocked'
   ].forEach(eventName => assert.match(app, new RegExp(`['"]${eventName}['"]`), eventName));

@@ -44,3 +44,12 @@ test('mouse drag rejects unavailable areas below the existing one-centimetre min
   assert.equal(FLOW.MIN_UNAVAILABLE_AREA_CM, 1);
   assert.equal(FLOW.unavailableAreaFromDrag({ x: 10, y: 10 }, { x: 10.5, y: 40 }, field), null);
 });
+
+test('shrinking a layout counts an existing unavailable area from the validator valid flag', () => {
+  const areas = [{ id: 'area-1', right: 600 }];
+  let fieldWidth = 600;
+  const validate = area => ({ valid: area.right <= fieldWidth, reason: area.right <= fieldWidth ? null : 'outside-space' });
+  assert.equal(FLOW.countInvalidUnavailableAreas(areas, validate), 0);
+  fieldWidth = 500;
+  assert.equal(FLOW.countInvalidUnavailableAreas(areas, validate), 1);
+});

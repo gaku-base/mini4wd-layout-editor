@@ -64,6 +64,25 @@ test('rotation uses an exterior rectangle for distances', () => {
   assert.deepEqual(distances, { left: 200, right: 600, top: 100, bottom: 300 });
 });
 
+test('five-degree cutout rotation survives normalization and drives its exterior bounds', () => {
+  const cutout = ROOM.normalizeCutout({ id: 'five', x: 100, y: 200, width: 400, height: 200, rotation: 5 });
+  assert.equal(cutout.rotation, 5);
+  assert.equal(ROOM.normalizeRoomCutouts([cutout])[0].rotation, 5);
+  const bounds = ROOM.rotatedBounds(cutout);
+  const radians = 5 * Math.PI / 180;
+  const extentX = Math.cos(radians) * 200 + Math.sin(radians) * 100;
+  const extentY = Math.sin(radians) * 200 + Math.cos(radians) * 100;
+  assert.ok(Math.abs(bounds.left - (300 - extentX)) < 1e-9);
+  assert.ok(Math.abs(bounds.top - (300 - extentY)) < 1e-9);
+  assert.ok(Math.abs(bounds.right - (300 + extentX)) < 1e-9);
+  assert.ok(Math.abs(bounds.bottom - (300 + extentY)) < 1e-9);
+  const app = fs.readFileSync('app.js', 'utf8');
+  const rotate = app.slice(app.indexOf('function rotateSelectedCutout'), app.indexOf('function onPointerDown'));
+  const editor = app.slice(app.indexOf('function updateUI'), app.indexOf('function updateStatusOnly'));
+  assert.match(rotate, /replaceCutout\(\{ \.\.\.selected, rotation \}\)/);
+  assert.match(editor, /cutoutRotation: cutout\.rotation/);
+});
+
 test('screen and world coordinates round-trip independently of zoom, pan, and DPR', () => {
   [0.5, 1, 2].forEach(scale => {
     const view = { scale, offsetX: 137, offsetY: -53 };
@@ -92,8 +111,8 @@ test('wall dimensions use full cutout geometry even with no room intersection', 
 });
 
 test('cutouts normalize invalid shape and rotation, deduplicate ids, move and duplicate safely', () => {
-  const cutouts = ROOM.normalizeRoomCutouts([{ id: 'a', shape: 'ellipse', rotation: 40 }, { id: 'a', width: 20, height: 30 }]);
-  assert.deepEqual(cutouts.map(item => [item.id, item.shape, item.rotation]), [['a', 'rectangle', 0], ['a-2', 'rectangle', 0]]);
+  const cutouts = ROOM.normalizeRoomCutouts([{ id: 'a', shape: 'ellipse', rotation: 42 }, { id: 'a', width: 20, height: 30 }]);
+  assert.deepEqual(cutouts.map(item => [item.id, item.shape, item.rotation]), [['a', 'rectangle', 40], ['a-2', 'rectangle', 0]]);
   assert.deepEqual(ROOM.moveCutout(cutouts[0], { x: -16, y: 24 }).x, -20);
   assert.equal(ROOM.duplicateCutout(cutouts[0], cutouts).id, 'cutout-1');
 });

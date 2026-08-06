@@ -153,6 +153,7 @@
   let wheelRotation;
   let toastTimer = 0;
   let layoutStore;
+  let localStorageAvailable = false;
   let diagnosticLogger;
   const roomCornerCache = new Map();
 
@@ -184,7 +185,12 @@
     const snapshot = {
       currentMainMode: state.mode,
       currentSubMode: state.subEditMode,
+      wizardActive: Boolean(state.wizard.active),
+      wizardStep: state.wizard.step || null,
       placementMode: state.mode === 'unavailable-draw' ? 'unavailable-area-draw' : state.obstaclePlacement ? 'unavailable-area' : state.mode === 'start' ? 'start' : state.mode === 'place' ? 'course-part' : null,
+      selectedIds: [...state.selectedIds],
+      selectedObstacleId: state.selectedObstacleId || null,
+      selectedCutoutId: state.cad.selectedCutoutId || null,
       selectedItemId: obstacle?.id || selectedCutout?.id || selectedPart?.id || null,
       selectedItemType: obstacle ? 'unavailable-area' : selectedCutout ? 'room-cutout' : selectedPart?.type || null,
       spaceExists: Boolean(state.setupStarted),
@@ -198,6 +204,8 @@
       redoCount: state.future.length,
       openDialog: els.setupDialog?.open ? 'initial-setup' : null,
       openPanel: els.venueAreaCreatePanel && !els.venueAreaCreatePanel.hidden ? 'unavailable-area-create' : null,
+      devicePixelRatio: dpr,
+      localStorageAvailable,
       viewportTransform: {
         scale: Number(state.view.scale.toFixed(4)),
         offsetX: Math.round(state.view.offsetX),
@@ -319,6 +327,7 @@
       connectorIdsByType: Object.fromEntries(Object.entries(PARTS).map(([type, definition]) => [type, LAYOUT_GRAPH.connectorsForDefinition(definition).map(connector => connector.id)])),
       migrateLayout: migrateLayoutCornerTypes
     });
+    localStorageAvailable = true;
     const restored = restoreLocal();
     bindEvents();
     logDiagnostic('app-ready', { restoredLayout: Boolean(restored) }, { category: 'session', captureState: true });
@@ -727,6 +736,9 @@
     state.cad = { selectedCutoutId: null, tool: 'create', dragStartMm: null, dragCurrentMm: null, drag: null, snap: null };
     state.history = [];
     state.future = [];
+    state.layoutWarnings = [];
+    state.bankWarnings = [];
+    state.cornerDiagnostics = [];
     state.mode = 'move';
     state.subEditMode = null;
     state.setupStarted = false;
@@ -771,7 +783,7 @@
     logDiagnostic('layout-space-created', {
       widthCm: state.field.widthCm, depthCm: state.field.heightCm
     }, { category: 'layout-space' });
-    const outOfRangeAreas = state.obstacles.filter(obstacle => !obstaclePlacementValidity(obstacle)).length;
+    const outOfRangeAreas = INITIAL_LAYOUT_FLOW.countInvalidUnavailableAreas(state.obstacles, obstaclePlacementValidity);
     if (outOfRangeAreas) {
       logDiagnosticWarning('unavailable-area-outside-resized-space', { count: outOfRangeAreas }, { category: 'unavailable-area' });
       toast(`${outOfRangeAreas}件の設置不可エリアが新しいスペース外です。位置を調整してください`);
@@ -1194,6 +1206,7 @@
 
   function restoreLocal() {
     const restored = layoutStore.restore();
+    localStorageAvailable = restored.status !== 'unavailable';
     if (restored.status === 'restored') {
       applySerialized(restored.layout, true, { persist: false });
       toast(restored.versionStatus === 'supportedLegacy'
@@ -3854,6 +3867,15 @@
 
     if (state.mode === 'unavailable-draw' && state.pointer.down && state.unavailableAreaDraw?.pointerId === e.pointerId) {
       state.unavailableAreaDraw.current = { x: snap(world.x), y: snap(world.y) };
+      const preview = unavailableAreaDrawCandidate();
+      if (preview) {
+        logDiagnostic('unavailable-area-draw-preview', {
+          x: preview.x, y: preview.y, widthCm: preview.widthCm, depthCm: preview.depthCm
+        }, {
+          category: 'unavailable-area', captureState: false,
+          coalesceKey: 'unavailable-area-draw-preview', coalesceWindowMs: 300
+        });
+      }
       updateStatusOnly(); render();
       return;
     }
