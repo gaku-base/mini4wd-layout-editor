@@ -55,5 +55,5 @@ test('Escape and pointer cancellation restore an in-progress drag instead of con
   assert.match(cancel, /replaceObstacle\(state\.obstacleDrag\.original, false\)/);
   assert.match(cancel, /clearDragTrashState\(\)/);
   assert.match(pointerCancel, /cancelObstacleDrag\(\)/);
-  assert.match(keyDown, /key === 'escape' && \(state\.cad\.drag \|\| state\.obstacleDrag\)/);
+  assert.match(keyDown, /key === 'escape' && \(state\.cad\.drag \|\| state\.obstacleDrag \|\| state\.obstacleResize\)/);
 });

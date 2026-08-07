@@ -23,8 +23,8 @@ test('venue-area rotation advances by five degrees and wraps from 0 through 355'
 });
 
 test('automatic venue-area names fill the first available numbered slot', () => {
-  assert.equal(FLOW.nextObstacleName([]), '設置不可エリア1');
-  assert.equal(FLOW.nextObstacleName([{ name: '設置不可エリア1' }, { name: '柱' }, { name: '設置不可エリア3' }]), '設置不可エリア2');
+  assert.equal(FLOW.nextObstacleName([]), 'エリア1');
+  assert.equal(FLOW.nextObstacleName([{ name: 'エリア1' }, { name: '柱' }, { name: 'エリア3' }]), 'エリア2');
 });
 
 test('mouse drag creates a clamped unavailable-area rectangle in course centimetres', () => {

@@ -17,7 +17,7 @@
     if (typeof value.id !== 'string' || !value.id || !Number.isFinite(x) || !Number.isFinite(y)
       || !Number.isFinite(widthCm) || !Number.isFinite(depthCm) || widthCm <= 0 || depthCm <= 0
       || widthCm > MAX_DIMENSION_CM || depthCm > MAX_DIMENSION_CM) return null;
-    const fallbackName = options.fallbackName || '干渉物';
+    const fallbackName = options.fallbackName || '設置不可エリア';
     const name = String(value.name || fallbackName).trim().slice(0, 80) || fallbackName;
     return {
       id: value.id,
@@ -44,7 +44,7 @@
   function createObstacle(values, makeId, index = 0) {
     return normalizeObstacle({
       id: makeId(),
-      name: values?.name || `干渉物${index + 1}`,
+      name: values?.name || `エリア${index + 1}`,
       x: values?.x,
       y: values?.y,
       widthCm: values?.widthCm,
@@ -56,7 +56,7 @@
   }
 
   function updateObstacle(obstacle, changes) {
-    return normalizeObstacle({ ...obstacle, ...changes }, { fallbackName: obstacle?.name || '干渉物' });
+    return normalizeObstacle({ ...obstacle, ...changes }, { fallbackName: obstacle?.name || '設置不可エリア' });
   }
 
   function duplicateObstacle(obstacle, makeId, isValid) {

@@ -19,8 +19,8 @@
   function nextObstacleName(obstacles = []) {
     const names = new Set((Array.isArray(obstacles) ? obstacles : []).map(item => String(item?.name || '')));
     let number = 1;
-    while (names.has(`設置不可エリア${number}`)) number += 1;
-    return `設置不可エリア${number}`;
+    while (names.has(`エリア${number}`)) number += 1;
+    return `エリア${number}`;
   }
 
   function rotateVenueArea(rotation, delta) {
