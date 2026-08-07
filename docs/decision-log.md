@@ -442,3 +442,24 @@
 - An RC2 build classifies RC3 as an unsupported future version, preserves the
   stored bytes, and blocks overwriting instead of deleting the layout as
   corrupt. JSON fields and millimetre units are otherwise unchanged.
+
+### Saved initial spaces and direct Start placement (2026-08-08)
+
+- Reusable initial spaces are stored separately under
+  `mini4wd-layout-saved-spaces-v1`. A saved space contains only field size,
+  grid size, unavailable areas, its name, and timestamps; it never contains
+  Start, course parts, connections, history, view state, or warnings.
+- Opening a saved space always creates a deep-copied new-layout draft and then
+  proceeds directly to Start placement. The existing RC3 layout JSON and
+  localStorage schema, key, millimetre units, and metre/centimetre conversion
+  are unchanged.
+- New unavailable areas continue to use the obstacle model. Legacy room
+  cutouts remain readable without an automatic migration; saving a reusable
+  space copies their rectangular geometry into the saved-space area list and
+  leaves the active layout data unchanged.
+- Unavailable areas support grid or one-centimetre movement, four-corner
+  resizing, direct edge-dimension editing, and integer 0--359-degree rotation.
+  Course parts and Start keep their established 45-degree rotation behavior.
+- Start placement is rejected when its actual footprint is outside the field
+  or overlaps either an unavailable-area obstacle or a legacy room cutout.
+  Rejected clicks do not add undo history or mutate the saved layout.
