@@ -23,16 +23,23 @@ test('sub-edit mode bar has return and finish controls that clear transient edit
   const exitSection = app.slice(app.indexOf('function exitSubEditMode'), app.indexOf('function applySetup'));
   assert.match(exitSection, /cleanupEditorModeState\(\)/);
   assert.match(exitSection, /state\.subEditMode = null/);
-  assert.match(exitSection, /setNewLayoutModalTab\(tab\)/);
+  assert.match(exitSection, /setNewLayoutModalTab\(NEW_LAYOUT_TABS\.DEFAULT_TAB\)/);
   assert.doesNotMatch(exitSection, /snapshot\(/);
+  assert.match(html, /id="addObstacleFromBarBtn"/);
+  assert.match(html, /id="repeatObstaclePlacementBtn"/);
+  assert.doesNotMatch(html, />スペース修正へ戻る</);
+  assert.match(html, />同じものをもう1個</);
+  assert.match(html, />マウス指定</);
+  assert.match(html, />寸法指定</);
+  assert.match(html, />レイアウト開始</);
 });
 
 test('selected cutouts and obstacles expose clear, rotate, duplicate, and delete controls', () => {
   ['rotateCutoutLeftBtn', 'rotateCutoutRightBtn', 'clearCutoutSelectionBtn', 'rotateObstacleLeftBtn', 'rotateObstacleRightBtn', 'clearObstacleSelectionBtn', 'duplicateObstacleBtn', 'deleteObstacleBtn'].forEach(id => {
     assert.match(html, new RegExp(`id="${id}"`));
   });
-  assert.match(app, /function rotateSelectedCutout\(delta\)/);
-  assert.match(app, /function rotateSelectedObstacle\(delta\)/);
+  assert.match(app, /function rotateSelectedCutout\(delta, inputMethod = 'button'\)/);
+  assert.match(app, /function rotateSelectedObstacle\(delta, inputMethod = 'button'\)/);
   assert.match(app, /obstacle\.locked\) return setObstacleEditorError/);
   assert.match(app, /e\.target instanceof HTMLInputElement/);
 });

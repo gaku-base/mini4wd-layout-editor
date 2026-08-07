@@ -2,14 +2,17 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const {
   STORAGE_KEY,
   CURRENT_VERSION,
   SUPPORTED_LEGACY_VERSIONS,
-  createLayoutStore
+  createLayoutStore,
+  validateLayout
 } = require('./persistence.js');
 
 const LEGACY_VERSION = '1.0.0-RC1';
+const RC2_VERSION = '1.1.0-RC2';
 const options = {
   app: 'mini4wd-course-layout-mouse-flow',
   version: CURRENT_VERSION,
@@ -79,12 +82,12 @@ function restoredCurrent(layout = layoutFixture()) {
   return { status: 'restored', versionStatus: 'current', layout };
 }
 
-test('uses the same stable localStorage key for RC1 and RC2', () => {
+test('uses the same stable localStorage key while RC3 supports RC1 and RC2', () => {
   const store = createLayoutStore(new MemoryStorage(), options);
   assert.equal(STORAGE_KEY, 'mini4wd-course-layout-mouse-flow-v1.0.0-RC1');
   assert.equal(store.key, STORAGE_KEY);
-  assert.equal(CURRENT_VERSION, '1.1.0-RC2');
-  assert.deepEqual([...SUPPORTED_LEGACY_VERSIONS], [LEGACY_VERSION]);
+  assert.equal(CURRENT_VERSION, '1.1.0-RC3');
+  assert.deepEqual([...SUPPORTED_LEGACY_VERSIONS], [LEGACY_VERSION, RC2_VERSION]);
 });
 
 test('restores a current layout after app reinitialization', () => {
@@ -201,7 +204,7 @@ test('5. RC1 part and connection information remains identical', () => {
   assert.equal(restored.layout.rotation, legacy.rotation);
 });
 
-test('6. RC1 restore does not immediately write an empty or RC2 layout', () => {
+test('6. RC1 restore does not immediately write an empty or RC3 layout', () => {
   const raw = JSON.stringify(legacyLayoutFixture());
   const storage = new MemoryStorage([[STORAGE_KEY, raw]]);
   createLayoutStore(storage, options).restore();
@@ -209,7 +212,7 @@ test('6. RC1 restore does not immediately write an empty or RC2 layout', () => {
   assert.equal(storage.getItem(STORAGE_KEY), raw);
 });
 
-test('7. the next confirmed edit saves the layout as RC2', () => {
+test('7. the next confirmed edit saves the layout as RC3', () => {
   const storage = new MemoryStorage([[STORAGE_KEY, JSON.stringify(legacyLayoutFixture())]]);
   const store = createLayoutStore(storage, options);
   const restored = store.restore();
@@ -226,7 +229,7 @@ test('7. the next confirmed edit saves the layout as RC2', () => {
   assert.equal(saved.parts[0].x, legacyLayoutFixture().parts[0].x + 10);
 });
 
-test('8. an RC2 layout saved after migration restores again', () => {
+test('8. an RC3 layout saved after migration restores again', () => {
   const storage = new MemoryStorage([[STORAGE_KEY, JSON.stringify(legacyLayoutFixture())]]);
   const migratingStore = createLayoutStore(storage, options);
   const legacy = migratingStore.restore();
@@ -262,16 +265,18 @@ test('10. an unknown future version is retained and cannot be overwritten', () =
 });
 
 test('11. existing RC2 data still restores without a write', () => {
-  const current = layoutFixture();
-  const raw = JSON.stringify(current);
+  const legacyRc2 = layoutFixture({ version: RC2_VERSION });
+  const raw = JSON.stringify(legacyRc2);
   const storage = new MemoryStorage([[STORAGE_KEY, raw]]);
   const restored = createLayoutStore(storage, options).restore();
-  assert.deepEqual(restored, restoredCurrent(current));
+  assert.equal(restored.status, 'restored');
+  assert.equal(restored.versionStatus, 'supportedLegacy');
+  assert.deepEqual(restored.layout, legacyRc2);
   assert.equal(storage.setCount, 0);
   assert.equal(storage.getItem(STORAGE_KEY), raw);
 });
 
-test('12. RC2 additive height, zOrder, and multiple connection edges round-trip', () => {
+test('12. current additive height, zOrder, and multiple connection edges round-trip', () => {
   const layout = layoutFixture();
   layout.start = { ...layout.start, zMm: 230, zOrder: 0 };
   layout.parts = layout.parts.map((part, index) => ({
@@ -356,4 +361,57 @@ test('17. invalid persisted interference obstacles are rejected', () => {
   const store = createLayoutStore(storage, options);
   store.restore();
   assert.equal(store.save(layout).status, 'failed');
+});
+
+test('18. a five-degree roomCutout validates, saves, and restores without changing rotation', () => {
+  const layout = layoutFixture();
+  layout.roomCutouts = [{
+    id: 'cutout-1', name: 'pillar', type: 'room-cutout', shape: 'rectangle',
+    x: 100, y: 200, width: 400, height: 200, rotation: 5, visible: true, locked: false
+  }];
+  assert.equal(validateLayout(layout, options), true);
+  const storage = new MemoryStorage();
+  const store = createLayoutStore(storage, options);
+  assert.equal(store.restore().status, 'empty');
+  const saved = store.save(layout);
+  assert.equal(saved.status, 'saved');
+  assert.equal(validateLayout(JSON.parse(saved.serialized), options), true);
+  const restored = createLayoutStore(storage, options).restore();
+  assert.equal(restored.status, 'restored');
+  assert.equal(restored.layout.roomCutouts[0].rotation, 5);
+  const app = fs.readFileSync('app.js', 'utf8');
+  const loadJson = app.slice(app.indexOf('async function loadJson'), app.indexOf('function exportPng'));
+  assert.match(loadJson, /PERSISTENCE\.validateLayout\(parsed, validationOptions\)/);
+  assert.match(loadJson, /applySerialized\(PERSISTENCE\.migrateSupportedLegacyLayout\(parsed, versionStatus\), true\)/);
+});
+
+test('19. legacy RC2 roomCutout cardinal rotations remain restorable', () => {
+  for (const rotation of [0, 90, 180, 270]) {
+    const layout = layoutFixture({ version: RC2_VERSION });
+    layout.roomCutouts = [{
+      id: `cutout-${rotation}`, name: 'legacy', type: 'room-cutout', shape: 'rectangle',
+      x: 100, y: 200, width: 400, height: 200, rotation, visible: true, locked: false
+    }];
+    const storage = new MemoryStorage([[STORAGE_KEY, JSON.stringify(layout)]]);
+    const restored = createLayoutStore(storage, options).restore();
+    assert.equal(restored.status, 'restored');
+    assert.equal(restored.versionStatus, 'supportedLegacy');
+    assert.equal(restored.layout.roomCutouts[0].rotation, rotation);
+    assert.equal(storage.removeCount, 0);
+  }
+});
+
+test('20. an RC2 build treats RC3 data as future and retains it without deletion', () => {
+  const storage = new MemoryStorage();
+  const currentStore = createLayoutStore(storage, options);
+  currentStore.restore();
+  assert.equal(currentStore.save(layoutFixture()).status, 'saved');
+  const raw = storage.getItem(STORAGE_KEY);
+  const rc2Options = { ...options, version: RC2_VERSION, supportedLegacyVersions: [LEGACY_VERSION] };
+  const restored = createLayoutStore(storage, rc2Options).restore();
+  assert.equal(restored.status, 'unsupported-version');
+  assert.equal(restored.versionStatus, 'unsupportedFuture');
+  assert.equal(restored.version, CURRENT_VERSION);
+  assert.equal(storage.getItem(STORAGE_KEY), raw);
+  assert.equal(storage.removeCount, 0);
 });

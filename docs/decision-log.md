@@ -350,3 +350,95 @@
   intermediate wizard-transition frame.
 - Field dimensions, view fitting, persistence, export, and editor-mode state are
   unchanged; existing render requests remain coalesced into one animation frame.
+
+### Square-space initial setup branching (2026-08-05)
+
+- New layouts begin with one "square space" form for both squares and
+  rectangles. Width, depth, and grid keep the existing metre-to-centimetre
+  conversion; two transient checkboxes select room-shape adjustment and
+  interference-obstacle setup.
+- With neither option selected, the confirmed dimensions are fitted and Start
+  placement begins immediately. Optional stages are selected by one pure flow
+  function; a confirmation screen appears only after at least one optional
+  stage, so the ordinary path has no extra confirmation step.
+- Interference setup remains active after each placement. Its sub-editor bar
+  owns the placed count, same-size repeat, different-obstacle entry, and next
+  actions; the former always-visible return-to-space action is removed.
+- Wizard options and obstacle-creation form state remain transient. JSON,
+  localStorage, undo records, PNG output, collision behavior, and established
+  unit values are unchanged.
+
+### Unified course-unavailable-area setup (2026-08-06)
+
+- The initial dialog now contains only square-space dimensions, grid size, and
+  the create-space action. After creation, one canvas sub-editor presents room
+  cutouts and interference obstacles to users as "course unavailable areas";
+  their existing internal models and serialized fields remain unchanged.
+- New unavailable-area dimensions are entered in a non-modal canvas panel.
+  Placing or repeating an area never reopens the full-screen setup dialog, so
+  its backdrop is not released and recreated for every placed item.
+- Unavailable-area placement ghosts and selected areas rotate in 5-degree
+  increments with wheel or Z/X, independently of the established 45-degree
+  course-part rotation. The current normalized angle is drawn beside the area
+  only in the interactive canvas and is omitted from PNG export.
+- fitView, Start placement, undo/redo, lock, duplicate/delete, JSON and
+  localStorage formats, PNG content, and metre/centimetre conversion are not
+  changed by this UI consolidation.
+
+### Local diagnostic log export (2026-08-06)
+
+- A diagnostic-only, in-memory ring buffer records semantic setup, unavailable
+  area, course-part, mode, history, persistence, export, and runtime events.
+  Pointer movement, render frames, complete layout snapshots, storage contents,
+  file contents, secrets, full URLs, IP addresses, and local absolute paths are
+  excluded or redacted.
+- The buffer is capped at 1000 events and removes old informational events
+  before warnings or errors. Rapid wheel rotations for the same target are
+  coalesced; errors retain a bounded compact editor snapshot and at most 50
+  simplified part records.
+- Diagnostic data is never included in layout JSON or localStorage. It is
+  downloaded only through the explicit diagnostic-log export action, and the
+  clear action starts a new diagnostic session after confirmation.
+
+### Re-entrant unavailable-area setup screens (2026-08-06)
+
+- Starting a new layout now clears the course, Start, unavailable areas,
+  selections, history, placement ghosts, drags, and editor modes immediately
+  inside the transient draft. Cancelling restores the serialized layout and
+  its runtime history/view baseline; no draft arrays are shared with it.
+- The first setup screen owns only width, depth, grid, and space creation. The
+  second screen owns both mouse-drag and dimension-ghost unavailable-area
+  creation, the unified obstacle/cutout list, Back, and direct layout start.
+  Returning clears only transient screen-two interactions and keeps confirmed
+  dimensions and placed unavailable areas.
+- Mouse-drag rectangles are clamped to the current field and use the existing
+  one-centimetre minimum accepted by unavailable-area input. Dimension ghosts
+  keep automatic names and the existing 5-degree wheel/Z/X rotation. Course
+  parts retain 45-degree rotation.
+- Event handlers remain bound once at application initialization. Screen
+  re-entry changes explicit wizard/mode state and DOM visibility instead of
+  recreating controls. Layout JSON/localStorage fields, unit conversion, PNG,
+  collision behavior, and existing undo record format remain unchanged.
+
+### Five-degree room-cutout rotation and setup diagnostics (2026-08-06)
+
+- Room cutout rotation is normalized in 5-degree increments. Its existing
+  rectangular CAD mask, hit testing, and boundary calculations consistently
+  use the rotated rectangle's exterior axis-aligned bounds; the persisted
+  `rotation` field and millimetre coordinate format are unchanged.
+- New-layout draft reset also clears derived layout, bank, and corner warning
+  caches so warnings from the previous layout cannot survive into the draft.
+- Diagnostic snapshots include wizard position, selection identifiers, DPR,
+  and localStorage availability. Mouse-drag preview events are coalesced to
+  avoid an unbounded high-frequency event stream.
+
+### RC3 persistence for five-degree room cutouts (2026-08-07)
+
+- The current persisted version is `1.1.0-RC3`. RC3 accepts room-cutout
+  rotations from 0 through 355 degrees in 5-degree increments; RC2 validation
+  remains limited to its historical 0/90/180/270-degree values.
+- `1.0.0-RC1` and `1.1.0-RC2` remain supported legacy inputs and are rewritten
+  as RC3 only after a confirmed save. The localStorage key remains unchanged.
+- An RC2 build classifies RC3 as an unsupported future version, preserves the
+  stored bytes, and blocks overwriting instead of deleting the layout as
+  corrupt. JSON fields and millimetre units are otherwise unchanged.

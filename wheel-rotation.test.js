@@ -36,11 +36,14 @@ test('fine pixel trackpad input accumulates while inertia remains suppressed', (
   assert.equal(wheel.push({ deltaY: 8, deltaMode: 0 }, 1120), 0);
 });
 
-test('wheel direction uses the same 45 degree steps as Z and X', () => {
+test('course parts keep 45 degree steps while venue areas use 5 degree wheel and Z/X rotation', () => {
   const app = fs.readFileSync('app.js', 'utf8');
   const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));
-  assert.match(wheel, /rotateCurrent\(direction < 0 \? -45 : 45\);/);
-  assert.match(app, /if \(key === 'z'\) \{ e\.preventDefault\(\); rotateCurrent\(-45\); return; \}/);
-  assert.match(app, /if \(key === 'x'\) \{ e\.preventDefault\(\); rotateCurrent\(45\); return; \}/);
+  assert.match(wheel, /rotateCurrent\(direction < 0 \? -45 : 45, 'wheel'\);/);
+  assert.match(wheel, /rotateActiveVenueArea\(direction < 0 \? -INITIAL_LAYOUT_FLOW\.ROTATION_STEP : INITIAL_LAYOUT_FLOW\.ROTATION_STEP, 'wheel'\)/);
+  assert.match(app, /rotateActiveVenueArea\(-INITIAL_LAYOUT_FLOW\.ROTATION_STEP, 'keyboard-z'\)/);
+  assert.match(app, /rotateActiveVenueArea\(INITIAL_LAYOUT_FLOW\.ROTATION_STEP, 'keyboard-x'\)/);
+  assert.match(app, /rotateCurrent\(-45, 'keyboard-z'\)/);
+  assert.match(app, /rotateCurrent\(45, 'keyboard-x'\)/);
   assert.match(wheel, /if \(e\.ctrlKey\) \{[\s\S]*return;[\s\S]*if \(e\.shiftKey \|\| e\.metaKey \|\| !hasWheelRotatableTarget\(\)\)/);
 });

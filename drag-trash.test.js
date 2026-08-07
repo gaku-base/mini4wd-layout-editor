@@ -44,7 +44,7 @@ test('locked obstacles cannot start a drag, including the initial-setup interfer
   const begin = section('function beginObstacleDrag', 'function clearObstacleSelection');
   const down = section('function onPointerDown', 'function onPointerMove');
   assert.match(begin, /if \(obstacle\.locked\)/);
-  assert.match(begin, /ロック中の干渉物は移動・ゴミ箱削除できません/);
+  assert.match(begin, /ロック中の設置不可エリアは移動・ゴミ箱削除できません/);
   assert.match(down, /state\.wizard\.active && state\.subEditMode === 'interference'[\s\S]*beginObstacleDrag\(obstacle, e, world\)/);
 });
 

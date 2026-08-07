@@ -4,9 +4,7 @@
   root.M4WD_NEW_LAYOUT_TABS = api;
 }(typeof globalThis === 'object' ? globalThis : window, () => {
   const TABS = Object.freeze([
-    Object.freeze({ id: 'layout-space', label: 'レイアウトスペース', panelId: 'layoutSpacePanel' }),
-    Object.freeze({ id: 'space-adjustment', label: 'スペース修正', panelId: 'spaceAdjustmentPanel' }),
-    Object.freeze({ id: 'interference', label: '干渉物設定', panelId: 'interferencePanel' })
+    Object.freeze({ id: 'layout-space', label: '四角形スペース', panelId: 'layoutSpacePanel' })
   ]);
   const DEFAULT_TAB = TABS[0].id;
 

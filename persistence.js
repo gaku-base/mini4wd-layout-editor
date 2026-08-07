@@ -7,11 +7,11 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  // RC1 and RC2 intentionally share this key so a saved RC1 layout can be
-  // migrated in place only after a successful RC2 save.
+  // RC1, RC2, and RC3 intentionally share this key so a supported legacy
+  // layout can be migrated in place only after a successful current save.
   const STORAGE_KEY = 'mini4wd-course-layout-mouse-flow-v1.0.0-RC1';
-  const CURRENT_VERSION = '1.1.0-RC2';
-  const SUPPORTED_LEGACY_VERSIONS = Object.freeze(['1.0.0-RC1']);
+  const CURRENT_VERSION = '1.1.0-RC3';
+  const SUPPORTED_LEGACY_VERSIONS = Object.freeze(['1.0.0-RC1', '1.1.0-RC2']);
   const PERSISTED_FIELDS = [
     'app', 'version', 'field', 'parts', 'start', 'startPhase',
     'selectedType', 'rotation', 'activeConnection', 'connections', 'siteBoundary', 'roomCutouts', 'obstacles'
@@ -27,6 +27,11 @@
 
   function isRotation(value) {
     return isFiniteNumber(value) && value >= 0 && value < 360 && value % 45 === 0;
+  }
+
+  function isRoomCutoutRotation(value, versionStatus) {
+    if (!isFiniteNumber(value) || value < 0 || value >= 360) return false;
+    return versionStatus === 'current' ? value % 5 === 0 : value % 90 === 0;
   }
 
   function cloneJson(value) {
@@ -114,7 +119,7 @@
         if (!isRecord(cutout) || typeof cutout.id !== 'string' || !cutout.id || cutoutIds.has(cutout.id)
           || typeof cutout.name !== 'string' || cutout.type !== 'room-cutout' || cutout.shape !== 'rectangle'
           || !isFiniteNumber(cutout.x) || !isFiniteNumber(cutout.y) || !isFiniteNumber(cutout.width) || !isFiniteNumber(cutout.height)
-          || cutout.width <= 0 || cutout.height <= 0 || ![0, 90, 180, 270].includes(cutout.rotation)
+          || cutout.width <= 0 || cutout.height <= 0 || !isRoomCutoutRotation(cutout.rotation, versionStatus)
           || typeof cutout.locked !== 'boolean' || typeof cutout.visible !== 'boolean') return false;
         cutoutIds.add(cutout.id);
       }
