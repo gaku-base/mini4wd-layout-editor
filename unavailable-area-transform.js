@@ -18,6 +18,13 @@
     return ((rotation % 360) + 360) % 360;
   }
 
+  function parseIntegerRotationInput(value) {
+    const text = String(value ?? '').trim();
+    const rotation = Number(text);
+    if (!text || !Number.isInteger(rotation) || rotation < 0 || rotation > 360) return null;
+    return normalizeIntegerRotation(rotation);
+  }
+
   function snapValue(value, gridCm, precise = false) {
     const step = precise ? 1 : Math.max(1, Number(gridCm) || 1);
     return Math.round(Number(value) / step) * step;
@@ -114,8 +121,15 @@
     return best;
   }
 
+  function pointInsideLabelBox(point, box) {
+    return Boolean(point && box
+      && Number(point.x) >= Number(box.x) && Number(point.x) <= Number(box.x) + Number(box.width)
+      && Number(point.y) >= Number(box.y) && Number(point.y) <= Number(box.y) + Number(box.height));
+  }
+
   return Object.freeze({
-    CORNERS, normalizeIntegerRotation, snapValue, axes, pointForSigns,
-    cornerPoints, edgeGeometry, moveTo, resizeFromCorner, resizeAroundCenter, hitCorner
+    CORNERS, normalizeIntegerRotation, parseIntegerRotationInput, snapValue, axes, pointForSigns,
+    cornerPoints, edgeGeometry, moveTo, resizeFromCorner, resizeAroundCenter, hitCorner,
+    pointInsideLabelBox
   });
 }));

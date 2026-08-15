@@ -23,6 +23,16 @@
     return normalizeName(first).localeCompare(normalizeName(second), 'ja', { sensitivity: 'accent' }) === 0;
   }
 
+  function validateAreaName(value, areas = [], currentId = null) {
+    const name = normalizeName(value);
+    if (!name) return { valid: false, reason: 'empty-name', name: '' };
+    const duplicate = (Array.isArray(areas) ? areas : [])
+      .some(area => area?.id !== currentId && sameName(area?.name, name));
+    return duplicate
+      ? { valid: false, reason: 'duplicate-name', name }
+      : { valid: true, reason: null, name };
+  }
+
   function normalizeRotation(value) {
     const rotation = Number(value);
     if (!Number.isInteger(rotation)) return null;
@@ -59,6 +69,24 @@
       visible: value.visible !== false,
       locked: value.locked === true
     };
+  }
+
+  function areaInsideField(area, field, epsilon = 1e-7) {
+    const normalizedArea = normalizeArea(area, area?.id || 'area');
+    const normalizedField = normalizeField(field);
+    if (!normalizedArea || !normalizedField) return false;
+    const radians = normalizedArea.rotation * Math.PI / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const halfWidth = normalizedArea.widthCm / 2;
+    const halfDepth = normalizedArea.depthCm / 2;
+    return [-1, 1].every(sx => [-1, 1].every(sy => {
+      const x = normalizedArea.x + cos * halfWidth * sx - sin * halfDepth * sy;
+      const y = normalizedArea.y + sin * halfWidth * sx + cos * halfDepth * sy;
+      return x >= -epsilon && y >= -epsilon
+        && x <= normalizedField.widthCm + epsilon
+        && y <= normalizedField.heightCm + epsilon;
+    }));
   }
 
   function normalizeSpace(value) {
@@ -124,6 +152,11 @@
     });
   }
 
+  function spaceAreasInsideField(space) {
+    return Boolean(space && Array.isArray(space.unavailableAreas)
+      && space.unavailableAreas.every(area => areaInsideField(area, space.field)));
+  }
+
   function replaceSpace(spaces, id, values, options = {}) {
     const source = spaces.find(space => space.id === id);
     if (!source) return { ok: false, reason: 'not-found', spaces };
@@ -139,7 +172,7 @@
       createdAt: source.createdAt,
       updatedAt: now()
     });
-    if (!next) return { ok: false, reason: 'invalid-space', spaces };
+    if (!next || !spaceAreasInsideField(next)) return { ok: false, reason: 'invalid-space', spaces };
     return { ok: true, space: next, spaces: spaces.map(space => space.id === id ? next : space) };
   }
 
@@ -185,7 +218,7 @@
       if (!name) return { status: 'failed', reason: 'invalid-name' };
       if (library.spaces.some(space => sameName(space.name, name))) return { status: 'failed', reason: 'duplicate-name' };
       const space = createSpace({ ...values, name }, { makeId, now });
-      if (!space) return { status: 'failed', reason: 'invalid-space' };
+      if (!space || !spaceAreasInsideField(space)) return { status: 'failed', reason: 'invalid-space' };
       const saved = persist({ version: VERSION, spaces: [...library.spaces, space] });
       return saved.status === 'saved' ? { ...saved, status: 'created', space: deepClone(space) } : saved;
     }
@@ -207,7 +240,7 @@
         field: source.field,
         unavailableAreas: source.unavailableAreas.map(area => ({ ...area, id: makeId('area') }))
       }, { makeId, now });
-      if (!copy) return { status: 'failed', reason: 'invalid-space' };
+      if (!copy || !spaceAreasInsideField(copy)) return { status: 'failed', reason: 'invalid-space' };
       const saved = persist({ version: VERSION, spaces: [...library.spaces, copy] });
       return saved.status === 'saved' ? { ...saved, status: 'duplicated', space: deepClone(copy) } : saved;
     }
@@ -228,8 +261,8 @@
 
   return Object.freeze({
     STORAGE_KEY, VERSION, MIN_FIELD_CM, MAX_FIELD_CM, GRID_VALUES,
-    deepClone, normalizeName, sameName, normalizeRotation, normalizeField,
-    normalizeArea, normalizeSpace, normalizeLibrary, uniqueName, createSpace,
+    deepClone, normalizeName, sameName, validateAreaName, normalizeRotation, normalizeField,
+    normalizeArea, areaInsideField, normalizeSpace, normalizeLibrary, uniqueName, createSpace,
     replaceSpace, createSavedSpaceStore
   });
 }));

@@ -44,6 +44,17 @@ test('venue setup can finish without areas and enters exclusive Start placement'
   assert.match(finalize, /if \(wizard\.isNew\) fitView\(\)/);
 });
 
+test('the setup progress advances through STEP 2 and STEP 3 then clears after Start placement', () => {
+  const ui = section('function updateUI', 'function updateBankUI');
+  const finalize = section('function finalizeInitialSetup', 'function cancelInitialSetup');
+  const placeStart = section('function placeStartLane', 'function localEndpoints');
+  assert.match(ui, /STEP 2 \/ 3 設置不可エリア設定/);
+  assert.match(html, /id="initialSetupStepBar"[^>]*>[\s\S]*STEP 3 \/ 3 Start位置設定/);
+  assert.match(ui, /INITIAL_LAYOUT_FLOW\.STEPS\.START/);
+  assert.match(finalize, /wizard\.isNew \? INITIAL_LAYOUT_FLOW\.STEPS\.START : 'library'/);
+  assert.match(placeStart, /state\.wizard\.step = 'library'/);
+});
+
 test('new-layout metric inputs retain exact square and rectangle ratios and reset the view', () => {
   const advance = section('function advanceWizardFromLayoutSpace', 'function continueInitialSetupAfter');
   const fit = section('function fitView', 'function drawFrame');

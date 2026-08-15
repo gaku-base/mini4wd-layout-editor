@@ -160,6 +160,7 @@
   let layoutStore;
   let savedSpaceStore;
   let savedSpaceRestoreStatus = 'empty';
+  let canvasLabelEdit = null;
   let localStorageAvailable = false;
   let diagnosticLogger;
   const roomCornerCache = new Map();
@@ -295,7 +296,7 @@
 
   function cacheElements() {
     const ids = [
-      'courseCanvas','canvasWrap','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
+      'courseCanvas','canvasWrap','canvasLabelEditor','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
       'newBtn','saveBtn','loadInput','exportBtn','cancelSetupBtn','instruction','toast','partsList','partsSummary',
       'savedSpaceLibraryPanel','savedSpaceCards','savedSpaceEmpty','createNewSpaceBtn','cancelSavedSpaceLibraryBtn',
       'layoutSpacePanel','layoutSpacePreviewSvg','layoutSpacePreviewRect','layoutSpacePreviewTitle','layoutSpacePreviewWidth','layoutSpacePreviewHeight','fieldWidthError','fieldHeightError','venueAreaCreatePanel','cancelVenueAreaCreateBtn',
@@ -310,7 +311,7 @@
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
       'siteBoundaryPanel','roomCutoutPanel','siteBoundaryName','siteBoundaryX','siteBoundaryY','siteBoundaryWidth','siteBoundaryHeight','siteBoundaryVisible','applySiteBoundaryBtn',
       'newCutoutBtn','roomCutoutEmpty','roomCutoutEditor','cutoutName','cutoutX','cutoutY','cutoutWidth','cutoutHeight','cutoutRotation','cutoutVisible','cutoutLocked','applyCutoutBtn','rotateCutoutLeftBtn','rotateCutoutRightBtn','clearCutoutSelectionBtn','cutoutRotationNote','duplicateCutoutBtn','deleteCutoutBtn','cutoutDistances','cutoutDimensionOverlay',
-      'subEditModeBar','subEditModeTitle','subEditModeDescription','subEditObstacleCount','drawUnavailableAreaBtn','repeatObstaclePlacementBtn','addObstacleFromBarBtn','returnToSetupBtn','finishSubEditBtn','spaceSaveControls','savedSpaceNameInput','savedSpaceNameError','saveSpaceAndStartBtn','skipSpaceSaveBtn','dragTrash','dragTrashLabel',
+      'initialSetupStepBar','subEditModeBar','subEditModeTitle','subEditModeDescription','subEditObstacleCount','drawUnavailableAreaBtn','repeatObstaclePlacementBtn','addObstacleFromBarBtn','returnToSetupBtn','finishSubEditBtn','spaceSaveControls','savedSpaceNameInput','savedSpaceNameError','saveSpaceAndStartBtn','skipSpaceSaveBtn','dragTrash','dragTrashLabel',
       'diagnosticLogCount','diagnosticErrorCount','diagnosticWarningCount','exportDiagnosticLogBtn','clearDiagnosticLogBtn',
       'wizardProgress','wizardStageLabel'
     ];
@@ -501,6 +502,16 @@
     els.rotateObstacleRightBtn?.addEventListener('click', () => rotateSelectedObstacle(INITIAL_LAYOUT_FLOW.ROTATION_STEP));
     els.duplicateObstacleBtn?.addEventListener('click', duplicateSelectedObstacle);
     els.deleteObstacleBtn?.addEventListener('click', deleteSelectedObstacle);
+    els.canvasLabelEditor?.addEventListener('keydown', event => {
+      event.stopPropagation();
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitCanvasLabelEdit();
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelCanvasLabelEdit();
+      }
+    });
     ['change', 'blur'].forEach(eventName => {
       ['obstacleNameInput','obstacleXInput','obstacleYInput','obstacleWidthInput','obstacleDepthInput','obstacleRotationInput','obstacleVisibleInput','obstacleLockedInput']
         .forEach(id => on(els[id], eventName, applyObstacleEditorInputs));
@@ -891,8 +902,35 @@
     els.savedSpaceNameError.textContent = message;
   }
 
+  function validateUnavailableAreasForTransition(action) {
+    const draftAreas = savedSpaceAreasFromCurrentDraft();
+    const outsideIds = draftAreas
+      .filter(area => !SAVED_SPACES.areaInsideField(area, state.field))
+      .map(area => area.id);
+    const geometryInvalidIds = state.obstacles
+      .filter(area => obstaclePlacementValidity(area).valid !== true)
+      .map(area => area.id);
+    const invalidIds = [...new Set([...outsideIds, ...geometryInvalidIds])];
+    if (invalidIds.length === 0) return true;
+    const firstObstacle = state.obstacles.find(area => invalidIds.includes(area.id));
+    if (firstObstacle) selectObstacle(firstObstacle.id, { mode: false });
+    const message = outsideIds.length
+      ? 'スペース外にある設置不可エリアがあります。位置またはサイズを調整してください。'
+      : '無効な設置不可エリアがあります。位置またはサイズを調整してください。';
+    logDiagnosticWarning('screen-transition-blocked', {
+      action,
+      reason: outsideIds.length ? 'unavailable-area-outside-field' : 'unavailable-area-invalid-geometry',
+      invalidAreaIds: invalidIds
+    }, { category: 'navigation', captureState: true });
+    if (action === 'save-space') setSavedSpaceNameError(message);
+    toast(message);
+    updateUI(); render();
+    return false;
+  }
+
   function saveCurrentSpaceAndContinue() {
     if (!isUnavailableAreaScreenActive()) return logBlockedScreenTransition('save-space', 'unavailable-area-screen-inactive');
+    if (!validateUnavailableAreasForTransition('save-space')) return false;
     const name = String(els.savedSpaceNameInput?.value || '').trim();
     if (!name) return setSavedSpaceNameError('スペース名を入力してください');
     const values = {
@@ -984,6 +1022,7 @@
       unavailableAreaCount: state.obstacles.length + state.roomCutouts.length
     }, { category: 'navigation', captureState: true });
     if (!isUnavailableAreaScreenActive()) return logBlockedScreenTransition('layout-start', 'unavailable-area-screen-inactive');
+    if (!validateUnavailableAreasForTransition('layout-start')) return false;
     finalizeInitialSetup();
     return true;
   }
@@ -1156,7 +1195,7 @@
     } else if (wizard.baseline) {
       snapshotSerialized(wizard.baseline);
     }
-    state.wizard = { active: false, step: 'library', isNew: false, baseline: null, runtimeBaseline: null, editingSavedSpaceId: null, sourceSavedSpaceId: null };
+    state.wizard = { active: false, step: wizard.isNew ? INITIAL_LAYOUT_FLOW.STEPS.START : 'library', isNew: false, baseline: null, runtimeBaseline: null, editingSavedSpaceId: null, sourceSavedSpaceId: null };
     ensureSetupDialogClosed();
     recalculateLayoutWarnings();
     persistLocal();
@@ -1202,6 +1241,7 @@
     state.obstaclePlacement = null;
     state.unavailableAreaDraw = null;
     setVenueAreaCreatorVisible(false);
+    cancelCanvasLabelEdit();
     cancelObstacleDrag();
     cancelObstacleResize();
     state.selectedObstacleId = null;
@@ -2085,15 +2125,36 @@
       c.fillStyle = '#fff2c8'; c.font = `700 ${12 / unit}px sans-serif`; c.textAlign = 'right'; c.textBaseline = 'top';
       c.fillText('🔒', obstacle.widthCm / 2 - 3 / unit, -obstacle.depthCm / 2 + 3 / unit);
     }
-    if (obstacle.widthCm >= 28 / unit && obstacle.depthCm >= 16 / unit) {
-      c.fillStyle = '#fff3e8'; c.font = `700 ${10 / unit}px sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText(obstacle.name, 0, 0, Math.max(0, obstacle.widthCm - 8 / unit));
-    }
     c.restore();
+    drawObstacleNameLabel(c, obstacle, { selected, exportMode: options.exportMode });
     if (!options.exportMode && (options.ghost || selected)) drawObstacleAngleLabel(c, obstacle);
     if (!options.exportMode && selected && state.wizard.active && state.subEditMode === 'interference') {
       drawObstacleSelectionGeometry(c, obstacle);
     }
+  }
+
+  function obstacleNameLabelBox(obstacle) {
+    const unit = Math.max(state.view.scale, .15);
+    const width = clamp((String(obstacle.name || '').length * 7 + 18) / unit, 54 / unit, 150 / unit);
+    const height = 20 / unit;
+    return { x: obstacle.x - width / 2, y: obstacle.y - height / 2, width, height };
+  }
+
+  function drawObstacleNameLabel(c, obstacle, options = {}) {
+    const unit = Math.max(state.view.scale, .15);
+    const box = obstacleNameLabelBox(obstacle);
+    c.save();
+    if (options.selected && !options.exportMode) {
+      c.fillStyle = 'rgba(17,24,33,.88)';
+      c.strokeStyle = '#ffd15c';
+      c.lineWidth = 1 / unit;
+      c.beginPath(); c.roundRect(box.x, box.y, box.width, box.height, 4 / unit); c.fill(); c.stroke();
+    }
+    c.fillStyle = '#fff3e8';
+    c.font = `700 ${10 / unit}px sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(obstacle.name, obstacle.x, obstacle.y, Math.max(0, box.width - 8 / unit));
+    c.restore();
   }
 
   function drawObstacleSelectionGeometry(c, obstacle) {
@@ -2124,7 +2185,7 @@
     c.restore();
   }
 
-  function drawObstacleAngleLabel(c, obstacle) {
+  function obstacleAngleLabelBox(obstacle) {
     const unit = Math.max(state.view.scale, .15);
     const canvasWidth = els.courseCanvas.width / dpr;
     const canvasHeight = els.courseCanvas.height / dpr;
@@ -2139,8 +2200,17 @@
     const minY = Math.min(...corners.map(point => point.y));
     const width = 46 / unit;
     const height = 24 / unit;
-    const x = clamp(maxX + 10 / unit, visible.minX + 6 / unit, visible.maxX - width - 6 / unit);
-    const y = clamp(minY, visible.minY + 6 / unit, visible.maxY - height - 6 / unit);
+    return {
+      x: clamp(maxX + 10 / unit, visible.minX + 6 / unit, visible.maxX - width - 6 / unit),
+      y: clamp(minY, visible.minY + 6 / unit, visible.maxY - height - 6 / unit),
+      width,
+      height
+    };
+  }
+
+  function drawObstacleAngleLabel(c, obstacle) {
+    const unit = Math.max(state.view.scale, .15);
+    const { x, y, width, height } = obstacleAngleLabelBox(obstacle);
     c.save();
     c.fillStyle = 'rgba(17,24,33,.94)';
     c.strokeStyle = '#f7c657';
@@ -3205,6 +3275,7 @@
     }
     snapshot();
     state.start = candidate;
+    state.wizard.step = 'library';
     state.startPhase = 'position';
     state.selectedType = 'straight';
     state.mode = 'place';
@@ -4117,6 +4188,21 @@
     }
     if (state.wizard.active && state.subEditMode === 'interference') {
       const selected = selectedObstacle();
+      const angleLabel = obstacleAngleLabelHitTest(selected, world);
+      if (angleLabel) {
+        editObstacleAngleFromCanvas(angleLabel);
+        state.pointer.down = false;
+        try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        return;
+      }
+      const nameLabel = obstacleNameLabelHitTest(world);
+      if (nameLabel) {
+        selectObstacle(nameLabel.id, { mode: false });
+        editObstacleNameFromCanvas(nameLabel);
+        state.pointer.down = false;
+        try { els.courseCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        return;
+      }
       const dimension = obstacleDimensionHitTest(selected, world);
       if (dimension) {
         editObstacleDimension(dimension.dimension);
@@ -5195,6 +5281,15 @@
       .sort((first, second) => first.distance - second.distance)[0] || null;
   }
 
+  function obstacleAngleLabelHitTest(obstacle, world) {
+    return obstacle && UNAVAILABLE_AREA_TRANSFORM.pointInsideLabelBox(world, obstacleAngleLabelBox(obstacle)) ? obstacle : null;
+  }
+
+  function obstacleNameLabelHitTest(world) {
+    return [...state.obstacles].reverse()
+      .find(obstacle => obstacle.visible && UNAVAILABLE_AREA_TRANSFORM.pointInsideLabelBox(world, obstacleNameLabelBox(obstacle))) || null;
+  }
+
   function beginObstacleResize(obstacle, corner, e) {
     if (!obstacle || !corner || obstacle.locked) return false;
     clearDragTrashState();
@@ -5239,6 +5334,99 @@
     return true;
   }
 
+  function editObstacleAngleFromCanvas(obstacle) {
+    if (!obstacle) return false;
+    if (obstacle.locked) {
+      toast('ロック中の設置不可エリアは回転できません。先にロックを解除してください');
+      return true;
+    }
+    return beginCanvasLabelEdit('angle', obstacle);
+  }
+
+  function editObstacleNameFromCanvas(obstacle) {
+    if (!obstacle) return false;
+    return beginCanvasLabelEdit('name', obstacle);
+  }
+
+  function beginCanvasLabelEdit(kind, obstacle) {
+    const input = els.canvasLabelEditor;
+    if (!input || !obstacle || !['angle', 'name'].includes(kind)) return false;
+    cancelCanvasLabelEdit();
+    const box = kind === 'angle' ? obstacleAngleLabelBox(obstacle) : obstacleNameLabelBox(obstacle);
+    const topLeft = worldToScreen(box.x, box.y);
+    const canvasRect = els.courseCanvas.getBoundingClientRect();
+    const wrapRect = els.canvasWrap.getBoundingClientRect();
+    input.style.left = `${canvasRect.left - wrapRect.left + topLeft.x}px`;
+    input.style.top = `${canvasRect.top - wrapRect.top + topLeft.y}px`;
+    input.style.width = `${Math.max(48, box.width * state.view.scale)}px`;
+    input.style.height = `${Math.max(24, box.height * state.view.scale)}px`;
+    input.value = kind === 'angle' ? String(obstacle.rotation) : obstacle.name;
+    input.setAttribute('aria-label', kind === 'angle' ? '角度ラベル編集' : '設置不可エリア名ラベル編集');
+    input.inputMode = kind === 'angle' ? 'numeric' : 'text';
+    input.hidden = false;
+    canvasLabelEdit = { kind, obstacleId: obstacle.id };
+    input.focus();
+    input.select();
+    return true;
+  }
+
+  function cancelCanvasLabelEdit() {
+    if (els.canvasLabelEditor) els.canvasLabelEditor.hidden = true;
+    canvasLabelEdit = null;
+    return true;
+  }
+
+  function commitCanvasLabelEdit() {
+    const edit = canvasLabelEdit;
+    const input = els.canvasLabelEditor;
+    const obstacle = edit && state.obstacles.find(item => item.id === edit.obstacleId);
+    if (!edit || !input || !obstacle) return cancelCanvasLabelEdit();
+    if (edit.kind === 'angle') {
+      const rotation = UNAVAILABLE_AREA_TRANSFORM.parseIntegerRotationInput(input.value);
+      if (rotation == null) {
+        setObstacleEditorError('角度は0～359の整数で入力してください。360は0°として保存します。');
+        input.focus(); input.select();
+        return false;
+      }
+      const next = INTERFERENCE_OBSTACLES.updateObstacle(obstacle, { rotation });
+      if (!next || !obstaclePlacementValidity(next).valid) {
+        setObstacleEditorError('回転後もレイアウトスペース内へ収まる角度を入力してください。');
+        input.focus(); input.select();
+        return false;
+      }
+      cancelCanvasLabelEdit();
+      if (next.rotation === obstacle.rotation) return true;
+      snapshot(); replaceObstacle(next);
+      setObstacleEditorError('');
+      logDiagnostic('unavailable-area-rotated', {
+        inputMethod: 'canvas-label', beforeAngle: obstacle.rotation, afterAngle: next.rotation,
+        step: Math.abs(next.rotation - obstacle.rotation), targetId: obstacle.id, targetType: 'obstacle'
+      }, { category: 'transform' });
+      return true;
+    }
+    const validation = SAVED_SPACES.validateAreaName(input.value, state.obstacles, obstacle.id);
+    if (validation.reason === 'empty-name') {
+      setObstacleEditorError('設置不可エリア名を入力してください。');
+      input.focus(); input.select();
+      return false;
+    }
+    if (validation.reason === 'duplicate-name') {
+      setObstacleEditorError('同じ名前の設置不可エリアがあります。別の名前を入力してください。');
+      input.focus(); input.select();
+      return false;
+    }
+    cancelCanvasLabelEdit();
+    if (validation.name === obstacle.name) return true;
+    const next = INTERFERENCE_OBSTACLES.updateObstacle(obstacle, { name: validation.name });
+    if (!next) return false;
+    snapshot(); replaceObstacle(next);
+    setObstacleEditorError('');
+    logDiagnostic('unavailable-area-renamed', {
+      targetId: obstacle.id, beforeName: obstacle.name, afterName: validation.name, inputMethod: 'canvas-label'
+    }, { category: 'unavailable-area' });
+    return true;
+  }
+
   function cancelObstacleDrag() {
     if (state.obstacleDrag) {
       logDiagnostic('unavailable-area-drag-cancelled', { targetId: state.obstacleDrag.id }, { category: 'transform' });
@@ -5251,6 +5439,7 @@
   function clearObstacleSelection(refresh = true) {
     const targetId = state.selectedObstacleId;
     state.selectedObstacleId = null;
+    cancelCanvasLabelEdit();
     cancelObstacleDrag();
     if (refresh) { updateUI(); render(); }
     if (targetId) logDiagnostic('unavailable-area-selection-cleared', { targetId }, { category: 'selection' });
@@ -5469,11 +5658,13 @@
   function applyObstacleEditorInputs() {
     const obstacle = selectedObstacle();
     if (!obstacle) return;
-    const rotationText = String(els.obstacleRotationInput?.value ?? '').trim();
-    const rotation = rotationText ? UNAVAILABLE_AREA_TRANSFORM.normalizeIntegerRotation(rotationText) : null;
+    const rotation = UNAVAILABLE_AREA_TRANSFORM.parseIntegerRotationInput(els.obstacleRotationInput?.value);
     if (rotation == null) return setObstacleEditorError('角度は0～359の整数で入力してください。360は0°として保存します。');
+    const nameValidation = SAVED_SPACES.validateAreaName(els.obstacleNameInput.value, state.obstacles, obstacle.id);
+    if (nameValidation.reason === 'empty-name') return setObstacleEditorError('設置不可エリア名を入力してください。');
+    if (nameValidation.reason === 'duplicate-name') return setObstacleEditorError('同じ名前の設置不可エリアがあります。別の名前を入力してください。');
     const next = INTERFERENCE_OBSTACLES.updateObstacle(obstacle, {
-      name: els.obstacleNameInput.value,
+      name: nameValidation.name,
       x: Number(els.obstacleXInput.value) * 100,
       y: Number(els.obstacleYInput.value) * 100,
       widthCm: Number(els.obstacleWidthInput.value) * 100,
@@ -5483,9 +5674,6 @@
       locked: els.obstacleLockedInput.checked
     });
     if (!next) return setObstacleEditorError('数値を確認してください。横幅と奥行は0より大きく、50m以下にします。');
-    if (state.obstacles.some(item => item.id !== obstacle.id && SAVED_SPACES.sameName(item.name, next.name))) {
-      return setObstacleEditorError('同じ名前の設置不可エリアがあります。別の名前を入力してください。');
-    }
     const geometryChanged = next.x !== obstacle.x || next.y !== obstacle.y
       || next.widthCm !== obstacle.widthCm || next.depthCm !== obstacle.depthCm || next.rotation !== obstacle.rotation;
     if (obstacle.locked && geometryChanged) return setObstacleEditorError('ロック中の設置不可エリアは位置・寸法・回転を変更できません。ロックを解除してから編集してください。');
@@ -6337,6 +6525,10 @@
     const boundaryMode = state.mode === 'boundary';
     const cutoutMode = state.mode === 'cutout';
     const subEditorActive = Boolean(state.subEditMode);
+    const initialStartStepActive = !state.wizard.active
+      && state.wizard.step === INITIAL_LAYOUT_FLOW.STEPS.START
+      && state.mode === 'start' && !state.start;
+    if (els.initialSetupStepBar) els.initialSetupStepBar.hidden = !initialStartStepActive;
     if (els.subEditModeBar) els.subEditModeBar.hidden = !subEditorActive;
     if (els.statusBar) {
       const statusVisibilityChanged = els.statusBar.hidden !== subEditorActive;
@@ -6346,7 +6538,11 @@
       if (statusVisibilityChanged) resizeCanvas();
     }
     if (state.subEditMode === 'space-adjustment' && els.subEditModeTitle) els.subEditModeTitle.textContent = 'コース設置不可エリア';
-    if (state.subEditMode === 'interference' && els.subEditModeTitle) els.subEditModeTitle.textContent = 'コース設置不可エリア';
+    if (state.subEditMode === 'interference' && els.subEditModeTitle) {
+      els.subEditModeTitle.textContent = isUnavailableAreaScreenActive()
+        ? 'STEP 2 / 3 設置不可エリア設定'
+        : 'コース設置不可エリア';
+    }
     const wizardInterference = isUnavailableAreaScreenActive();
     if (els.subEditModeDescription) els.subEditModeDescription.hidden = !wizardInterference;
     if (els.subEditObstacleCount) {

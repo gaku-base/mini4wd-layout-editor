@@ -463,3 +463,19 @@
 - Start placement is rejected when its actual footprint is outside the field
   or overlaps either an unavailable-area obstacle or a legacy room cutout.
   Rejected clicks do not add undo history or mutate the saved layout.
+
+### Initial-space review completion (2026-08-10)
+
+- Saving a reusable space and proceeding without saving now share the same
+  rotated-rectangle boundary check. Either transition is blocked while any
+  unavailable area extends outside the field; the saved-space schema rejects
+  the same invalid geometry as a second line of validation.
+- Setup progress is explicit through `STEP 2 / 3` unavailable-area editing and
+  `STEP 3 / 3` Start placement. The progress marker is cleared when Start is
+  placed and normal course editing begins.
+- Selected unavailable-area angle labels accept direct integer editing from
+  the canvas. Area-name labels remain horizontal and can be clicked to rename;
+  locked areas reject angle edits, while names remain editable because the
+  existing lock covers position, size, and rotation. Sidebar inputs remain available.
+- These changes do not alter RC3 layout JSON, saved-space versioning, internal
+  millimetre units, course-part rotation, collision rules, or PNG inclusion.

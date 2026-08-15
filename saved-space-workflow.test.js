@@ -56,6 +56,19 @@ test('saved-space editing restores the active course before returning to the lib
   assert.match(persistence, /if \(state\.wizard\.active\) return \{ status: 'deferred-wizard' \}/);
 });
 
+test('save and skip transitions share the final unavailable-area boundary guard', () => {
+  const validator = section('function validateUnavailableAreasForTransition', 'function saveCurrentSpaceAndContinue');
+  const save = section('function saveCurrentSpaceAndContinue', 'function ensureSetupDialogOpen');
+  const skip = section('function startLayoutFromUnavailableAreaScreen', 'function exitSubEditMode');
+  assert.match(validator, /savedSpaceAreasFromCurrentDraft\(\)/);
+  assert.match(validator, /SAVED_SPACES\.areaInsideField/);
+  assert.match(validator, /obstaclePlacementValidity\(area\)\.valid !== true/);
+  assert.match(validator, /selectObstacle\(firstObstacle\.id/);
+  assert.match(validator, /unavailable-area-outside-field/);
+  assert.match(save, /validateUnavailableAreasForTransition\('save-space'\)/);
+  assert.match(skip, /validateUnavailableAreasForTransition\('layout-start'\)/);
+});
+
 test('STEP 1 defaults, presets, validation, and real-ratio preview are present', () => {
   assert.match(html, /id="fieldWidthInput"[^>]*min="1"[^>]*max="50"[^>]*value="5\.0"/);
   assert.match(html, /id="fieldHeightInput"[^>]*min="1"[^>]*max="50"[^>]*value="5\.0"/);
@@ -88,10 +101,51 @@ test('selected unavailable areas integrate grid move, Shift precision, resize, a
 
 test('selected unavailable areas accept integer 0-359 rotation and reject duplicate names', () => {
   const apply = section('function applyObstacleEditorInputs', 'function duplicateSelectedObstacle');
-  assert.match(apply, /normalizeIntegerRotation/);
-  assert.match(apply, /SAVED_SPACES\.sameName/);
+  assert.match(apply, /parseIntegerRotationInput/);
+  assert.match(apply, /SAVED_SPACES\.validateAreaName/);
   assert.match(apply, /unavailable-area-renamed/);
   assert.match(html, /id="obstacleRotationInput"[^>]*min="0"[^>]*max="360"[^>]*step="1"/);
+});
+
+test('canvas labels have dedicated hit tests and direct edit handlers', () => {
+  const pointer = section('function onPointerDown', 'function onPointerMove');
+  const labels = section('function obstacleAngleLabelHitTest', 'function beginObstacleResize');
+  const direct = section('function editObstacleAngleFromCanvas', 'function cancelObstacleDrag');
+  assert.ok(pointer.indexOf('obstacleAngleLabelHitTest') < pointer.indexOf('obstacleHitTest'));
+  assert.ok(pointer.indexOf('obstacleNameLabelHitTest') < pointer.indexOf('obstacleHitTest'));
+  assert.match(labels, /obstacleAngleLabelBox/);
+  assert.match(labels, /obstacleNameLabelBox/);
+  assert.match(direct, /beginCanvasLabelEdit\('angle'/);
+  assert.match(direct, /commitCanvasLabelEdit/);
+  assert.match(direct, /parseIntegerRotationInput/);
+  assert.match(direct, /obstacle\.locked/);
+  assert.match(direct, /SAVED_SPACES\.validateAreaName/);
+  assert.match(direct, /inputMethod: 'canvas-label'/);
+});
+
+test('canvas name editing matches sidebar lock semantics and validates empty and duplicate names', () => {
+  const direct = section('function editObstacleNameFromCanvas', 'function cancelObstacleDrag');
+  assert.doesNotMatch(direct, /obstacle\.locked/);
+  assert.match(direct, /empty-name/);
+  assert.match(direct, /duplicate-name/);
+  assert.match(direct, /beginCanvasLabelEdit\('name'/);
+  assert.match(direct, /cancelCanvasLabelEdit/);
+});
+
+test('canvas label editor commits with Enter and cancels with Escape without prompt dialogs', () => {
+  const binding = section('function bindEvents', 'function openSetup');
+  const direct = section('function editObstacleAngleFromCanvas', 'function cancelObstacleDrag');
+  assert.match(html, /id="canvasLabelEditor"/);
+  assert.match(binding, /event\.key === 'Enter'/);
+  assert.match(binding, /event\.key === 'Escape'/);
+  assert.doesNotMatch(direct, /window\.prompt/);
+});
+
+test('area names render horizontally after the rotated obstacle context is restored', () => {
+  const shape = section('function drawObstacleShape', 'function drawObstacleSelectionGeometry');
+  assert.ok(shape.indexOf('c.restore();') < shape.indexOf('drawObstacleNameLabel'));
+  const name = section('function drawObstacleNameLabel', 'function drawObstacleSelectionGeometry');
+  assert.doesNotMatch(name, /rotate\(/);
 });
 
 test('Start placement rejects field overflow and both unavailable-area models before snapshot', () => {

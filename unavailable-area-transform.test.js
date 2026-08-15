@@ -3,8 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  normalizeIntegerRotation, snapValue, axes, cornerPoints, edgeGeometry,
-  moveTo, resizeFromCorner, resizeAroundCenter, hitCorner
+  normalizeIntegerRotation, parseIntegerRotationInput, snapValue, axes, cornerPoints, edgeGeometry,
+  moveTo, resizeFromCorner, resizeAroundCenter, hitCorner, pointInsideLabelBox
 } = require('./unavailable-area-transform.js');
 
 const area = {
@@ -19,6 +19,24 @@ test('integer rotations preserve 27 and 359 while 360 normalizes to zero', () =>
   assert.equal(normalizeIntegerRotation(-1), 359);
   assert.equal(normalizeIntegerRotation(2.5), null);
   assert.equal(normalizeIntegerRotation(''), 0);
+});
+
+test('direct angle input accepts integer labels and rejects empty or decimal values', () => {
+  assert.equal(parseIntegerRotationInput('27'), 27);
+  assert.equal(parseIntegerRotationInput('359'), 359);
+  assert.equal(parseIntegerRotationInput('360'), 0);
+  assert.equal(parseIntegerRotationInput('27.5'), null);
+  assert.equal(parseIntegerRotationInput('-1'), null);
+  assert.equal(parseIntegerRotationInput('361'), null);
+  assert.equal(parseIntegerRotationInput(''), null);
+  assert.equal(parseIntegerRotationInput('   '), null);
+});
+
+test('canvas label hit testing uses the supplied zoom-scaled world box', () => {
+  const zoom = 2;
+  const angleLabel = { x: 100, y: 80, width: 46 / zoom, height: 24 / zoom };
+  assert.equal(pointInsideLabelBox({ x: 110, y: 85 }, angleLabel), true);
+  assert.equal(pointInsideLabelBox({ x: 124, y: 85 }, angleLabel), false);
 });
 
 test('grid movement uses the current grid and Shift movement uses one centimetre', () => {

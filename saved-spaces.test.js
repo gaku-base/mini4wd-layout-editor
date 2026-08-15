@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   STORAGE_KEY, VERSION, deepClone, normalizeLibrary, uniqueName,
-  createSavedSpaceStore
+  areaInsideField, validateAreaName, createSavedSpaceStore
 } = require('./saved-spaces.js');
 
 class MemoryStorage {
@@ -149,4 +149,33 @@ test('invalid decimal rotations and malformed libraries are rejected', () => {
     }]
   };
   assert.equal(normalizeLibrary(library), null);
+});
+
+test('saved-space validation rejects rotated unavailable areas outside the field', () => {
+  const field = { widthCm: 500, heightCm: 800, gridCm: 10 };
+  const inside = { id: 'area-1', name: '柱', x: 250, y: 400, widthCm: 80, depthCm: 60, rotation: 27 };
+  const outside = { ...inside, x: 490, rotation: 45 };
+  assert.equal(areaInsideField(inside, field), true);
+  assert.equal(areaInsideField(outside, field), false);
+
+  const store = createSavedSpaceStore(new MemoryStorage(), deterministicOptions());
+  store.restore();
+  assert.equal(store.create({ ...input(), unavailableAreas: [outside] }).reason, 'invalid-space');
+
+  const legacyLibrary = {
+    version: VERSION,
+    spaces: [{
+      id: 'space-legacy', name: '既存スペース', field,
+      unavailableAreas: [outside], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z'
+    }]
+  };
+  assert.equal(normalizeLibrary(legacyLibrary).spaces.length, 1);
+});
+
+test('unavailable-area names trim, reject empty values, and reject duplicates', () => {
+  const areas = [{ id: 'area-1', name: '柱' }, { id: 'area-2', name: '机' }];
+  assert.deepEqual(validateAreaName(' 壁 ', areas, 'area-1'), { valid: true, reason: null, name: '壁' });
+  assert.equal(validateAreaName('  ', areas, 'area-1').reason, 'empty-name');
+  assert.equal(validateAreaName('机', areas, 'area-1').reason, 'duplicate-name');
+  assert.equal(validateAreaName('柱', areas, 'area-1').valid, true);
 });
