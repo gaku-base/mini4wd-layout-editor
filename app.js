@@ -5345,6 +5345,10 @@
 
   function editObstacleNameFromCanvas(obstacle) {
     if (!obstacle) return false;
+    if (obstacle.locked) {
+      toast('ロック中の設置不可エリアは名前変更できません。先にロックを解除してください');
+      return true;
+    }
     return beginCanvasLabelEdit('name', obstacle);
   }
 
@@ -5381,6 +5385,11 @@
     const input = els.canvasLabelEditor;
     const obstacle = edit && state.obstacles.find(item => item.id === edit.obstacleId);
     if (!edit || !input || !obstacle) return cancelCanvasLabelEdit();
+    if (edit.kind === 'name' && obstacle.locked) {
+      cancelCanvasLabelEdit();
+      toast('ロック中の設置不可エリアは名前変更できません。先にロックを解除してください');
+      return false;
+    }
     if (edit.kind === 'angle') {
       const rotation = UNAVAILABLE_AREA_TRANSFORM.parseIntegerRotationInput(input.value);
       if (rotation == null) {

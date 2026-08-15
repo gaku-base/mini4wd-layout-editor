@@ -475,7 +475,8 @@
   placed and normal course editing begins.
 - Selected unavailable-area angle labels accept direct integer editing from
   the canvas. Area-name labels remain horizontal and can be clicked to rename;
-  locked areas reject angle edits, while names remain editable because the
-  existing lock covers position, size, and rotation. Sidebar inputs remain available.
+  locked areas reject both angle and name edits so canvas behavior matches the
+  disabled sidebar inputs. Selection, inspection, unlocking, and duplication
+  remain available while locked.
 - These changes do not alter RC3 layout JSON, saved-space versioning, internal
   millimetre units, course-part rotation, collision rules, or PNG inclusion.

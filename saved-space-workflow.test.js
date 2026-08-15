@@ -125,11 +125,28 @@ test('canvas labels have dedicated hit tests and direct edit handlers', () => {
 
 test('canvas name editing matches sidebar lock semantics and validates empty and duplicate names', () => {
   const direct = section('function editObstacleNameFromCanvas', 'function cancelObstacleDrag');
-  assert.doesNotMatch(direct, /obstacle\.locked/);
+  const entry = section('function editObstacleNameFromCanvas', 'function beginCanvasLabelEdit');
+  assert.match(entry, /if \(obstacle\.locked\)/);
+  assert.match(entry, /ロック中の設置不可エリアは名前変更できません/);
+  assert.ok(entry.indexOf('obstacle.locked') < entry.indexOf("beginCanvasLabelEdit('name'"));
   assert.match(direct, /empty-name/);
   assert.match(direct, /duplicate-name/);
   assert.match(direct, /beginCanvasLabelEdit\('name'/);
+  assert.match(direct, /updateObstacle\(obstacle, \{ name: validation\.name \}\)/);
+  assert.match(direct, /snapshot\(\); replaceObstacle\(next\)/);
   assert.match(direct, /cancelCanvasLabelEdit/);
+});
+
+test('canvas name commit rejects an area locked after editing began before mutation or history', () => {
+  const commit = section('function commitCanvasLabelEdit', 'function cancelObstacleDrag');
+  const guard = commit.indexOf("if (edit.kind === 'name' && obstacle.locked)");
+  assert.notEqual(guard, -1);
+  assert.ok(guard < commit.indexOf('SAVED_SPACES.validateAreaName'));
+  assert.ok(guard < commit.indexOf('snapshot(); replaceObstacle(next)'));
+  const guarded = commit.slice(guard, commit.indexOf("if (edit.kind === 'angle')"));
+  assert.match(guarded, /cancelCanvasLabelEdit\(\)/);
+  assert.match(guarded, /名前変更できません/);
+  assert.match(guarded, /return false/);
 });
 
 test('canvas label editor commits with Enter and cancels with Escape without prompt dialogs', () => {
