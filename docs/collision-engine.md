@@ -32,7 +32,7 @@ An authoritative world AABB is produced only when the resolved profile satisfies
 
 - `status` is `verified` or `provisional`;
 - `coordinateFrame` is `part-local-xyz`;
-- interpolation is `linear` or `none`; `unknown` and spline interpolation are not treated as broad-phase safe by this first implementation;
+- interpolation is `linear`; `none`, `unknown`, and spline interpolation are not treated as broad-phase safe by this first implementation because they do not provide the same conservative station-to-station linear sweep contract;
 - stations have unique IDs, finite ratios in `[0, 1]`, ascending ratio order, and include ratio `0` and ratio `1`;
 - every station has finite `centerlinePositionMm.x/y/z` and `tangentHeadingDeg`;
 - required running-surface and underside polylines exist;
@@ -58,7 +58,7 @@ This makes curved and sloped station sections transform without assuming a recta
 
 ## Conservative sampled AABB
 
-For XY, the engine does not simply take the extrema of the transformed station wall points. It takes the world centerline-station bounds and expands them by the largest known lateral station radius. With linear/no interpolation this conservatively encloses the sampled cross-section sweep even while station tangent headings change between samples. Z uses the extrema of the sampled transformed collision points.
+For XY, the engine does not simply take the extrema of the transformed station wall points. It takes the world centerline-station bounds and expands them by the largest known lateral station radius. With the accepted linear interpolation contract this conservatively encloses the sampled cross-section sweep even while station tangent headings change between samples. Z uses the extrema of the sampled transformed collision points.
 
 This AABB is conservative for the profile representation accepted by this Phase 2.0 contract. It does not improve the physical accuracy of a provisional measurement profile; unknown geometry still stays `indeterminate`.
 
