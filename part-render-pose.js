@@ -3,6 +3,10 @@
 
   const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const normalizeAngle = value => ((finite(value) % 360) + 360) % 360;
+  const START_GUIDE_STROKES = new Set([
+    '#249b74', '#de3445',
+    'rgb(36,155,116)', 'rgb(222,52,69)'
+  ]);
 
   function resolvePartPose(part = {}) {
     return Object.freeze({
@@ -95,6 +99,83 @@
     };
   }
 
+  function normalizeStrokeStyle(value) {
+    return String(value == null ? '' : value).toLowerCase().replace(/\s+/g, '');
+  }
+
+  function readStatusRotation(documentValue) {
+    const text = documentValue?.getElementById?.('statusRotation')?.textContent;
+    const match = String(text == null ? '' : text).match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  function startOutlineGuideGeometry(definition, sourceRect, rotationDeg, lineWidth = 0) {
+    const width = Number(definition?.w);
+    const height = Number(definition?.h);
+    const x = Number(sourceRect?.x);
+    const y = Number(sourceRect?.y);
+    const sourceWidth = Number(sourceRect?.w);
+    const sourceHeight = Number(sourceRect?.h);
+    const rotation = Number(rotationDeg);
+    const strokeWidth = Number(lineWidth);
+    if (![width, height, x, y, sourceWidth, sourceHeight, rotation, strokeWidth].every(Number.isFinite)
+        || width <= 0 || height <= 0 || sourceWidth < 0 || sourceHeight < 0 || strokeWidth < 0) return null;
+    const padding = strokeWidth;
+    return {
+      center: { x: x + sourceWidth / 2, y: y + sourceHeight / 2 },
+      rotationDeg: normalizeAngle(rotation),
+      rect: {
+        x: -width / 2 - padding,
+        y: -height / 2 - padding,
+        w: width + padding * 2,
+        h: height + padding * 2
+      }
+    };
+  }
+
+  function shouldReplaceStartGuideStroke(context, documentValue) {
+    if (!context || context.canvas?.id !== 'courseCanvas') return false;
+    if (!context.canvas.classList?.contains?.('mode-start-position')) return false;
+    const dash = typeof context.getLineDash === 'function' ? context.getLineDash() : [];
+    if (!Array.isArray(dash) || dash.length === 0) return false;
+    if (!START_GUIDE_STROKES.has(normalizeStrokeStyle(context.strokeStyle))) return false;
+    return Number.isFinite(readStatusRotation(documentValue));
+  }
+
+  function installStartPlacementOutlineGuide(rootValue) {
+    const root = rootValue || (typeof window !== 'undefined' ? window : null);
+    const prototype = root?.CanvasRenderingContext2D?.prototype;
+    if (!prototype || typeof prototype.strokeRect !== 'function') return false;
+    if (prototype.__m4wdStartOutlineGuideInstalled) return true;
+    const originalStrokeRect = prototype.strokeRect;
+    Object.defineProperty(prototype, '__m4wdStartOutlineGuideInstalled', {
+      configurable: true,
+      value: true
+    });
+    prototype.strokeRect = function (x, y, w, h) {
+      const documentValue = root.document;
+      const startDefinition = root.M4WD_PART_CATALOG?.PARTS?.start;
+      if (shouldReplaceStartGuideStroke(this, documentValue)) {
+        const geometry = startOutlineGuideGeometry(
+          startDefinition,
+          { x, y, w, h },
+          readStatusRotation(documentValue),
+          Number(this.lineWidth) || 0
+        );
+        if (geometry) {
+          this.save();
+          this.translate(geometry.center.x, geometry.center.y);
+          this.rotate(geometry.rotationDeg * Math.PI / 180);
+          originalStrokeRect.call(this, geometry.rect.x, geometry.rect.y, geometry.rect.w, geometry.rect.h);
+          this.restore();
+          return;
+        }
+      }
+      return originalStrokeRect.call(this, x, y, w, h);
+    };
+    return true;
+  }
+
   const api = Object.freeze({
     resolvePartPose,
     cornerGeometry,
@@ -102,9 +183,17 @@
     transformPoint,
     tracePartPath,
     traceConnectors,
-    tracePart
+    tracePart,
+    normalizeStrokeStyle,
+    readStatusRotation,
+    startOutlineGuideGeometry,
+    shouldReplaceStartGuideStroke,
+    installStartPlacementOutlineGuide
   });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  if (typeof window !== 'undefined') window.M4WD_PART_RENDER_POSE = api;
+  if (typeof window !== 'undefined') {
+    window.M4WD_PART_RENDER_POSE = api;
+    installStartPlacementOutlineGuide(window);
+  }
 })();
