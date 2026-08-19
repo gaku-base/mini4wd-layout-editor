@@ -24,6 +24,13 @@ async function text(locator) {
   return String(await locator.textContent() || '').trim();
 }
 
+async function waitStatusCount(page, expected) {
+  await page.waitForFunction(expectedCount => {
+    const value = document.querySelector('#statusCount')?.textContent || '';
+    return value.trim() === String(expectedCount);
+  }, expected, { timeout: TIMEOUT });
+}
+
 async function openSavedSpaceLibrary(page) {
   const library = page.locator('#savedSpaceLibraryPanel');
   if (!(await library.isVisible())) {
@@ -101,26 +108,45 @@ async function main() {
     const box = await canvas.boundingBox();
     assert.ok(box && box.width > 100 && box.height > 100, 'course canvas has a usable size');
 
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
     const startBefore = await text(page.locator('#startText'));
     assert.match(startBefore, /未設定/);
 
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.click(centerX, centerY);
 
     await page.waitForFunction(() => {
       const value = document.querySelector('#startText')?.textContent || '';
       return value.trim() && !value.includes('未設定');
     }, { timeout: TIMEOUT });
+    await waitStatusCount(page, 1);
 
     const startAfterPlacement = await text(page.locator('#startText'));
     assert.doesNotMatch(startAfterPlacement, /未設定/);
     logStep('Start can be placed and normal course editing begins');
 
+    await page.keyboard.press('1');
+    const straightX = centerX + Math.min(100, box.width * 0.12);
+    await page.mouse.move(straightX, centerY);
+    await page.mouse.click(straightX, centerY);
+    await waitStatusCount(page, 2);
+    logStep('Straight can be placed after Start');
+
+    await page.locator('#undoBtn').click();
+    await waitStatusCount(page, 1);
+    logStep('Undo removes the placed Straight');
+
+    await page.locator('#redoBtn').click();
+    await waitStatusCount(page, 2);
+    logStep('Redo restores the placed Straight');
+
     await page.reload({ waitUntil: 'networkidle', timeout: 15000 });
     await waitVisible(page, '#courseCanvas');
     const startAfterReload = await text(page.locator('#startText'));
     assert.doesNotMatch(startAfterReload, /未設定/);
-    logStep('course state restores after reload');
+    await waitStatusCount(page, 2);
+    logStep('Start and Straight restore after reload');
 
     await openSavedSpaceLibrary(page);
     const savedCard = page.locator('.saved-space-card', { hasText: 'Smoke Test Space' });
@@ -128,11 +154,15 @@ async function main() {
     logStep('saved-space library persists after reload');
 
     const startBeforeCancel = await text(page.locator('#startText'));
+    const countBeforeCancel = await text(page.locator('#statusCount'));
     await page.locator('#cancelSavedSpaceLibraryBtn').click();
     await page.locator('#savedSpaceLibraryPanel').waitFor({ state: 'hidden', timeout: TIMEOUT });
     const startAfterCancel = await text(page.locator('#startText'));
+    const countAfterCancel = await text(page.locator('#statusCount'));
     assert.equal(startAfterCancel, startBeforeCancel);
+    assert.equal(countAfterCancel, countBeforeCancel);
     assert.doesNotMatch(startAfterCancel, /未設定/);
+    assert.equal(countAfterCancel, '2');
     logStep('cancelling new-layout setup preserves the current course');
 
     assert.deepEqual(pageErrors, [], `page errors:\n${pageErrors.join('\n')}`);
