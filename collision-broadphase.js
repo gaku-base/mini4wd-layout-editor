@@ -28,6 +28,16 @@
       ? (placement?.profile?.id == null ? null : String(placement.profile.id))
       : String(placement.profileRef)
   });
+  const nonEmptyId = value => {
+    if (value == null) return null;
+    const text = String(value).trim();
+    return text ? text : null;
+  };
+  const requiredWallKeys = options => [...new Set(
+    (Array.isArray(options?.requiredWallKeys) ? options.requiredWallKeys : [])
+      .map(nonEmptyId)
+      .filter(Boolean)
+  )];
 
   function normalizeAngleDeg(value) { return angle(value); }
 
@@ -43,7 +53,7 @@
   function validatePlacement(placement) {
     const id = identity(placement);
     const missing = [];
-    if (!id.partId) missing.push('partId');
+    if (!nonEmptyId(id.partId)) missing.push('partId');
     const x = finite(placement?.positionMm?.x);
     const y = finite(placement?.positionMm?.y);
     const z = finite(placement?.positionMm?.z);
@@ -112,22 +122,39 @@
       if (required) missing.push(path);
       return;
     }
+
     const values = [];
-    for (const key of ['lowerEdgeMm', 'upperEdgeMm']) {
-      if (wall[key] != null) {
-        const yz = normalizeYZPoint(wall[key]);
-        if (yz) values.push(yz);
-        else missing.push(`${path}.${key}`);
-      }
-    }
+    const lowerPresent = wall.lowerEdgeMm != null;
+    const upperPresent = wall.upperEdgeMm != null;
+    const lower = lowerPresent ? normalizeYZPoint(wall.lowerEdgeMm) : null;
+    const upper = upperPresent ? normalizeYZPoint(wall.upperEdgeMm) : null;
+    if (lowerPresent && !lower) missing.push(`${path}.lowerEdgeMm`);
+    if (upperPresent && !upper) missing.push(`${path}.upperEdgeMm`);
+    if (lower) values.push(lower);
+    if (upper) values.push(upper);
+
+    let polylineComplete = false;
     if (Array.isArray(wall.polylineYZMm)) {
+      let validCount = 0;
       wall.polylineYZMm.forEach((value, index) => {
         const yz = normalizeYZPoint(value);
-        if (yz) values.push(yz);
-        else missing.push(`${path}.polylineYZMm[${index}]`);
+        if (yz) {
+          validCount += 1;
+          values.push(yz);
+        } else missing.push(`${path}.polylineYZMm[${index}]`);
       });
+      polylineComplete = wall.polylineYZMm.length > 0 && validCount === wall.polylineYZMm.length;
     }
-    if (required && values.length === 0) missing.push(path);
+
+    const edgeComplete = Boolean(lower && upper);
+    if (required && !edgeComplete && !polylineComplete) {
+      if (lowerPresent || upperPresent) {
+        if (!lowerPresent) missing.push(`${path}.lowerEdgeMm`);
+        if (!upperPresent) missing.push(`${path}.upperEdgeMm`);
+      } else {
+        missing.push(path);
+      }
+    }
     values.forEach(yz => points.push(worldPoint(center, tangent, yz, placement)));
   }
 
@@ -153,7 +180,8 @@
     collectPolyline(station?.runningSurfacePolylineYZMm, `${prefix}.runningSurfacePolylineYZMm`, options.requireRunningSurface !== false, center, tangent, placement, points, missing);
     collectPolyline(station?.undersidePolylineYZMm, `${prefix}.undersidePolylineYZMm`, options.requireUnderside !== false, center, tangent, placement, points, missing);
 
-    const requiredWalls = [...new Set((options.requiredWallKeys || []).map(String))];
+    const requiredWalls = requiredWallKeys(options);
+    if (requiredWalls.length === 0) missing.push('options.requiredWallKeys(non-empty wall schema required)');
     const polyWalls = station?.sideWallPolylinesYZMm || {};
     const objectWalls = station?.walls || {};
     const keys = new Set([...Object.keys(polyWalls), ...Object.keys(objectWalls), ...requiredWalls]);
@@ -210,6 +238,7 @@
     const placement = validatePlacement(placementValue);
     const profile = placementValue?.profile;
     const missing = placement.missing.map(item => `placement.${item}`);
+    if (requiredWallKeys(options).length === 0) missing.push('options.requiredWallKeys(non-empty wall schema required)');
     if (!profile || typeof profile !== 'object') missing.push('profile');
     if (profile && !['verified', 'provisional'].includes(String(profile.status))) missing.push('profile.status(collision-ready verified/provisional required)');
     if (profile && profile.coordinateFrame !== 'part-local-xyz') missing.push('profile.coordinateFrame(part-local-xyz required)');
@@ -291,16 +320,20 @@
     const details = matches.map(connection => {
       const exclusion = connection.normalContactExclusion;
       const status = exclusion?.status == null ? 'unknown' : String(exclusion.status);
+      const connectorAId = nonEmptyId(connection.connectorAId);
+      const connectorBId = nonEmptyId(connection.connectorBId);
+      const validConnectorIdentity = Boolean(connectorAId && connectorBId);
       return {
-        connectorAId: connection.connectorAId == null ? null : String(connection.connectorAId),
-        connectorBId: connection.connectorBId == null ? null : String(connection.connectorBId),
+        connectorAId,
+        connectorBId,
+        validConnectorIdentity,
         exclusionStatus: status,
-        confirmedCoverage: ['verified', 'provisional'].includes(status) && exclusion?.broadPhaseCoverage === 'confirmed'
+        confirmedCoverage: validConnectorIdentity && ['verified', 'provisional'].includes(status) && exclusion?.broadPhaseCoverage === 'confirmed'
       };
     });
     const statuses = [...new Set(details.map(item => item.exclusionStatus))];
     return {
-      formalConnection: true,
+      formalConnection: details.some(item => item.validConnectorIdentity),
       connectorAId: details.length === 1 ? details[0].connectorAId : null,
       connectorBId: details.length === 1 ? details[0].connectorBId : null,
       exclusionStatus: statuses.length === 1 ? statuses[0] : 'mixed',
@@ -309,10 +342,44 @@
     };
   }
 
-  function classifyPair(partAValue, partBValue, options = {}) {
+  function identityDiagnostic(partAValue, partBValue, reasonCode, duplicatePartIds = new Set()) {
+    const idA = identity(partAValue).partId;
+    const idB = identity(partBValue).partId;
+    const a = buildWorldAabb(partAValue, { requiredWallKeys: ['__diagnostic__'] });
+    const b = buildWorldAabb(partBValue, { requiredWallKeys: ['__diagnostic__'] });
+    const missing = [];
+    if (!nonEmptyId(idA)) missing.push({ partId: null, path: 'partId' });
+    if (!nonEmptyId(idB)) missing.push({ partId: null, path: 'partId' });
+    if ((idA && idA === idB) || duplicatePartIds.has(idA)) missing.push({ partId: idA || null, path: 'partId(duplicate)' });
+    if (idB && duplicatePartIds.has(idB) && idB !== idA) missing.push({ partId: idB, path: 'partId(duplicate)' });
+    return {
+      partAId: idA,
+      partBId: idB,
+      profileRefA: a.profileRef,
+      profileRefB: b.profileRef,
+      worldAabbA: null,
+      worldAabbB: null,
+      knownWorldAabbA: a.knownAabb,
+      knownWorldAabbB: b.knownAabb,
+      candidateRangeMm: null,
+      normalContact: { formalConnection: false, exclusionStatus: 'not-evaluated', confirmedCoverage: false, connections: [] },
+      missing,
+      status: 'indeterminate',
+      reasonCode
+    };
+  }
+
+  function classifyPair(partAValue, partBValue, options = {}, context = {}) {
+    if (partAValue === partBValue) return null;
     const idAValue = identity(partAValue).partId;
     const idBValue = identity(partBValue).partId;
-    if (!idAValue || !idBValue || idAValue === idBValue) return null;
+    const duplicatePartIds = context.duplicatePartIds instanceof Set ? context.duplicatePartIds : new Set();
+    if (!nonEmptyId(idAValue) || !nonEmptyId(idBValue)) {
+      return identityDiagnostic(partAValue, partBValue, 'part-id-missing', duplicatePartIds);
+    }
+    if (idAValue === idBValue || duplicatePartIds.has(idAValue) || duplicatePartIds.has(idBValue)) {
+      return identityDiagnostic(partAValue, partBValue, 'part-id-duplicate', duplicatePartIds);
+    }
     const [partA, partB] = idAValue.localeCompare(idBValue) <= 0 ? [partAValue, partBValue] : [partBValue, partAValue];
     const idA = identity(partA).partId;
     const idB = identity(partB).partId;
@@ -348,10 +415,35 @@
   }
 
   function analyzeBroadPhase(placements, options = {}) {
-    const sorted = (Array.isArray(placements) ? [...placements] : []).sort((a, b) => identity(a).partId.localeCompare(identity(b).partId));
+    const values = Array.isArray(placements) ? [...placements] : [];
+    const counts = new Map();
+    values.forEach(value => {
+      const id = nonEmptyId(identity(value).partId);
+      if (id) counts.set(id, (counts.get(id) || 0) + 1);
+    });
+    const duplicatePartIds = new Set([...counts].filter(([, count]) => count > 1).map(([id]) => id));
+    const sorted = values.sort((a, b) => {
+      const ia = identity(a); const ib = identity(b);
+      const byId = ia.partId.localeCompare(ib.partId);
+      if (byId) return byId;
+      const byProfile = String(ia.profileRef || '').localeCompare(String(ib.profileRef || ''));
+      if (byProfile) return byProfile;
+      const pa = a?.positionMm || {}; const pb = b?.positionMm || {};
+      for (const axis of ['x', 'y', 'z']) {
+        const av = finite(pa[axis]); const bv = finite(pb[axis]);
+        if (av != null && bv != null && av !== bv) return av - bv;
+        if (av == null && bv != null) return -1;
+        if (av != null && bv == null) return 1;
+      }
+      const ar = finite(a?.rotationDeg); const br = finite(b?.rotationDeg);
+      if (ar != null && br != null && ar !== br) return ar - br;
+      if (ar == null && br != null) return -1;
+      if (ar != null && br == null) return 1;
+      return 0;
+    });
     const results = [];
     for (let i = 0; i < sorted.length; i += 1) for (let j = i + 1; j < sorted.length; j += 1) {
-      const result = classifyPair(sorted[i], sorted[j], options);
+      const result = classifyPair(sorted[i], sorted[j], options, { duplicatePartIds });
       if (result) results.push(result);
     }
     return results;
