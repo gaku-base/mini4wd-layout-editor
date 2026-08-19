@@ -3,10 +3,6 @@
 
   const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const normalizeAngle = value => ((finite(value) % 360) + 360) % 360;
-  const START_GUIDE_STROKES = new Set([
-    '#249b74', '#de3445',
-    'rgb(36,155,116)', 'rgb(222,52,69)'
-  ]);
 
   function resolvePartPose(part = {}) {
     return Object.freeze({
@@ -99,14 +95,21 @@
     };
   }
 
-  function normalizeStrokeStyle(value) {
-    return String(value == null ? '' : value).toLowerCase().replace(/\s+/g, '');
-  }
-
   function readStatusRotation(documentValue) {
     const text = documentValue?.getElementById?.('statusRotation')?.textContent;
     const match = String(text == null ? '' : text).match(/-?\d+(?:\.\d+)?/);
     return match ? Number(match[0]) : null;
+  }
+
+  function rotatedRectSize(width, height, rotationDeg) {
+    const w = Number(width);
+    const h = Number(height);
+    const rotation = Number(rotationDeg);
+    if (![w, h, rotation].every(Number.isFinite) || w <= 0 || h <= 0) return null;
+    const radians = rotation * Math.PI / 180;
+    const cos = Math.abs(Math.cos(radians));
+    const sin = Math.abs(Math.sin(radians));
+    return { w: w * cos + h * sin, h: w * sin + h * cos };
   }
 
   function startOutlineGuideGeometry(definition, sourceRect, rotationDeg, lineWidth = 0) {
@@ -133,13 +136,24 @@
     };
   }
 
-  function shouldReplaceStartGuideStroke(context, documentValue) {
+  function sourceRectMatchesRotatedStart(definition, sourceRect, rotationDeg, epsilon = 1e-6) {
+    const expected = rotatedRectSize(definition?.w, definition?.h, rotationDeg);
+    const sourceWidth = Number(sourceRect?.w);
+    const sourceHeight = Number(sourceRect?.h);
+    const tolerance = Number(epsilon);
+    if (!expected || ![sourceWidth, sourceHeight, tolerance].every(Number.isFinite) || tolerance < 0) return false;
+    return Math.abs(sourceWidth - expected.w) <= tolerance
+      && Math.abs(sourceHeight - expected.h) <= tolerance;
+  }
+
+  function shouldReplaceStartGuideStroke(context, documentValue, startDefinition, sourceRect) {
     if (!context || context.canvas?.id !== 'courseCanvas') return false;
     if (!context.canvas.classList?.contains?.('mode-start-position')) return false;
     const dash = typeof context.getLineDash === 'function' ? context.getLineDash() : [];
     if (!Array.isArray(dash) || dash.length === 0) return false;
-    if (!START_GUIDE_STROKES.has(normalizeStrokeStyle(context.strokeStyle))) return false;
-    return Number.isFinite(readStatusRotation(documentValue));
+    const rotation = readStatusRotation(documentValue);
+    if (!Number.isFinite(rotation)) return false;
+    return sourceRectMatchesRotatedStart(startDefinition, sourceRect, rotation);
   }
 
   function installStartPlacementOutlineGuide(rootValue) {
@@ -155,10 +169,11 @@
     prototype.strokeRect = function (x, y, w, h) {
       const documentValue = root.document;
       const startDefinition = root.M4WD_PART_CATALOG?.PARTS?.start;
-      if (shouldReplaceStartGuideStroke(this, documentValue)) {
+      const sourceRect = { x, y, w, h };
+      if (shouldReplaceStartGuideStroke(this, documentValue, startDefinition, sourceRect)) {
         const geometry = startOutlineGuideGeometry(
           startDefinition,
-          { x, y, w, h },
+          sourceRect,
           readStatusRotation(documentValue),
           Number(this.lineWidth) || 0
         );
@@ -184,9 +199,10 @@
     tracePartPath,
     traceConnectors,
     tracePart,
-    normalizeStrokeStyle,
     readStatusRotation,
+    rotatedRectSize,
     startOutlineGuideGeometry,
+    sourceRectMatchesRotatedStart,
     shouldReplaceStartGuideStroke,
     installStartPlacementOutlineGuide
   });
