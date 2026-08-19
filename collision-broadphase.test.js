@@ -131,11 +131,14 @@ test('collision readiness validates station IDs, ratios, and order', () => {
   assert.ok(result.missing.some(path => path.includes('ratio ascending required')));
 });
 
-test('unknown or spline interpolation is not authoritative broad phase', () => {
-  const value = profile('interpolation'); value.interpolation = 'unknown';
-  const result = broad.buildWorldAabb(placed('A', undefined, 0, value), options);
-  assert.equal(result.status, 'indeterminate');
-  assert.ok(result.missing.some(path => path.includes('interpolation')));
+test('only linear interpolation is authoritative broad phase', () => {
+  for (const interpolation of ['unknown', 'none', 'spline']) {
+    const value = profile(`interpolation-${interpolation}`);
+    value.interpolation = interpolation;
+    const result = broad.buildWorldAabb(placed('A', undefined, 0, value), options);
+    assert.equal(result.status, 'indeterminate');
+    assert.ok(result.missing.some(path => path.includes('interpolation')));
+  }
 });
 
 test('part rotation stays on 45-degree grid', () => {
