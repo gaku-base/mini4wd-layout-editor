@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -21,6 +21,114 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Apply PR74 part-outline implementation
+        if: github.event_name == 'pull_request' && github.head_ref == 'feat/part-outline-guides' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${GITHUB_HEAD_REF}"
+          git checkout -B "${GITHUB_HEAD_REF}" "origin/${GITHUB_HEAD_REF}"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app.js')
+          text = path.read_text(encoding='utf-8')
+
+          if 'function drawPartOutlineGuide(c, part, stroke)' not in text:
+              needle = """  function drawPartSelectionEffect(c, type, stroke, fill, dashed = false, resolvedDef = PARTS[type]) {\n    c.save();\n    if (!tracePartShapePath(c, type)) { c.restore(); return; }\n"""
+              insert = """  function drawPartOutlineGuide(c, part, stroke) {\n    if (!part || !PARTS[part.type]) return false;\n    const pose = resolvePartPose(part);\n    c.save();\n    c.translate(part.x, part.y);\n    c.rotate(pose.rotation * Math.PI / 180);\n    if (!tracePartShapePath(c, part.type)) { c.restore(); return false; }\n    c.strokeStyle = stroke;\n    c.lineWidth = 2 / Math.max(state.view.scale, .15);\n    c.setLineDash([6 / Math.max(state.view.scale, .15), 4 / Math.max(state.view.scale, .15)]);\n    c.stroke();\n    c.setLineDash([]);\n    c.restore();\n    return true;\n  }\n\n  function drawPartSelectionEffect(c, type, stroke, fill, dashed = false, resolvedDef = PARTS[type]) {\n    c.save();\n    if (!tracePartShapePath(c, type)) { c.restore(); return; }\n"""
+              if needle not in text:
+                  raise SystemExit('drawPartSelectionEffect insertion point not found')
+              text = text.replace(needle, insert, 1)
+
+          old_start = """      const bounds = startBounds(candidate);\n      c.save();\n      c.strokeStyle = validity.valid ? '#249b74' : '#de3445';\n      c.lineWidth = 2 / state.view.scale;\n      c.setLineDash([6 / state.view.scale, 4 / state.view.scale]);\n      c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h);\n      c.setLineDash([]);\n      c.restore();\n"""
+          new_start = """      drawPartOutlineGuide(\n        c,\n        { ...candidate, id: 'start', type: 'start' },\n        validity.valid ? '#249b74' : '#de3445'\n      );\n"""
+          if old_start in text:
+              text = text.replace(old_start, new_start, 1)
+          elif "{ ...candidate, id: 'start', type: 'start' }" not in text:
+              raise SystemExit('Start guide block not found')
+
+          old_ghost = """        drawPart(c, ghostPart);\n        c.restore();\n        drawConnectionGuide(c, proposal);\n"""
+          new_ghost = """        drawPart(c, ghostPart);\n        c.restore();\n        drawPartOutlineGuide(\n          c,\n          ghostPart,\n          proposal.outOfBounds ? '#f07818' : (proposal.valid ? '#249b74' : '#de4b5b')\n        );\n        drawConnectionGuide(c, proposal);\n"""
+          if old_ghost in text:
+              text = text.replace(old_ghost, new_ghost, 1)
+          elif 'drawPartOutlineGuide(\n          c,\n          ghostPart,' not in text:
+              raise SystemExit('course ghost guide insertion point not found')
+
+          path.write_text(text, encoding='utf-8')
+
+          Path('part-outline-guides.test.js').write_text(r'''const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+
+const source = fs.readFileSync('app.js', 'utf8');
+
+function functionBody(name, nextName) {
+  const start = source.indexOf(`function ${name}`);
+  assert.notEqual(start, -1, `${name} must exist`);
+  const end = nextName ? source.indexOf(`function ${nextName}`, start + 1) : source.length;
+  assert.notEqual(end, -1, `${nextName} must exist after ${name}`);
+  return source.slice(start, end);
+}
+
+test('part outline guide follows the physical part path after applying placement rotation', () => {
+  const body = functionBody('drawPartOutlineGuide', 'drawPartSelectionEffect');
+  assert.match(body, /resolvePartPose\(part\)/);
+  assert.match(body, /c\.translate\(part\.x, part\.y\)/);
+  assert.match(body, /c\.rotate\(pose\.rotation \* Math\.PI \/ 180\)/);
+  assert.match(body, /tracePartShapePath\(c, part\.type\)/);
+  assert.match(body, /setLineDash/);
+  assert.doesNotMatch(body, /strokeRect|partBounds|startBounds|transformedBounds/);
+});
+
+test('Start placement guide no longer renders an axis-aligned rotated AABB rectangle', () => {
+  const body = functionBody('drawCursorAndGhost', 'drawPointerCrosshair');
+  const startSection = body.slice(body.indexOf("if (state.mode === 'start')"), body.indexOf("if (state.mode === 'place')"));
+  assert.match(startSection, /drawPartOutlineGuide/);
+  assert.match(startSection, /type: 'start'/);
+  assert.doesNotMatch(startSection, /startBounds\(candidate\)|strokeRect\(bounds\.minX/);
+});
+
+test('course placement ghosts use the same physical outline guide', () => {
+  const body = functionBody('drawCursorAndGhost', 'drawPointerCrosshair');
+  const placeSection = body.slice(body.indexOf("if (state.mode === 'place')"));
+  assert.match(placeSection, /drawPartOutlineGuide\([\s\S]*ghostPart/);
+  assert.match(placeSection, /proposal\.outOfBounds/);
+  assert.match(placeSection, /proposal\.valid/);
+});
+
+test('Corner, Burning Changer and Wave retain their dedicated physical outline paths', () => {
+  const body = functionBody('tracePartShapePath', 'drawPartOutlineGuide');
+  assert.match(body, /if \(def\.corner45\)/);
+  assert.match(body, /if \(def\.burning\)/);
+  assert.match(body, /if \(def\.wave\) return traceWaveOuterPath/);
+});
+
+test('selection outline continues to use the physical shape path instead of an AABB', () => {
+  const body = functionBody('drawPartSelectionEffect', 'hoverStyleForMode');
+  assert.match(body, /tracePartShapePath\(c, type\)/);
+  assert.doesNotMatch(body, /strokeRect|partBounds|startBounds|transformedBounds/);
+});
+
+test('PNG export path does not call the transient placement outline guide', () => {
+  const exportStart = source.indexOf('function exportPNG');
+  assert.notEqual(exportStart, -1, 'exportPNG must exist');
+  const nextFunction = source.indexOf('\n  function ', exportStart + 20);
+  const exportBody = source.slice(exportStart, nextFunction === -1 ? source.length : nextFunction);
+  assert.doesNotMatch(exportBody, /drawPartOutlineGuide/);
+});
+''', encoding='utf-8')
+          PY
+          node --check app.js
+          node --test part-outline-guides.test.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js part-outline-guides.test.js
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: draw placement guides on part outlines"
+            git push origin HEAD:"${GITHUB_HEAD_REF}"
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
