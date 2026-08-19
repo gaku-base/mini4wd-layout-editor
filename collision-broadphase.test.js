@@ -208,3 +208,58 @@ test('candidate extraction keeps candidate and indeterminate only', () => {
   assert.ok(results.some(item => item.partBId === 'D' && item.status === 'indeterminate'));
   assert.equal(results.some(item => item.status === 'clear'), false);
 });
+
+test('missing part ID is retained as indeterminate instead of being dropped', () => {
+  const result = broad.classifyPair(placed(''), placed('B', { x: 100, y: 0, z: 0 }), options);
+  assert.equal(result.status, 'indeterminate');
+  assert.equal(result.reasonCode, 'part-id-missing');
+  assert.ok(result.missing.some(item => item.path === 'partId'));
+});
+
+test('duplicate part IDs make all affected analyzer pairs indeterminate', () => {
+  const first = placed('A');
+  const duplicate = placed('A', { x: 100, y: 0, z: 0 });
+  const other = placed('C', { x: 1000, y: 0, z: 0 });
+  assert.equal(broad.classifyPair(first, duplicate, options).status, 'indeterminate');
+  const results = broad.analyzeBroadPhase([first, duplicate, other], options);
+  assert.equal(results.length, 3);
+  assert.ok(results.every(item => item.status === 'indeterminate'));
+  assert.ok(results.some(item => item.missing.some(missing => missing.path === 'partId(duplicate)')));
+});
+
+test('collision readiness requires a non-empty wall schema', () => {
+  const omitted = broad.buildWorldAabb(placed('A'), { physicalToleranceMm: 0 });
+  const empty = broad.buildWorldAabb(placed('A'), { requiredWallKeys: [], physicalToleranceMm: 0 });
+  assert.equal(omitted.status, 'indeterminate');
+  assert.equal(empty.status, 'indeterminate');
+  assert.ok(omitted.missing.some(path => path.includes('requiredWallKeys')));
+  assert.ok(empty.missing.some(path => path.includes('requiredWallKeys')));
+});
+
+test('bank wall edge objects require both lower and upper edges', () => {
+  for (const missingKey of ['lowerEdgeMm', 'upperEdgeMm']) {
+    const value = profile(`bank-missing-${missingKey}`);
+    value.stations.forEach(station => {
+      delete station.sideWallPolylinesYZMm;
+      station.walls = {
+        inner: { lowerEdgeMm: { y: -50, z: -20 }, upperEdgeMm: { y: -50, z: 30 } },
+        outer: { lowerEdgeMm: { y: 50, z: -20 }, upperEdgeMm: { y: 50, z: 30 } }
+      };
+      delete station.walls.inner[missingKey];
+    });
+    const result = broad.buildWorldAabb(placed('BANK', undefined, 0, value), { requiredWallKeys: ['inner', 'outer'], physicalToleranceMm: 0 });
+    assert.equal(result.status, 'indeterminate');
+    assert.ok(result.missing.some(path => path.includes(`walls.inner.${missingKey}`)));
+  }
+});
+
+test('normal-contact exclusion requires non-empty connector identities', () => {
+  for (const connectorAId of [null, '', '   ']) {
+    const result = broad.classifyPair(placed('A'), placed('B', { x: 100, y: 0, z: 0 }), {
+      ...options,
+      connections: [{ partAId: 'A', connectorAId, partBId: 'B', connectorBId: 'entrance', normalContactExclusion: { status: 'verified', broadPhaseCoverage: 'confirmed' } }]
+    });
+    assert.equal(result.status, 'candidate');
+    assert.equal(result.normalContact.confirmedCoverage, false);
+  }
+});
