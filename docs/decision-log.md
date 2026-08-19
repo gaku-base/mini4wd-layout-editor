@@ -69,7 +69,7 @@
 - The fast-path anchor and automatic type-selection state are session-only and
   are excluded from JSON, localStorage, Undo/Redo, and layout data.
 
-### Concrete left/right corner part types (2026-07-29)
+### Concrete left/right corner part types (2026-07-29）
 
 - 45-degree corners use the concrete catalog types `corner-45-right` and
   `corner-45-left`; a part type, rather than runtime mirror state, is the
@@ -147,6 +147,7 @@
 - CodexはGitHub上で実装・テスト・PR作成を担当する。
 - GitHubの仕様書、Issue、PRを共通の作業記録とする。
 - PRのマージと寸法確定などの重要判断はユーザー承認を残す。
+
 ### 計測プロトコルとcollision profile
 
 - Phase 2へ進む前に、寸法・接続点・外形・3Dプロファイルへ測定元、測定日、測定者、許容誤差、信頼度を記録する。
