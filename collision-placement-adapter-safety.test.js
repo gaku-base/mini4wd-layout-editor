@@ -5,7 +5,9 @@ const assert = require('node:assert/strict');
 const ADAPTER = require('./collision-placement-adapter.js');
 const BROADPHASE = require('./collision-broadphase.js');
 
-function makeProfile() {
+// Synthetic provisional collision fixture only. Its arbitrary dimensions are
+// engine-test geometry, not measured, verified, or production part dimensions.
+function makeSyntheticProvisionalProfile() {
   const station = (id, ratio, x) => ({
     id,
     ratio,
@@ -35,12 +37,12 @@ test('wall schema normalization accepts only non-empty string keys', () => {
   );
 });
 
-test('finite centimetre input that overflows in mm becomes unknown', () => {
+test('synthetic provisional profile: finite centimetre input that overflows in mm becomes unknown', () => {
   assert.equal(ADAPTER.editorCmToMm(Number.MAX_VALUE), null);
   const placement = ADAPTER.adaptEditorPlacement({
     id: 'overflow', type: 'slope', x: Number.MAX_VALUE, y: 0, zMm: 0, rotation: 0
   }, {
-    resolveCollisionProfile: () => ({ profile: makeProfile(), requiredWallKeys: ['left', 'right'] })
+    resolveCollisionProfile: () => ({ profile: makeSyntheticProvisionalProfile(), requiredWallKeys: ['left', 'right'] })
   });
   assert.equal(placement.positionMm.x, null);
   const result = BROADPHASE.buildWorldAabb(placement);
