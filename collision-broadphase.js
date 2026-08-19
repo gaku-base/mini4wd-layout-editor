@@ -7,55 +7,54 @@
   'use strict';
 
   const DEFAULT_NUMERIC_EPSILON_MM = 1e-7;
+  const DEFAULT_ROTATION_STEP_DEG = 45;
+  const DEFAULT_ROTATION_EPSILON_DEG = 1e-9;
+  const PROFILE_RATIO_EPSILON = 1e-10;
 
-  function finiteNumber(value) {
-    return typeof value === 'number' && Number.isFinite(value) ? value : null;
-  }
-
-  function normalizeAngleDeg(value) {
-    const number = finiteNumber(value);
-    if (number == null) return null;
-    return ((number % 360) + 360) % 360;
-  }
-
-  function rotateXY(x, y, degrees) {
+  const finite = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const angle = value => {
+    const number = finite(value);
+    return number == null ? null : ((number % 360) + 360) % 360;
+  };
+  const rotateXY = (x, y, degrees) => {
     const radians = degrees * Math.PI / 180;
     const cos = Math.cos(radians);
     const sin = Math.sin(radians);
-    return {
-      x: x * cos - y * sin,
-      y: x * sin + y * cos
-    };
+    return { x: x * cos - y * sin, y: x * sin + y * cos };
+  };
+  const identity = placement => ({
+    partId: placement?.partId == null ? '' : String(placement.partId),
+    profileRef: placement?.profileRef == null
+      ? (placement?.profile?.id == null ? null : String(placement.profile.id))
+      : String(placement.profileRef)
+  });
+
+  function normalizeAngleDeg(value) { return angle(value); }
+
+  function isRotationStepAligned(rotationDeg, stepDeg = DEFAULT_ROTATION_STEP_DEG, epsilonDeg = DEFAULT_ROTATION_EPSILON_DEG) {
+    const rotation = finite(rotationDeg);
+    const step = finite(stepDeg);
+    const epsilon = finite(epsilonDeg);
+    if (rotation == null || step == null || step <= 0 || epsilon == null || epsilon < 0) return false;
+    const remainder = ((rotation % step) + step) % step;
+    return Math.min(remainder, step - remainder) <= epsilon;
   }
 
-  function placementIdentity(placement, index = 0) {
-    const partId = placement?.partId == null ? '' : String(placement.partId);
-    return {
-      partId,
-      index,
-      profileRef: placement?.profileRef == null
-        ? (placement?.profile?.id == null ? null : String(placement.profile.id))
-        : String(placement.profileRef)
-    };
-  }
-
-  function validatePlacement(placement, index = 0) {
-    const identity = placementIdentity(placement, index);
+  function validatePlacement(placement) {
+    const id = identity(placement);
     const missing = [];
-    if (!identity.partId) missing.push('partId');
-
-    const positionMm = placement?.positionMm;
-    const x = finiteNumber(positionMm?.x);
-    const y = finiteNumber(positionMm?.y);
-    const z = finiteNumber(positionMm?.z);
-    const rotationDeg = normalizeAngleDeg(placement?.rotationDeg);
+    if (!id.partId) missing.push('partId');
+    const x = finite(placement?.positionMm?.x);
+    const y = finite(placement?.positionMm?.y);
+    const z = finite(placement?.positionMm?.z);
+    const rotationDeg = angle(placement?.rotationDeg);
     if (x == null) missing.push('positionMm.x');
     if (y == null) missing.push('positionMm.y');
     if (z == null) missing.push('positionMm.z');
     if (rotationDeg == null) missing.push('rotationDeg');
-
+    else if (!isRotationStepAligned(rotationDeg)) missing.push('rotationDeg(45-degree increment required)');
     return {
-      ...identity,
+      ...id,
       ready: missing.length === 0,
       missing,
       positionMm: x == null || y == null || z == null ? null : { x, y, z },
@@ -64,400 +63,311 @@
   }
 
   function normalizeYZPoint(value) {
-    if (Array.isArray(value) && value.length >= 2) {
-      const y = finiteNumber(value[0]);
-      const z = finiteNumber(value[1]);
-      return y == null || z == null ? null : [y, z];
-    }
-    if (value && typeof value === 'object') {
-      const y = finiteNumber(value.y);
-      const z = finiteNumber(value.z);
-      return y == null || z == null ? null : [y, z];
-    }
-    return null;
+    const pair = Array.isArray(value) ? value : value && typeof value === 'object' ? [value.y, value.z] : null;
+    if (!pair || pair.length < 2) return null;
+    const y = finite(pair[0]);
+    const z = finite(pair[1]);
+    return y == null || z == null ? null : [y, z];
   }
 
-  function validPoint2(value) {
-    return normalizeYZPoint(value) != null;
-  }
-
-  function pointFromStationOffset(center, tangentHeadingDeg, yzValue) {
-    const yz = normalizeYZPoint(yzValue);
-    const lateralMm = yz[0];
-    const verticalMm = yz[1];
-    const lateralVector = rotateXY(0, lateralMm, tangentHeadingDeg);
+  function worldPoint(center, tangentHeadingDeg, yz, placement) {
+    const lateral = rotateXY(0, yz[0], tangentHeadingDeg);
+    const local = { x: center.x + lateral.x, y: center.y + lateral.y, z: center.z + yz[1] };
+    const rotated = rotateXY(local.x, local.y, placement.rotationDeg);
     return {
-      x: center.x + lateralVector.x,
-      y: center.y + lateralVector.y,
-      z: center.z + verticalMm
+      x: placement.positionMm.x + rotated.x,
+      y: placement.positionMm.y + rotated.y,
+      z: placement.positionMm.z + local.z
     };
   }
 
-  function transformLocalPointToWorld(localPoint, placementValidation) {
-    const rotated = rotateXY(localPoint.x, localPoint.y, placementValidation.rotationDeg);
+  function worldCenter(center, placement) {
+    const rotated = rotateXY(center.x, center.y, placement.rotationDeg);
     return {
-      x: placementValidation.positionMm.x + rotated.x,
-      y: placementValidation.positionMm.y + rotated.y,
-      z: placementValidation.positionMm.z + localPoint.z
+      x: placement.positionMm.x + rotated.x,
+      y: placement.positionMm.y + rotated.y,
+      z: placement.positionMm.z + center.z
     };
   }
 
-  function collectPolyline(points, path, center, tangentHeadingDeg, worldPlacement, output, missing, required) {
-    if (!Array.isArray(points) || points.length === 0) {
+  function collectPolyline(values, path, required, center, tangent, placement, points, missing) {
+    if (!Array.isArray(values) || values.length === 0) {
       if (required) missing.push(path);
       return;
     }
     let validCount = 0;
-    points.forEach((point, pointIndex) => {
-      if (!validPoint2(point)) {
-        missing.push(`${path}[${pointIndex}]`);
-        return;
+    values.forEach((value, index) => {
+      const yz = normalizeYZPoint(value);
+      if (!yz) missing.push(`${path}[${index}]`);
+      else {
+        validCount += 1;
+        points.push(worldPoint(center, tangent, yz, placement));
       }
-      validCount += 1;
-      output.push(transformLocalPointToWorld(
-        pointFromStationOffset(center, tangentHeadingDeg, point),
-        worldPlacement
-      ));
     });
     if (required && validCount === 0 && !missing.includes(path)) missing.push(path);
   }
 
-  function collectWallObject(wall, path, center, tangentHeadingDeg, worldPlacement, output, missing, required) {
+  function collectWall(wall, path, required, center, tangent, placement, points, missing) {
     if (!wall || typeof wall !== 'object') {
       if (required) missing.push(path);
       return;
     }
-    const candidates = [];
-    if (validPoint2(wall.lowerEdgeMm)) candidates.push(wall.lowerEdgeMm);
-    else if (wall.lowerEdgeMm != null) missing.push(`${path}.lowerEdgeMm`);
-    if (validPoint2(wall.upperEdgeMm)) candidates.push(wall.upperEdgeMm);
-    else if (wall.upperEdgeMm != null) missing.push(`${path}.upperEdgeMm`);
+    const values = [];
+    for (const key of ['lowerEdgeMm', 'upperEdgeMm']) {
+      if (wall[key] != null) {
+        const yz = normalizeYZPoint(wall[key]);
+        if (yz) values.push(yz);
+        else missing.push(`${path}.${key}`);
+      }
+    }
     if (Array.isArray(wall.polylineYZMm)) {
-      wall.polylineYZMm.forEach((point, pointIndex) => {
-        if (validPoint2(point)) candidates.push(point);
-        else missing.push(`${path}.polylineYZMm[${pointIndex}]`);
+      wall.polylineYZMm.forEach((value, index) => {
+        const yz = normalizeYZPoint(value);
+        if (yz) values.push(yz);
+        else missing.push(`${path}.polylineYZMm[${index}]`);
       });
     }
-    if (required && candidates.length === 0) {
-      missing.push(path);
-      return;
-    }
-    candidates.forEach(point => {
-      output.push(transformLocalPointToWorld(
-        pointFromStationOffset(center, tangentHeadingDeg, point),
-        worldPlacement
-      ));
-    });
+    if (required && values.length === 0) missing.push(path);
+    values.forEach(yz => points.push(worldPoint(center, tangent, yz, placement)));
   }
 
-  function transformStationGeometry(station, placement, options = {}, stationIndex = 0) {
-    const placementValidation = validatePlacement(placement);
-    const missing = placementValidation.missing.map(item => `placement.${item}`);
-    const points = [];
+  function transformStationGeometry(station, placementValue, options = {}, stationIndex = 0) {
+    const placement = validatePlacement(placementValue);
     const stationId = station?.id == null ? String(stationIndex) : String(station.id);
     const prefix = `stations[${stationId}]`;
-
+    const missing = placement.missing.map(item => `placement.${item}`);
     const center = {
-      x: finiteNumber(station?.centerlinePositionMm?.x),
-      y: finiteNumber(station?.centerlinePositionMm?.y),
-      z: finiteNumber(station?.centerlinePositionMm?.z)
+      x: finite(station?.centerlinePositionMm?.x),
+      y: finite(station?.centerlinePositionMm?.y),
+      z: finite(station?.centerlinePositionMm?.z)
     };
-    const tangentHeadingDeg = normalizeAngleDeg(station?.tangentHeadingDeg);
-    if (center.x == null) missing.push(`${prefix}.centerlinePositionMm.x`);
-    if (center.y == null) missing.push(`${prefix}.centerlinePositionMm.y`);
-    if (center.z == null) missing.push(`${prefix}.centerlinePositionMm.z`);
-    if (tangentHeadingDeg == null) missing.push(`${prefix}.tangentHeadingDeg`);
-
-    if (!placementValidation.ready || Object.values(center).some(value => value == null) || tangentHeadingDeg == null) {
+    const tangent = angle(station?.tangentHeadingDeg);
+    for (const axis of ['x', 'y', 'z']) if (center[axis] == null) missing.push(`${prefix}.centerlinePositionMm.${axis}`);
+    if (tangent == null) missing.push(`${prefix}.tangentHeadingDeg`);
+    const points = [];
+    if (!placement.ready || Object.values(center).some(value => value == null) || tangent == null) {
       return { stationId, ready: false, points, missing: [...new Set(missing)] };
     }
 
-    // The measurement protocol stores each station cross-section as Y/Z offsets
-    // from centerlinePositionMm in the station frame. tangentHeadingDeg rotates
-    // that station frame inside part-local XY before the part pose is applied.
-    points.push(transformLocalPointToWorld(center, placementValidation));
+    points.push(worldCenter(center, placement));
+    collectPolyline(station?.runningSurfacePolylineYZMm, `${prefix}.runningSurfacePolylineYZMm`, options.requireRunningSurface !== false, center, tangent, placement, points, missing);
+    collectPolyline(station?.undersidePolylineYZMm, `${prefix}.undersidePolylineYZMm`, options.requireUnderside !== false, center, tangent, placement, points, missing);
 
-    collectPolyline(
-      station?.runningSurfacePolylineYZMm,
-      `${prefix}.runningSurfacePolylineYZMm`,
-      center,
-      tangentHeadingDeg,
-      placementValidation,
-      points,
-      missing,
-      options.requireRunningSurface !== false
-    );
-    collectPolyline(
-      station?.undersidePolylineYZMm,
-      `${prefix}.undersidePolylineYZMm`,
-      center,
-      tangentHeadingDeg,
-      placementValidation,
-      points,
-      missing,
-      options.requireUnderside !== false
-    );
-
-    const requiredWallKeys = Array.isArray(options.requiredWallKeys)
-      ? [...new Set(options.requiredWallKeys.map(String))]
-      : [];
-    const polylineWalls = station?.sideWallPolylinesYZMm || {};
+    const requiredWalls = [...new Set((options.requiredWallKeys || []).map(String))];
+    const polyWalls = station?.sideWallPolylinesYZMm || {};
     const objectWalls = station?.walls || {};
-    const wallKeys = new Set([
-      ...Object.keys(polylineWalls),
-      ...Object.keys(objectWalls),
-      ...requiredWallKeys
-    ]);
-    wallKeys.forEach(key => {
-      const required = requiredWallKeys.includes(key);
-      if (polylineWalls[key] != null || (!objectWalls[key] && required)) {
-        collectPolyline(
-          polylineWalls[key],
-          `${prefix}.sideWallPolylinesYZMm.${key}`,
-          center,
-          tangentHeadingDeg,
-          placementValidation,
-          points,
-          missing,
-          required
-        );
+    const keys = new Set([...Object.keys(polyWalls), ...Object.keys(objectWalls), ...requiredWalls]);
+    keys.forEach(key => {
+      const required = requiredWalls.includes(key);
+      if (polyWalls[key] != null || (objectWalls[key] == null && required)) {
+        collectPolyline(polyWalls[key], `${prefix}.sideWallPolylinesYZMm.${key}`, required, center, tangent, placement, points, missing);
       }
-      if (objectWalls[key] != null) {
-        collectWallObject(
-          objectWalls[key],
-          `${prefix}.walls.${key}`,
-          center,
-          tangentHeadingDeg,
-          placementValidation,
-          points,
-          missing,
-          required
-        );
-      }
+      if (objectWalls[key] != null) collectWall(objectWalls[key], `${prefix}.walls.${key}`, required, center, tangent, placement, points, missing);
     });
-
-    return {
-      stationId,
-      ready: missing.length === 0,
-      points,
-      missing: [...new Set(missing)]
-    };
+    return { stationId, ready: missing.length === 0, points, missing: [...new Set(missing)] };
   }
 
   function boundsForPoints(points) {
     if (!Array.isArray(points) || points.length === 0) return null;
-    return points.reduce((bounds, point) => ({
-      minX: Math.min(bounds.minX, point.x),
-      minY: Math.min(bounds.minY, point.y),
-      minZ: Math.min(bounds.minZ, point.z),
-      maxX: Math.max(bounds.maxX, point.x),
-      maxY: Math.max(bounds.maxY, point.y),
-      maxZ: Math.max(bounds.maxZ, point.z)
-    }), {
-      minX: Infinity,
-      minY: Infinity,
-      minZ: Infinity,
-      maxX: -Infinity,
-      maxY: -Infinity,
-      maxZ: -Infinity
-    });
+    return points.reduce((b, p) => ({
+      minX: Math.min(b.minX, p.x), minY: Math.min(b.minY, p.y), minZ: Math.min(b.minZ, p.z),
+      maxX: Math.max(b.maxX, p.x), maxY: Math.max(b.maxY, p.y), maxZ: Math.max(b.maxZ, p.z)
+    }), { minX: Infinity, minY: Infinity, minZ: Infinity, maxX: -Infinity, maxY: -Infinity, maxZ: -Infinity });
   }
 
-  function buildWorldAabb(placement, options = {}) {
-    const validation = validatePlacement(placement);
-    const missing = validation.missing.map(item => `placement.${item}`);
-    const profile = placement?.profile;
+  function validateStationSequence(stations) {
+    const missing = [];
+    const seenIds = new Set();
+    let previousRatio = -Infinity;
+    let entrance = false;
+    let exit = false;
+    stations.forEach((station, index) => {
+      const id = station?.id == null ? '' : String(station.id);
+      const label = id || index;
+      const ratio = finite(station?.ratio);
+      if (!id) missing.push(`stations[${index}].id`);
+      else if (seenIds.has(id)) missing.push(`stations[${id}].id(duplicate)`);
+      else seenIds.add(id);
+      if (ratio == null) missing.push(`stations[${label}].ratio`);
+      else {
+        if (ratio < -PROFILE_RATIO_EPSILON || ratio > 1 + PROFILE_RATIO_EPSILON) missing.push(`stations[${label}].ratio(range 0..1 required)`);
+        if (ratio + PROFILE_RATIO_EPSILON < previousRatio) missing.push('profile.stations(ratio ascending required)');
+        previousRatio = Math.max(previousRatio, ratio);
+        if (Math.abs(ratio) <= PROFILE_RATIO_EPSILON) entrance = true;
+        if (Math.abs(ratio - 1) <= PROFILE_RATIO_EPSILON) exit = true;
+      }
+    });
+    if (!entrance) missing.push('profile.stations(entrance ratio 0 required)');
+    if (!exit) missing.push('profile.stations(exit ratio 1 required)');
+    return [...new Set(missing)];
+  }
+
+  function clearance(station, key) {
+    return finite(station?.passableClearance?.[key] ?? station?.[key]);
+  }
+
+  function buildWorldAabb(placementValue, options = {}) {
+    const placement = validatePlacement(placementValue);
+    const profile = placementValue?.profile;
+    const missing = placement.missing.map(item => `placement.${item}`);
     if (!profile || typeof profile !== 'object') missing.push('profile');
-    const profileStatus = profile?.status == null ? null : String(profile.status);
-    if (profile && profileStatus !== 'verified' && profileStatus !== 'provisional') missing.push('profile.status(collision-ready verified/provisional required)');
-    if (profile && profile.coordinateFrame !== 'part-local-xyz') {
-      missing.push('profile.coordinateFrame(part-local-xyz required)');
-    }
+    if (profile && !['verified', 'provisional'].includes(String(profile.status))) missing.push('profile.status(collision-ready verified/provisional required)');
+    if (profile && profile.coordinateFrame !== 'part-local-xyz') missing.push('profile.coordinateFrame(part-local-xyz required)');
+    if (profile && !['linear', 'none'].includes(String(profile.interpolation))) missing.push('profile.interpolation(broad-phase-safe linear/none required)');
     const stations = Array.isArray(profile?.stations) ? profile.stations : null;
     if (!stations || stations.length === 0) missing.push('profile.stations');
+    else missing.push(...validateStationSequence(stations));
 
     const points = [];
-    if (stations && validation.ready) {
-      stations.forEach((station, stationIndex) => {
-        const transformed = transformStationGeometry(station, placement, options, stationIndex);
-        points.push(...transformed.points);
-        missing.push(...transformed.missing);
-      });
-    }
+    const centers = [];
+    let lateralRadius = 0;
+    if (stations && placement.ready) stations.forEach((station, index) => {
+      const transformed = transformStationGeometry(station, placementValue, options, index);
+      points.push(...transformed.points);
+      missing.push(...transformed.missing);
+      if (transformed.points.length) {
+        const center = transformed.points[0];
+        centers.push(center);
+        transformed.points.forEach(point => {
+          lateralRadius = Math.max(lateralRadius, Math.hypot(point.x - center.x, point.y - center.y));
+        });
+      }
+      const id = station?.id == null ? String(index) : String(station.id);
+      if (clearance(station, 'effectiveHeightMm') == null) missing.push(`stations[${id}].effectiveHeightMm`);
+      if (clearance(station, 'effectiveWidthMm') == null) missing.push(`stations[${id}].effectiveWidthMm`);
+    });
 
+    const sampled = boundsForPoints(points);
+    const centerBounds = boundsForPoints(centers);
+    const knownAabb = sampled && centerBounds ? {
+      minX: centerBounds.minX - lateralRadius,
+      minY: centerBounds.minY - lateralRadius,
+      minZ: sampled.minZ,
+      maxX: centerBounds.maxX + lateralRadius,
+      maxY: centerBounds.maxY + lateralRadius,
+      maxZ: sampled.maxZ
+    } : sampled;
     const uniqueMissing = [...new Set(missing)];
-    const knownAabb = boundsForPoints(points);
     return {
       status: uniqueMissing.length === 0 && knownAabb ? 'ready' : 'indeterminate',
-      partId: validation.partId,
-      profileRef: validation.profileRef,
+      partId: placement.partId,
+      profileRef: placement.profileRef,
       aabb: uniqueMissing.length === 0 ? knownAabb : null,
       knownAabb,
       missing: uniqueMissing
     };
   }
 
-  function nonNegativeFinite(value, fallback = 0) {
-    const number = finiteNumber(value);
+  function nonNegative(value, fallback = 0) {
+    const number = finite(value);
     return number == null ? fallback : Math.max(0, number);
   }
-
-  function expandedAabb(aabb, distanceMm) {
-    const distance = nonNegativeFinite(distanceMm, 0);
-    return {
-      minX: aabb.minX - distance,
-      minY: aabb.minY - distance,
-      minZ: aabb.minZ - distance,
-      maxX: aabb.maxX + distance,
-      maxY: aabb.maxY + distance,
-      maxZ: aabb.maxZ + distance
-    };
+  function expandedAabb(aabb, mm) {
+    const d = nonNegative(mm);
+    return { minX: aabb.minX - d, minY: aabb.minY - d, minZ: aabb.minZ - d, maxX: aabb.maxX + d, maxY: aabb.maxY + d, maxZ: aabb.maxZ + d };
   }
-
-  function separatingAxis(aabbA, aabbB, options = {}) {
-    const physicalToleranceMm = nonNegativeFinite(options.physicalToleranceMm, 0);
-    const numericEpsilonMm = nonNegativeFinite(options.numericEpsilonMm, DEFAULT_NUMERIC_EPSILON_MM);
-    const margin = physicalToleranceMm + numericEpsilonMm;
-    if (aabbA.maxX < aabbB.minX - margin || aabbB.maxX < aabbA.minX - margin) return 'x';
-    if (aabbA.maxY < aabbB.minY - margin || aabbB.maxY < aabbA.minY - margin) return 'y';
-    if (aabbA.maxZ < aabbB.minZ - margin || aabbB.maxZ < aabbA.minZ - margin) return 'z';
+  function separatingAxis(a, b, options = {}) {
+    const margin = nonNegative(options.physicalToleranceMm) + nonNegative(options.numericEpsilonMm, DEFAULT_NUMERIC_EPSILON_MM);
+    if (a.maxX < b.minX - margin || b.maxX < a.minX - margin) return 'x';
+    if (a.maxY < b.minY - margin || b.maxY < a.minY - margin) return 'y';
+    if (a.maxZ < b.minZ - margin || b.maxZ < a.minZ - margin) return 'z';
     return null;
   }
-
-  function intersectionAabb(aabbA, aabbB, expandMm = 0) {
-    const a = expandedAabb(aabbA, expandMm);
-    const b = expandedAabb(aabbB, expandMm);
-    const result = {
-      minX: Math.max(a.minX, b.minX),
-      minY: Math.max(a.minY, b.minY),
-      minZ: Math.max(a.minZ, b.minZ),
-      maxX: Math.min(a.maxX, b.maxX),
-      maxY: Math.min(a.maxY, b.maxY),
-      maxZ: Math.min(a.maxZ, b.maxZ)
-    };
-    if (result.minX > result.maxX || result.minY > result.maxY || result.minZ > result.maxZ) return null;
-    return result;
+  function intersectionAabb(aValue, bValue, expandMm = 0) {
+    const a = expandedAabb(aValue, expandMm);
+    const b = expandedAabb(bValue, expandMm);
+    const r = { minX: Math.max(a.minX, b.minX), minY: Math.max(a.minY, b.minY), minZ: Math.max(a.minZ, b.minZ), maxX: Math.min(a.maxX, b.maxX), maxY: Math.min(a.maxY, b.maxY), maxZ: Math.min(a.maxZ, b.maxZ) };
+    return r.minX > r.maxX || r.minY > r.maxY || r.minZ > r.maxZ ? null : r;
   }
 
-  function orderedPair(partA, partB) {
-    const left = placementIdentity(partA);
-    const right = placementIdentity(partB);
-    return left.partId.localeCompare(right.partId) <= 0
-      ? [partA, partB]
-      : [partB, partA];
-  }
-
-  function samePair(connection, partAId, partBId) {
-    const a = connection?.partAId == null ? '' : String(connection.partAId);
-    const b = connection?.partBId == null ? '' : String(connection.partBId);
-    return (a === partAId && b === partBId) || (a === partBId && b === partAId);
-  }
-
+  const samePair = (connection, a, b) => {
+    const left = connection?.partAId == null ? '' : String(connection.partAId);
+    const right = connection?.partBId == null ? '' : String(connection.partBId);
+    return (left === a && right === b) || (left === b && right === a);
+  };
   function normalContactState(connections, partAId, partBId) {
-    const connection = (Array.isArray(connections) ? connections : []).find(item => samePair(item, partAId, partBId));
-    if (!connection) return { formalConnection: false, exclusionStatus: 'not-connected', confirmedCoverage: false };
-    const exclusion = connection.normalContactExclusion;
-    const status = exclusion?.status == null ? 'unknown' : String(exclusion.status);
-    const known = status === 'verified' || status === 'provisional';
-    const confirmedCoverage = known && exclusion?.broadPhaseCoverage === 'confirmed';
+    const matches = (Array.isArray(connections) ? connections : []).filter(item => samePair(item, partAId, partBId));
+    if (!matches.length) return { formalConnection: false, exclusionStatus: 'not-connected', confirmedCoverage: false, connections: [] };
+    const details = matches.map(connection => {
+      const exclusion = connection.normalContactExclusion;
+      const status = exclusion?.status == null ? 'unknown' : String(exclusion.status);
+      return {
+        connectorAId: connection.connectorAId == null ? null : String(connection.connectorAId),
+        connectorBId: connection.connectorBId == null ? null : String(connection.connectorBId),
+        exclusionStatus: status,
+        confirmedCoverage: ['verified', 'provisional'].includes(status) && exclusion?.broadPhaseCoverage === 'confirmed'
+      };
+    });
+    const statuses = [...new Set(details.map(item => item.exclusionStatus))];
     return {
       formalConnection: true,
-      connectorAId: connection.connectorAId == null ? null : String(connection.connectorAId),
-      connectorBId: connection.connectorBId == null ? null : String(connection.connectorBId),
-      exclusionStatus: status,
-      confirmedCoverage
+      connectorAId: details.length === 1 ? details[0].connectorAId : null,
+      connectorBId: details.length === 1 ? details[0].connectorBId : null,
+      exclusionStatus: statuses.length === 1 ? statuses[0] : 'mixed',
+      confirmedCoverage: details.every(item => item.confirmedCoverage),
+      connections: details
     };
   }
 
   function classifyPair(partAValue, partBValue, options = {}) {
-    const [partA, partB] = orderedPair(partAValue, partBValue);
-    const idA = placementIdentity(partA).partId;
-    const idB = placementIdentity(partB).partId;
-    if (!idA || !idB || idA === idB) return null;
-
-    const aabbA = buildWorldAabb(partA, options);
-    const aabbB = buildWorldAabb(partB, options);
-    const resultBase = {
-      partAId: idA,
-      partBId: idB,
-      profileRefA: aabbA.profileRef,
-      profileRefB: aabbB.profileRef,
-      worldAabbA: aabbA.aabb,
-      worldAabbB: aabbB.aabb,
-      knownWorldAabbA: aabbA.knownAabb,
-      knownWorldAabbB: aabbB.knownAabb,
+    const idAValue = identity(partAValue).partId;
+    const idBValue = identity(partBValue).partId;
+    if (!idAValue || !idBValue || idAValue === idBValue) return null;
+    const [partA, partB] = idAValue.localeCompare(idBValue) <= 0 ? [partAValue, partBValue] : [partBValue, partAValue];
+    const idA = identity(partA).partId;
+    const idB = identity(partB).partId;
+    const a = buildWorldAabb(partA, options);
+    const b = buildWorldAabb(partB, options);
+    const base = {
+      partAId: idA, partBId: idB,
+      profileRefA: a.profileRef, profileRefB: b.profileRef,
+      worldAabbA: a.aabb, worldAabbB: b.aabb,
+      knownWorldAabbA: a.knownAabb, knownWorldAabbB: b.knownAabb,
       candidateRangeMm: null,
       normalContact: normalContactState(options.connections, idA, idB),
       missing: []
     };
-
-    if (aabbA.status !== 'ready' || aabbB.status !== 'ready') {
-      return {
-        ...resultBase,
-        status: 'indeterminate',
-        reasonCode: 'profile-or-placement-incomplete',
-        missing: [
-          ...aabbA.missing.map(path => ({ partId: idA, path })),
-          ...aabbB.missing.map(path => ({ partId: idB, path }))
-        ]
-      };
-    }
-
-    const axis = separatingAxis(aabbA.aabb, aabbB.aabb, options);
-    if (axis) {
-      return {
-        ...resultBase,
-        status: 'clear',
-        reasonCode: `aabb-separated-${axis}`
-      };
-    }
-
-    const physicalToleranceMm = nonNegativeFinite(options.physicalToleranceMm, 0);
-    const candidateRangeMm = intersectionAabb(aabbA.aabb, aabbB.aabb, physicalToleranceMm / 2);
-    if (resultBase.normalContact.confirmedCoverage) {
-      return {
-        ...resultBase,
-        status: 'excluded-normal-contact',
-        reasonCode: 'confirmed-normal-contact-exclusion',
-        candidateRangeMm
-      };
-    }
-
+    if (a.status !== 'ready' || b.status !== 'ready') return {
+      ...base, status: 'indeterminate', reasonCode: 'profile-or-placement-incomplete',
+      missing: [...a.missing.map(path => ({ partId: idA, path })), ...b.missing.map(path => ({ partId: idB, path }))]
+    };
+    const tolerance = finite(options.physicalToleranceMm);
+    if (tolerance == null || tolerance < 0) return {
+      ...base, status: 'indeterminate', reasonCode: 'physical-tolerance-unknown',
+      missing: [{ partId: null, path: 'physicalToleranceMm' }]
+    };
+    const axis = separatingAxis(a.aabb, b.aabb, options);
+    if (axis) return { ...base, status: 'clear', reasonCode: `aabb-separated-${axis}` };
+    const candidateRangeMm = intersectionAabb(a.aabb, b.aabb, tolerance / 2);
+    if (base.normalContact.confirmedCoverage) return { ...base, status: 'excluded-normal-contact', reasonCode: 'confirmed-normal-contact-exclusion', candidateRangeMm };
     return {
-      ...resultBase,
-      status: 'candidate',
-      reasonCode: resultBase.normalContact.formalConnection
-        ? 'aabb-overlap-normal-contact-not-confirmed'
-        : 'aabb-overlap',
+      ...base, status: 'candidate',
+      reasonCode: base.normalContact.formalConnection ? 'aabb-overlap-normal-contact-not-confirmed' : 'aabb-overlap',
       candidateRangeMm
     };
   }
 
-  function comparePlacements(left, right) {
-    return placementIdentity(left).partId.localeCompare(placementIdentity(right).partId);
-  }
-
   function analyzeBroadPhase(placements, options = {}) {
-    const sorted = (Array.isArray(placements) ? [...placements] : []).sort(comparePlacements);
-    const diagnostics = [];
-    for (let i = 0; i < sorted.length; i += 1) {
-      for (let j = i + 1; j < sorted.length; j += 1) {
-        const result = classifyPair(sorted[i], sorted[j], options);
-        if (result) diagnostics.push(result);
-      }
+    const sorted = (Array.isArray(placements) ? [...placements] : []).sort((a, b) => identity(a).partId.localeCompare(identity(b).partId));
+    const results = [];
+    for (let i = 0; i < sorted.length; i += 1) for (let j = i + 1; j < sorted.length; j += 1) {
+      const result = classifyPair(sorted[i], sorted[j], options);
+      if (result) results.push(result);
     }
-    return diagnostics;
+    return results;
   }
+  const extractBroadPhaseCandidates = (placements, options = {}) => analyzeBroadPhase(placements, options)
+    .filter(result => result.status === 'candidate' || result.status === 'indeterminate');
 
-  function extractBroadPhaseCandidates(placements, options = {}) {
-    return analyzeBroadPhase(placements, options)
-      .filter(result => result.status === 'candidate' || result.status === 'indeterminate');
-  }
-
-  const api = Object.freeze({
+  return Object.freeze({
     DEFAULT_NUMERIC_EPSILON_MM,
+    DEFAULT_ROTATION_STEP_DEG,
+    DEFAULT_ROTATION_EPSILON_DEG,
+    PROFILE_RATIO_EPSILON,
     normalizeAngleDeg,
+    isRotationStepAligned,
     validatePlacement,
+    validateStationSequence,
     transformStationGeometry,
     boundsForPoints,
     buildWorldAabb,
@@ -467,6 +377,4 @@
     analyzeBroadPhase,
     extractBroadPhaseCandidates
   });
-
-  return api;
 });
