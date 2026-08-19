@@ -342,16 +342,18 @@
     };
   }
 
-  function identityDiagnostic(partAValue, partBValue, reasonCode, duplicatePartIds = new Set()) {
+  function identityDiagnostic(partAValue, partBValue, reasonCode, duplicatePartIds = new Set(), options = {}) {
     const idA = identity(partAValue).partId;
     const idB = identity(partBValue).partId;
-    const a = buildWorldAabb(partAValue, { requiredWallKeys: ['__diagnostic__'] });
-    const b = buildWorldAabb(partBValue, { requiredWallKeys: ['__diagnostic__'] });
+    const normalizedIdA = nonEmptyId(idA);
+    const normalizedIdB = nonEmptyId(idB);
+    const a = buildWorldAabb(partAValue, options);
+    const b = buildWorldAabb(partBValue, options);
     const missing = [];
-    if (!nonEmptyId(idA)) missing.push({ partId: null, path: 'partId' });
-    if (!nonEmptyId(idB)) missing.push({ partId: null, path: 'partId' });
-    if ((idA && idA === idB) || duplicatePartIds.has(idA)) missing.push({ partId: idA || null, path: 'partId(duplicate)' });
-    if (idB && duplicatePartIds.has(idB) && idB !== idA) missing.push({ partId: idB, path: 'partId(duplicate)' });
+    if (!normalizedIdA) missing.push({ partId: null, path: 'partId' });
+    if (!normalizedIdB) missing.push({ partId: null, path: 'partId' });
+    if ((normalizedIdA && normalizedIdA === normalizedIdB) || duplicatePartIds.has(normalizedIdA)) missing.push({ partId: idA || null, path: 'partId(duplicate)' });
+    if (normalizedIdB && duplicatePartIds.has(normalizedIdB) && normalizedIdB !== normalizedIdA) missing.push({ partId: idB, path: 'partId(duplicate)' });
     return {
       partAId: idA,
       partBId: idB,
@@ -373,12 +375,14 @@
     if (partAValue === partBValue) return null;
     const idAValue = identity(partAValue).partId;
     const idBValue = identity(partBValue).partId;
+    const normalizedIdA = nonEmptyId(idAValue);
+    const normalizedIdB = nonEmptyId(idBValue);
     const duplicatePartIds = context.duplicatePartIds instanceof Set ? context.duplicatePartIds : new Set();
-    if (!nonEmptyId(idAValue) || !nonEmptyId(idBValue)) {
-      return identityDiagnostic(partAValue, partBValue, 'part-id-missing', duplicatePartIds);
+    if (!normalizedIdA || !normalizedIdB) {
+      return identityDiagnostic(partAValue, partBValue, 'part-id-missing', duplicatePartIds, options);
     }
-    if (idAValue === idBValue || duplicatePartIds.has(idAValue) || duplicatePartIds.has(idBValue)) {
-      return identityDiagnostic(partAValue, partBValue, 'part-id-duplicate', duplicatePartIds);
+    if (normalizedIdA === normalizedIdB || duplicatePartIds.has(normalizedIdA) || duplicatePartIds.has(normalizedIdB)) {
+      return identityDiagnostic(partAValue, partBValue, 'part-id-duplicate', duplicatePartIds, options);
     }
     const [partA, partB] = idAValue.localeCompare(idBValue) <= 0 ? [partAValue, partBValue] : [partBValue, partAValue];
     const idA = identity(partA).partId;
