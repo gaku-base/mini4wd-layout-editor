@@ -69,7 +69,7 @@
 - The fast-path anchor and automatic type-selection state are session-only and
   are excluded from JSON, localStorage, Undo/Redo, and layout data.
 
-### Concrete left/right corner part types (2026-07-29）
+### Concrete left/right corner part types (2026-07-29)
 
 - 45-degree corners use the concrete catalog types `corner-45-right` and
   `corner-45-left`; a part type, rather than runtime mirror state, is the
