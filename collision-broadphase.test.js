@@ -27,8 +27,8 @@ const options = { requiredWallKeys: ['left', 'right'], physicalToleranceMm: 0 };
 test('station transform applies tangent frame, 45-degree part rotation, and XYZ translation', () => {
   const station = {
     id: 's0', centerlinePositionMm: { x: 10, y: 20, z: 30 }, tangentHeadingDeg: 90,
-    runningSurfacePolylineYZMm: [[10, 5]], undersidePolylineYZMm: [[10, -5]],
-    sideWallPolylinesYZMm: { left: [[10, 0]], right: [[-10, 0]] }
+    runningSurfacePolylineYZMm: [[10, 5], [11, 5]], undersidePolylineYZMm: [[10, -5], [11, -5]],
+    sideWallPolylinesYZMm: { left: [[10, 0], [11, 0]], right: [[-10, 0], [-11, 0]] }
   };
   const value = { id: 'p', coordinateFrame: 'part-local-xyz', stations: [station] };
   const result = broad.transformStationGeometry(station, placed('A', { x: 100, y: 200, z: 300 }, 45, value), options);
