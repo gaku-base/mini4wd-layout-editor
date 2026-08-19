@@ -37,12 +37,15 @@ An authoritative world AABB is produced only when the resolved profile satisfies
 - interpolation is `linear`; `none`, `unknown`, and spline interpolation are not treated as broad-phase safe by this first implementation because they do not provide the same conservative station-to-station linear sweep contract;
 - stations have unique IDs, finite ratios in `[0, 1]`, ascending ratio order, and include ratio `0` and ratio `1`;
 - every station has finite `centerlinePositionMm.x/y/z` and `tangentHeadingDeg`;
-- required running-surface and underside polylines exist;
+- required running-surface and underside polylines exist and each contains at least two valid Y/Z points;
 - the caller supplies a non-empty `requiredWallKeys` schema and every requested wall is present and complete;
-- bank-style edge walls require both valid `lowerEdgeMm` and `upperEdgeMm`, unless a complete alternative `polylineYZMm` is supplied;
+- every required side-wall polyline contains at least two valid Y/Z points;
+- bank-style edge walls require both valid `lowerEdgeMm` and `upperEdgeMm`, unless a complete alternative `polylineYZMm` with at least two valid points is supplied;
 - every station has finite effective height and effective width, either under `passableClearance` or the equivalent station-level fields.
 
 Unknown or missing values are never converted to zero. If required data is missing, the result is `indeterminate`.
+
+`transformStationGeometry` may use `requireRunningSurface: false` or `requireUnderside: false` for standalone diagnostic transformation. Those switches **cannot** relax authoritative collision readiness: `buildWorldAabb`, and therefore pair classification, always requires both running-surface and underside geometry.
 
 For an incomplete profile, `knownWorldAabb*` may contain a diagnostic bound of the points that were actually known, but `worldAabb*` remains `null`. The partial bound must never be used to certify `clear` or `collision`.
 
@@ -74,7 +77,7 @@ The engine accepts both profile forms already documented by the measurement prot
 
 The caller must choose a non-empty wall schema with `requiredWallKeys`, for example `['left', 'right']` or `['inner', 'outer']`. Omitting the option or passing an empty array is `indeterminate`; the engine does not infer that missing walls mean zero wall extent.
 
-For bank-style edge objects, both lower and upper edges are required for a complete wall. A complete `polylineYZMm` may be used as an alternative representation. A single known edge is diagnostic-only and cannot make the AABB authoritative.
+For required polyline walls, at least two valid points are necessary to establish an extent. For bank-style edge objects, both lower and upper edges are required for a complete wall. A complete `polylineYZMm` with at least two valid points may be used as an alternative representation. A single known edge or one-point polyline is diagnostic-only and cannot make the AABB authoritative.
 
 ## AABB classification
 
