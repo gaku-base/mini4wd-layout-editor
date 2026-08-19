@@ -26,6 +26,8 @@ The current editor runtime still stores course-part `x` / `y` in centimetres and
 
 Course-part placement rotation must stay on the established 45-degree grid. Station `tangentHeadingDeg` remains independent and may contain measured profile headings.
 
+`partId` must be non-empty and unique within one `analyzeBroadPhase` input set. A missing ID, or any pair involving a duplicated ID, is retained as `indeterminate`; invalid identities are never silently dropped from downstream collision checking. Passing the exact same placement object twice to `classifyPair` is still treated as self-comparison and excluded.
+
 ## Profile readiness
 
 An authoritative world AABB is produced only when the resolved profile satisfies the collision-readiness conditions used by the measurement protocol:
@@ -36,7 +38,8 @@ An authoritative world AABB is produced only when the resolved profile satisfies
 - stations have unique IDs, finite ratios in `[0, 1]`, ascending ratio order, and include ratio `0` and ratio `1`;
 - every station has finite `centerlinePositionMm.x/y/z` and `tangentHeadingDeg`;
 - required running-surface and underside polylines exist;
-- any wall keys requested by the caller are present;
+- the caller supplies a non-empty `requiredWallKeys` schema and every requested wall is present and complete;
+- bank-style edge walls require both valid `lowerEdgeMm` and `upperEdgeMm`, unless a complete alternative `polylineYZMm` is supplied;
 - every station has finite effective height and effective width, either under `passableClearance` or the equivalent station-level fields.
 
 Unknown or missing values are never converted to zero. If required data is missing, the result is `indeterminate`.
@@ -69,7 +72,9 @@ The engine accepts both profile forms already documented by the measurement prot
 - `sideWallPolylinesYZMm.left/right = [[y, z], ...]`
 - bank-style `walls.inner/outer.lowerEdgeMm` / `upperEdgeMm` as `{ y, z }`
 
-The caller chooses which wall keys are required with `requiredWallKeys`, for example `['left', 'right']` or `['inner', 'outer']`.
+The caller must choose a non-empty wall schema with `requiredWallKeys`, for example `['left', 'right']` or `['inner', 'outer']`. Omitting the option or passing an empty array is `indeterminate`; the engine does not infer that missing walls mean zero wall extent.
+
+For bank-style edge objects, both lower and upper edges are required for a complete wall. A complete `polylineYZMm` may be used as an alternative representation. A single known edge is diagnostic-only and cannot make the AABB authoritative.
 
 ## AABB classification
 
@@ -77,8 +82,8 @@ Pair results use these statuses:
 
 - `clear`: both profiles are ready, a physical tolerance was explicitly supplied, and one AABB axis is separated beyond that physical tolerance plus numeric epsilon.
 - `candidate`: AABBs overlap or lie within the supplied physical tolerance. A narrow phase is required. This is **not** a collision result.
-- `indeterminate`: profile, placement, or required physical-tolerance information is incomplete. Missing paths are returned.
-- `excluded-normal-contact`: only available for formal connector relationships whose normal-contact exclusions are known and whose broad-phase overlap coverage was separately confirmed.
+- `indeterminate`: profile, placement, part identity, or required physical-tolerance information is incomplete. Missing paths are returned.
+- `excluded-normal-contact`: only available for formal connector relationships whose connector identities are valid, whose normal-contact exclusions are known, and whose broad-phase overlap coverage was separately confirmed.
 
 `candidateRangeMm` is the conservative physical-tolerance overlap range that later UI code can use as a red-highlight candidate region. It may be `null` when the pair is retained only by floating-point epsilon rather than by a physical overlap/tolerance band.
 
@@ -112,11 +117,12 @@ The `connections` option may include:
 
 `excluded-normal-contact` is returned only when all of the following are true:
 
-1. the pair matches at least one formal connection record;
-2. every matching connection edge has exclusion status `verified` or `provisional`;
-3. every matching connection edge has `broadPhaseCoverage: 'confirmed'`, supplied by a caller that has enough exclusion geometry to make that statement.
+1. the pair matches at least one connection record with non-empty `connectorAId` and `connectorBId`;
+2. every matching connection edge has valid, non-empty connector identities;
+3. every matching connection edge has exclusion status `verified` or `provisional`;
+4. every matching connection edge has `broadPhaseCoverage: 'confirmed'`, supplied by a caller that has enough exclusion geometry to make that statement.
 
-If a part pair has multiple formal connection edges and even one edge has unknown/unconfirmed exclusion coverage, the pair remains `candidate`. A connection belonging to another pair cannot exclude the current pair. The broad-phase module itself does not infer exclusion volume coverage.
+If a part pair has multiple matching connection edges and even one edge has missing connector identity or unknown/unconfirmed exclusion coverage, the pair remains `candidate`. A connection belonging to another pair cannot exclude the current pair. The broad-phase module itself does not infer exclusion volume coverage.
 
 ## Public API
 
@@ -130,7 +136,7 @@ If a part pair has multiple formal connection edges and even one edge has unknow
 - `analyzeBroadPhase(placements, options)`
 - `extractBroadPhaseCandidates(placements, options)`
 
-`analyzeBroadPhase` returns stable part-ID-ordered diagnostics for all distinct pairs. `extractBroadPhaseCandidates` removes `clear` and `excluded-normal-contact` pairs and keeps `candidate` plus `indeterminate` pairs for downstream work.
+`analyzeBroadPhase` validates part-ID uniqueness before classifying pairs and returns stable part-ID-ordered diagnostics for all distinct placements. Missing or duplicated identities are retained as `indeterminate`. `extractBroadPhaseCandidates` removes `clear` and `excluded-normal-contact` pairs and keeps `candidate` plus `indeterminate` pairs for downstream work.
 
 ## Current architecture note
 
