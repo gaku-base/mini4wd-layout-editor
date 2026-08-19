@@ -251,6 +251,42 @@ async function main() {
     assert.equal(countAfterCancel, '2');
     logStep('cancelling new-layout setup preserves the current course');
 
+    await openSavedSpaceLibrary(page);
+    const reusableCard = page.locator('.saved-space-card', { hasText: 'Smoke Test Space' });
+    await reusableCard.waitFor({ state: 'visible', timeout: TIMEOUT });
+    await reusableCard.getByRole('button', { name: 'このスペースを使う' }).click();
+
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('#initialSetupStepBar');
+      return bar && !bar.hidden && /STEP\s*3\s*\/\s*3/.test(bar.textContent || '');
+    }, { timeout: TIMEOUT });
+    assert.match(await text(page.locator('#startText')), /未設定/);
+    await waitStatusCount(page, 0);
+    logStep('saved space starts a fresh course without carrying Start or course parts');
+
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.click(centerX, centerY);
+    await page.waitForFunction(() => {
+      const value = document.querySelector('#startText')?.textContent || '';
+      return value.trim() && !value.includes('未設定');
+    }, { timeout: TIMEOUT });
+    await waitStatusCount(page, 1);
+
+    const reusedLayout = await readCurrentLayout(page);
+    assert.ok(reusedLayout, 'reused saved space persists as the current layout');
+    assert.equal(reusedLayout.obstacles?.length, 1);
+    assert.equal(reusedLayout.obstacles[0].name, 'Smoke Obstacle');
+    assert.equal(reusedLayout.obstacles[0].locked, true);
+    assert.ok(reusedLayout.start, 'Start can be placed on a reused saved space');
+    assert.equal(reusedLayout.parts?.length, 0);
+
+    const libraryAfterReuse = await readSavedSpaceLibrary(page);
+    assert.equal(libraryAfterReuse.spaces?.length, 1);
+    assert.equal(libraryAfterReuse.spaces[0].unavailableAreas?.length, 1);
+    assert.equal(libraryAfterReuse.spaces[0].unavailableAreas[0].name, 'Smoke Obstacle');
+    assert.equal(libraryAfterReuse.spaces[0].unavailableAreas[0].locked, true);
+    logStep('reused saved space keeps its unavailable area and leaves the template unchanged');
+
     assert.deepEqual(pageErrors, [], `page errors:\n${pageErrors.join('\n')}`);
     assert.deepEqual(consoleErrors, [], `console errors:\n${consoleErrors.join('\n')}`);
     logStep('console error / page error = 0');
