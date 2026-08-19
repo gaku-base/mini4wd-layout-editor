@@ -480,3 +480,14 @@
   remain available while locked.
 - These changes do not alter RC3 layout JSON, saved-space versioning, internal
   millimetre units, course-part rotation, collision rules, or PNG inclusion.
+
+### Phase 2.0 collision broad-phase foundation (2026-08-19)
+
+- Broad-phase is a pure domain layer. It may return `clear`, `candidate`, `indeterminate`, or `excluded-normal-contact`, but it never asserts `collision`; AABB overlap only means a later narrow phase is required.
+- Collision-engine inputs use millimetres for XYZ and degrees for rotation. The current editor's mixed-unit runtime (`x`/`y` in cm and `zMm` in mm) is not accepted directly; a future adapter must perform the conversion explicitly.
+- A profile can produce an authoritative world AABB only when its status is `verified` or `provisional`, its coordinate frame is `part-local-xyz`, and all caller-required station geometry is known. Missing/unknown data yields `indeterminate`; any partial known AABB is diagnostic-only and cannot certify `clear` or collision.
+- Station Y/Z cross-sections are treated as offsets from `centerlinePositionMm` in the station frame, oriented by `tangentHeadingDeg`, then rotated/translated by the part pose. Both slope-style left/right wall polylines and bank-style inner/outer wall edge objects are supported.
+- Floating-point `numericEpsilonMm` and caller-supplied `physicalToleranceMm` are separate. No manufacturing/contact tolerance is invented when the physical value is unknown.
+- A formal connection does not suppress an overlap by itself. `excluded-normal-contact` requires a matching formal connection, a `verified` or `provisional` exclusion record, and explicit confirmation that the exclusion covers the broad-phase overlap. Unknown or unrelated exclusions remain `candidate`.
+- `candidateRangeMm` is retained for future narrow-phase diagnostics and red UI highlighting. No UI, persistence schema, saved-space schema, existing part dimensions, or current warning behavior is changed in Phase 2.0.
+- The repository's intended TypeScript/Vite architecture is not yet present in current `main`; introducing it together with collision logic would expand scope into dependency, CI, and distribution changes. Phase 2.0 therefore follows the existing pure-JavaScript module/test pattern, while Issue #67 tracks the TypeScript build path separately.
