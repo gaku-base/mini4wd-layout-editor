@@ -8,14 +8,15 @@ const NEW_LAYOUT_TABS = require('./new-layout-tabs.js');
 const indexHtml = fs.readFileSync('./index.html', 'utf8');
 const appSource = fs.readFileSync('./app.js', 'utf8');
 
-test('new layout dialog exposes only the square-space input step', () => {
+test('new layout dialog keeps one internal setup tab and exposes the saved-space library before dimensions', () => {
   assert.deepEqual(NEW_LAYOUT_TABS.TABS.map(tab => tab.id), ['layout-space']);
   assert.equal(NEW_LAYOUT_TABS.DEFAULT_TAB, 'layout-space');
   assert.doesNotMatch(indexHtml, /role="tablist"/);
   assert.match(indexHtml, /id="fieldWidthInput"/);
   assert.match(indexHtml, /id="fieldHeightInput"/);
   assert.match(indexHtml, /id="gridInput"/);
-  assert.match(indexHtml, /id="wizardNextLayoutBtn"[^>]*>スペースを作成</);
+  assert.match(indexHtml, /id="savedSpaceLibraryPanel"/);
+  assert.match(indexHtml, /id="wizardNextLayoutBtn"[^>]*>次へ：設置不可エリア設定</);
   assert.doesNotMatch(indexHtml, /configureObstaclesInput|adjustRoomShapeInput/);
 });
 
@@ -34,7 +35,7 @@ test('non-modal venue-area input collects only dimensions and uses an automatic 
   assert.doesNotMatch(panel, /newObstacleRotationInput|回転（°）/);
   assert.match(panel, /id="startObstaclePlacementBtn"/);
   assert.match(appSource, /const name = INITIAL_LAYOUT_FLOW\.nextObstacleName\(state\.obstacles\)/);
-  assert.doesNotMatch(indexHtml, /id="obstacleRotationInput"/);
+  assert.match(indexHtml, /id="obstacleRotationInput"[^>]*step="1"/);
 });
 
 test('venue-area placement remains implemented without left-toolbar obstacle modes', () => {

@@ -10,11 +10,14 @@ const app = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const section = (start, end) => app.slice(app.indexOf(start), app.indexOf(end));
 
-test('initial setup contains only dimensions, grid, and space creation', () => {
+test('new-layout entry starts with the saved-space library and the new-space step contains dimensions and grid', () => {
+  assert.match(html, /id="savedSpaceLibraryPanel"/);
+  assert.match(html, /保存済みスペースから開始/);
+  assert.match(html, /id="createNewSpaceBtn"[^>]*>＋ 新しいスペースを作る</);
   assert.match(html, /id="fieldWidthInput"/);
   assert.match(html, /id="fieldHeightInput"/);
   assert.match(html, /id="gridInput"/);
-  assert.match(html, /id="wizardNextLayoutBtn"[^>]*>スペースを作成</);
+  assert.match(html, /id="wizardNextLayoutBtn"[^>]*>次へ：設置不可エリア設定</);
   assert.doesNotMatch(html, /configureObstaclesInput|adjustRoomShapeInput/);
   assert.doesNotMatch(html, /role="tablist"/);
 });
@@ -41,12 +44,23 @@ test('venue setup can finish without areas and enters exclusive Start placement'
   assert.match(finalize, /if \(wizard\.isNew\) fitView\(\)/);
 });
 
+test('the setup progress advances through STEP 2 and STEP 3 then clears after Start placement', () => {
+  const ui = section('function updateUI', 'function updateBankUI');
+  const finalize = section('function finalizeInitialSetup', 'function cancelInitialSetup');
+  const placeStart = section('function placeStartLane', 'function localEndpoints');
+  assert.match(ui, /STEP 2 \/ 3 設置不可エリア設定/);
+  assert.match(html, /id="initialSetupStepBar"[^>]*>[\s\S]*STEP 3 \/ 3 Start位置設定/);
+  assert.match(ui, /INITIAL_LAYOUT_FLOW\.STEPS\.START/);
+  assert.match(finalize, /wizard\.isNew \? INITIAL_LAYOUT_FLOW\.STEPS\.START : 'library'/);
+  assert.match(placeStart, /state\.wizard\.step = 'library'/);
+});
+
 test('new-layout metric inputs retain exact square and rectangle ratios and reset the view', () => {
   const advance = section('function advanceWizardFromLayoutSpace', 'function continueInitialSetupAfter');
   const fit = section('function fitView', 'function drawFrame');
   assert.match(advance, /widthCm: widthM \* 100/);
   assert.match(advance, /heightCm: heightM \* 100/);
-  assert.match(advance, /if \(state\.wizard\.isNew\) fitView\(\)/);
+  assert.match(advance, /if \(state\.wizard\.isNew \|\| state\.wizard\.editingSavedSpaceId\) fitView\(\)/);
   assert.match(fit, /Math\.min\(sx, sy\)/);
   const ratio = (widthM, heightM) => {
     const field = FIELD_BOUNDARY.fieldBounds({ widthCm: widthM * 100, heightCm: heightM * 100, gridCm: 10 });
@@ -115,7 +129,9 @@ test('new setup draft stays independent and cancellation restores the baseline',
   const fresh = section('function prepareNewInitialSetupDraft', 'function endInitialSetupSubEditor');
   const cancel = section('function cancelInitialSetup', 'function applySetup');
   assert.match(open, /baseline: JSON\.stringify\(serializeState\(\)\)/);
-  assert.match(open, /if \(reset\) prepareNewInitialSetupDraft\(\)/);
+  assert.match(open, /if \(reset\) showSavedSpaceLibrary\(\)/);
+  const beginNew = section('function beginNewSpaceWizard', 'function updateLayoutSpacePreview');
+  assert.match(beginNew, /prepareNewInitialSetupDraft\(\)/);
   assert.match(fresh, /state\.roomCutouts = \[\]/);
   assert.match(fresh, /state\.obstacles = \[\]/);
   assert.match(fresh, /state\.parts = \[\]/);
