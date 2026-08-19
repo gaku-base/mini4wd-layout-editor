@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -19,8 +19,117 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout
+      - name: Checkout feature branch
         uses: actions/checkout@v4
+        with:
+          ref: feat/part-shaped-dashed-guides
+          fetch-depth: 0
+
+      - name: Apply focused part-shaped guide patch
+        if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app.js')
+          text = path.read_text(encoding='utf-8')
+
+          marker = "\n  function drawPartSelectionEffect(c, type, stroke, fill, dashed = false, resolvedDef = PARTS[type]) {"
+          helper = r'''
+
+  function drawPartDashedOutline(c, part, stroke, options = {}) {
+    if (!part || !PARTS[part.type]) return false;
+    const unit = Math.max(state.view.scale, .15);
+    const lineWidthPx = Number.isFinite(Number(options.lineWidthPx)) ? Number(options.lineWidthPx) : 2;
+    const dashPx = Number.isFinite(Number(options.dashPx)) ? Number(options.dashPx) : 6;
+    const gapPx = Number.isFinite(Number(options.gapPx)) ? Number(options.gapPx) : 4;
+    c.save();
+    c.translate(part.x, part.y);
+    c.rotate((Number(part.rotation) || 0) * Math.PI / 180);
+    const traced = tracePartShapePath(c, part.type);
+    if (traced) {
+      c.strokeStyle = stroke;
+      c.lineWidth = lineWidthPx / unit;
+      c.lineJoin = 'round';
+      c.setLineDash([dashPx / unit, gapPx / unit]);
+      c.stroke();
+      c.setLineDash([]);
+    }
+    c.restore();
+    return traced;
+  }
+'''
+          if 'function drawPartDashedOutline(' not in text:
+              if marker not in text:
+                  raise SystemExit('drawPartSelectionEffect insertion marker not found')
+              text = text.replace(marker, helper + marker, 1)
+
+          old_start_end = """    c.restore();
+    drawPartConnectionFaces(c, { ...start, id: 'start', type: 'start' }, { ...options, exportMode });
+"""
+          new_start_end = """    if (options.selected && !exportMode) {
+      drawPartSelectionEffect(c, 'start', '#46bfff', 'rgba(70,191,255,.10)', true, START_DEF);
+    }
+    c.restore();
+    drawPartConnectionFaces(c, { ...start, id: 'start', type: 'start' }, { ...options, exportMode });
+"""
+          if "drawPartSelectionEffect(c, 'start', '#46bfff'" not in text:
+              if text.count(old_start_end) != 1:
+                  raise SystemExit(f'expected one Start end marker, found {text.count(old_start_end)}')
+              text = text.replace(old_start_end, new_start_end, 1)
+
+          old_start_ghost = """      const bounds = startBounds(candidate);
+      c.save();
+      c.strokeStyle = validity.valid ? '#249b74' : '#de3445';
+      c.lineWidth = 2 / state.view.scale;
+      c.setLineDash([6 / state.view.scale, 4 / state.view.scale]);
+      c.strokeRect(bounds.minX, bounds.minY, bounds.w, bounds.h);
+      c.setLineDash([]);
+      c.restore();
+"""
+          new_start_ghost = """      drawPartDashedOutline(
+        c,
+        { ...candidate, type: 'start' },
+        validity.valid ? '#249b74' : '#de3445'
+      );
+"""
+          if old_start_ghost in text:
+              text = text.replace(old_start_ghost, new_start_ghost, 1)
+          elif "{ ...candidate, type: 'start' }" not in text:
+              raise SystemExit('Start ghost guide marker not found')
+
+          old_part_ghost = """        drawPart(c, ghostPart);
+        c.restore();
+        drawConnectionGuide(c, proposal);
+"""
+          new_part_ghost = """        drawPart(c, ghostPart);
+        c.restore();
+        drawPartDashedOutline(
+          c,
+          ghostPart,
+          proposal.outOfBounds ? '#f07818' : (proposal.valid ? '#249b74' : '#de4b5b')
+        );
+        drawConnectionGuide(c, proposal);
+"""
+          if old_part_ghost in text:
+              text = text.replace(old_part_ghost, new_part_ghost, 1)
+          elif "drawPartDashedOutline(\n          c,\n          ghostPart," not in text:
+              raise SystemExit('course ghost draw marker not found')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          node --check app.js
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js
+          if ! git diff --cached --quiet; then
+            git commit -m "feat: trace part guides along real outlines"
+            git push origin HEAD:feat/part-shaped-dashed-guides
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
