@@ -114,7 +114,7 @@
         points.push(worldPoint(center, tangent, yz, placement));
       }
     });
-    if (required && validCount === 0 && !missing.includes(path)) missing.push(path);
+    if (required && validCount < 2) missing.push(`${path}(at least 2 valid points required)`);
   }
 
   function collectWall(wall, path, required, center, tangent, placement, points, missing) {
@@ -143,7 +143,7 @@
           values.push(yz);
         } else missing.push(`${path}.polylineYZMm[${index}]`);
       });
-      polylineComplete = wall.polylineYZMm.length > 0 && validCount === wall.polylineYZMm.length;
+      polylineComplete = wall.polylineYZMm.length >= 2 && validCount === wall.polylineYZMm.length;
     }
 
     const edgeComplete = Boolean(lower && upper);
@@ -237,8 +237,9 @@
   function buildWorldAabb(placementValue, options = {}) {
     const placement = validatePlacement(placementValue);
     const profile = placementValue?.profile;
+    const collisionOptions = { ...options, requireRunningSurface: true, requireUnderside: true };
     const missing = placement.missing.map(item => `placement.${item}`);
-    if (requiredWallKeys(options).length === 0) missing.push('options.requiredWallKeys(non-empty wall schema required)');
+    if (requiredWallKeys(collisionOptions).length === 0) missing.push('options.requiredWallKeys(non-empty wall schema required)');
     if (!profile || typeof profile !== 'object') missing.push('profile');
     if (profile && !['verified', 'provisional'].includes(String(profile.status))) missing.push('profile.status(collision-ready verified/provisional required)');
     if (profile && profile.coordinateFrame !== 'part-local-xyz') missing.push('profile.coordinateFrame(part-local-xyz required)');
@@ -251,7 +252,7 @@
     const centers = [];
     let lateralRadius = 0;
     if (stations && placement.ready) stations.forEach((station, index) => {
-      const transformed = transformStationGeometry(station, placementValue, options, index);
+      const transformed = transformStationGeometry(station, placementValue, collisionOptions, index);
       points.push(...transformed.points);
       missing.push(...transformed.missing);
       if (transformed.points.length) {
