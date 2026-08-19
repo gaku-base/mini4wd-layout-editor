@@ -9,14 +9,16 @@
   const CM_TO_MM = 10;
   const finite = value => typeof value === 'number' && Number.isFinite(value) ? value : null;
   const nonEmptyText = value => {
-    if (value == null) return null;
-    const text = String(value).trim();
+    if (typeof value !== 'string') return null;
+    const text = value.trim();
     return text ? text : null;
   };
 
   function editorCmToMm(value) {
     const number = finite(value);
-    return number == null ? null : number * CM_TO_MM;
+    if (number == null) return null;
+    const millimetres = number * CM_TO_MM;
+    return Number.isFinite(millimetres) ? millimetres : null;
   }
 
   function normalizeRequiredWallKeys(value) {
