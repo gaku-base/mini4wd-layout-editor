@@ -15,8 +15,9 @@ Issue #73 の実装メモ。
 - 点線は本体線を隠しにくいよう、既存lineWidth 1本分だけ画面上で外側へ広げる。
 - 既存のvalid（緑）/ invalid（赤）の意味・dash設定は維持する。
 - 通常コースパーツへ新しい点線レイヤーは追加しない。既に正しい既存選択表示をそのまま使用する。
-- Canvas全体の`strokeRect`を書き換えるのではなく、`courseCanvas`かつ`mode-start-position`かつStart配置用の緑/赤の点線strokeだけを限定置換する。
-- 設置範囲、設置不可エリア、マーキー選択など他の`strokeRect`は通過させる。
+- 置換対象は`courseCanvas`かつ`mode-start-position`かつ点線strokeで、さらにstrokeRectの幅・高さが現在角度の54×36cm Start回転AABBと一致する場合だけに限定する。
+- 色コードには依存しない。将来valid/invalid色が変わってもStart外形補正は維持する。
+- 設置範囲、設置不可エリア、マーキー選択などStart回転AABBと寸法が一致しない他の`strokeRect`はそのまま通過させる。
 
 ## 対象外
 
@@ -32,5 +33,5 @@ Issue #73 の実装メモ。
 - Start 0° / 45° / 90° / 135° / 180° / 225° / 270° / 315°で回転を保持する。
 - AABB中心位置は変えない。
 - 正式Start寸法54×36cmを使用する。
-- 設置範囲など別色・実線・別モードの`strokeRect`は変更しない。
+- Start回転AABBと寸法が一致しない別の点線`strokeRect`は変更しない。
 - 全NodeテストとChromium smokeを通す。
