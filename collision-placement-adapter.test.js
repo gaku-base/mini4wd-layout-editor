@@ -5,7 +5,9 @@ const assert = require('node:assert/strict');
 const ADAPTER = require('./collision-placement-adapter.js');
 const BROADPHASE = require('./collision-broadphase.js');
 
-function makePolylineProfile(id = 'poly') {
+// Synthetic provisional collision fixtures only. Their arbitrary dimensions are
+// engine-test geometry, not measured, verified, or production part dimensions.
+function makeSyntheticProvisionalPolylineProfile(id = 'poly') {
   const station = (stationId, ratio, x) => ({
     id: stationId,
     ratio,
@@ -28,7 +30,7 @@ function makePolylineProfile(id = 'poly') {
   };
 }
 
-function makeBankProfile(id = 'bank') {
+function makeSyntheticProvisionalBankProfile(id = 'bank') {
   const station = (stationId, ratio, x) => ({
     id: stationId,
     ratio,
@@ -67,9 +69,9 @@ test('editorCmToMm converts only finite numeric centimetres', () => {
   }
 });
 
-test('adaptEditorPlacement converts XY to mm, preserves zMm and rotation, and passes resolver context', () => {
+test('synthetic provisional profile: adaptEditorPlacement converts XY to mm, preserves zMm and rotation, and passes resolver context', () => {
   const part = { id: 'p-1', type: 'slope', x: 12.5, y: -3.25, zMm: 115, rotation: 45 };
-  const profile = makePolylineProfile('slope-profile');
+  const profile = makeSyntheticProvisionalPolylineProfile('slope-profile');
   let resolverCall = null;
   const placement = ADAPTER.adaptEditorPlacement(part, {
     partDefinitions: definitions,
@@ -88,8 +90,8 @@ test('adaptEditorPlacement converts XY to mm, preserves zMm and rotation, and pa
   assert.equal(placement.profile, profile);
 });
 
-test('invalid editor numeric fields stay unknown and rotation is not snapped to 45 degrees', () => {
-  const profile = makePolylineProfile();
+test('synthetic provisional profile: invalid editor numeric fields stay unknown and rotation is not snapped to 45 degrees', () => {
+  const profile = makeSyntheticProvisionalPolylineProfile();
   const placement = ADAPTER.adaptEditorPlacement({
     id: 'bad-numbers', type: 'slope', x: '10', y: null, zMm: Infinity, rotation: 30
   }, {
@@ -126,8 +128,8 @@ test('resolver errors are contained as unresolved profile diagnostics, never a f
   assert.equal(BROADPHASE.buildWorldAabb(placement).status, 'indeterminate');
 });
 
-test('adaptEditorLayout includes existing start plus parts and never creates a missing start', () => {
-  const profile = makePolylineProfile();
+test('synthetic provisional profile: adaptEditorLayout includes existing start plus parts and never creates a missing start', () => {
+  const profile = makeSyntheticProvisionalPolylineProfile();
   const resolver = () => ({ profile, requiredWallKeys: ['left', 'right'] });
   const layout = {
     start: { id: 'start', type: 'start', x: 1, y: 2, zMm: 0, rotation: 0 },
@@ -144,8 +146,8 @@ test('adaptEditorLayout includes existing start plus parts and never creates a m
   assert.deepEqual(withoutStart.map(item => item.partId), ['a', 'b']);
 });
 
-test('missing and duplicate IDs are not synthesized away by the adapter', () => {
-  const profile = makePolylineProfile();
+test('synthetic provisional profile: missing and duplicate IDs are not synthesized away by the adapter', () => {
+  const profile = makeSyntheticProvisionalPolylineProfile();
   const resolver = () => ({ profile, requiredWallKeys: ['left', 'right'] });
   const placements = ADAPTER.adaptEditorLayout({
     parts: [
@@ -162,9 +164,9 @@ test('missing and duplicate IDs are not synthesized away by the adapter', () => 
   assert(results.some(result => result.reasonCode === 'part-id-duplicate'));
 });
 
-test('mixed per-placement wall schemas can be classified in one pair', () => {
-  const poly = makePolylineProfile('poly');
-  const bank = makeBankProfile('bank');
+test('synthetic provisional profiles: mixed per-placement wall schemas can be classified in one pair', () => {
+  const poly = makeSyntheticProvisionalPolylineProfile('poly');
+  const bank = makeSyntheticProvisionalBankProfile('bank');
   const resolver = part => part.type === 'bank20'
     ? { profileRef: 'bank@1', profile: bank, requiredWallKeys: ['inner', 'outer'] }
     : { profileRef: 'poly@1', profile: poly, requiredWallKeys: ['left', 'right'] };
@@ -179,8 +181,8 @@ test('mixed per-placement wall schemas can be classified in one pair', () => {
   assert.equal(result.reasonCode, 'aabb-overlap');
 });
 
-test('legacy global wall schema remains a fallback when placement schema is absent', () => {
-  const profile = makePolylineProfile();
+test('synthetic provisional profile: legacy global wall schema remains a fallback when placement schema is absent', () => {
+  const profile = makeSyntheticProvisionalPolylineProfile();
   const base = { profile, positionMm: { x: 0, y: 0, z: 0 }, rotationDeg: 0 };
   const a = { ...base, partId: 'A' };
   const b = { ...base, partId: 'B', positionMm: { x: 50, y: 0, z: 0 } };
@@ -188,8 +190,8 @@ test('legacy global wall schema remains a fallback when placement schema is abse
   assert.equal(result.status, 'candidate');
 });
 
-test('explicit empty placement wall schema is authoritative and cannot be rescued by global fallback', () => {
-  const profile = makePolylineProfile();
+test('synthetic provisional profile: explicit empty placement wall schema is authoritative and cannot be rescued by global fallback', () => {
+  const profile = makeSyntheticProvisionalPolylineProfile();
   const a = {
     partId: 'A', profile, requiredWallKeys: [],
     positionMm: { x: 0, y: 0, z: 0 }, rotationDeg: 0
