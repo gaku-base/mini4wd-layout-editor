@@ -52,6 +52,10 @@ async function main() {
   const pageErrors = [];
   const dialogs = [];
 
+  // Chromium may request /favicon.ico even when the application does not define one.
+  // Fulfil only that browser-generated request so real application resource 404s still fail the smoke test.
+  await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
+
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
   });
