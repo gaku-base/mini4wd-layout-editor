@@ -16,7 +16,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -56,6 +56,55 @@ jobs:
             exit 0
           fi
           node --test "${tests[@]}"
+
+      - name: Run core browser smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          smoke_root="${RUNNER_TEMP}/m4wd-browser-smoke"
+          mkdir -p "$smoke_root"
+          npm install \
+            --prefix "$smoke_root" \
+            --no-save \
+            --no-package-lock \
+            playwright-core@1.55.0
+
+          chrome_bin="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          if [ -z "$chrome_bin" ]; then
+            echo 'Chrome/Chromium executable was not found on the GitHub runner.' >&2
+            exit 1
+          fi
+
+          python3 -m http.server 4173 --bind 127.0.0.1 >"${RUNNER_TEMP}/m4wd-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 40); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/index.html >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 40 ]; then
+              cat "${RUNNER_TEMP}/m4wd-http.log" >&2 || true
+              exit 1
+            fi
+            sleep 0.25
+          done
+
+          NODE_PATH="$smoke_root/node_modules" \
+          CHROME_BIN="$chrome_bin" \
+          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
+          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
+          node browser-smoke.js
+
+      - name: Upload browser smoke failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-smoke-failure
+          path: artifacts/browser-smoke/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Check required project files
         shell: bash
