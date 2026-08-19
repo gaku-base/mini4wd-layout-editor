@@ -491,3 +491,12 @@
 - A formal connection does not suppress an overlap by itself. `excluded-normal-contact` requires a matching formal connection, a `verified` or `provisional` exclusion record, and explicit confirmation that the exclusion covers the broad-phase overlap. Unknown or unrelated exclusions remain `candidate`.
 - `candidateRangeMm` is retained for future narrow-phase diagnostics and red UI highlighting. No UI, persistence schema, saved-space schema, existing part dimensions, or current warning behavior is changed in Phase 2.0.
 - The repository's intended TypeScript/Vite architecture is not yet present in current `main`; introducing it together with collision logic would expand scope into dependency, CI, and distribution changes. Phase 2.0 therefore follows the existing pure-JavaScript module/test pattern, while Issue #67 tracks the TypeScript build path separately.
+
+### Phase 2.1 editor collision placement adapter (2026-08-20)
+
+- Current editor `x` / `y` values remain centimetres at runtime and are converted exactly `×10` to millimetres at the collision-engine boundary; `zMm` remains millimetres.
+- Missing, non-finite, nonnumeric, or converted-overflow coordinates and invalid rotations are not repaired, parsed, rounded, or coerced to zero. They remain unresolved so downstream broad-phase returns `indeterminate`.
+- Collision profiles and required wall schemas are selected only by an explicit caller resolver. The adapter does not infer profile geometry, measurements, physical tolerances, or missing dimensions.
+- Placement-level `requiredWallKeys` is authoritative when present. Legacy global `options.requiredWallKeys` is used only when the placement property is absent; an explicit empty/unresolved placement schema cannot be rescued by the global fallback.
+- The per-placement schema allows slope-style `left/right` and bank-style `inner/outer` profiles to coexist safely in one layout without sharing one global naming convention.
+- Phase 2.1 does not connect broad-phase to `app.js`, does not add UI interference drawing, and does not change persistence, saved spaces, part dimensions, physical tolerance, or measurement values.
