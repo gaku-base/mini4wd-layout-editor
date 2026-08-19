@@ -213,7 +213,7 @@
     if (!profile || typeof profile !== 'object') missing.push('profile');
     if (profile && !['verified', 'provisional'].includes(String(profile.status))) missing.push('profile.status(collision-ready verified/provisional required)');
     if (profile && profile.coordinateFrame !== 'part-local-xyz') missing.push('profile.coordinateFrame(part-local-xyz required)');
-    if (profile && !['linear', 'none'].includes(String(profile.interpolation))) missing.push('profile.interpolation(broad-phase-safe linear/none required)');
+    if (profile && profile.interpolation !== 'linear') missing.push('profile.interpolation(broad-phase-safe linear required)');
     const stations = Array.isArray(profile?.stations) ? profile.stations : null;
     if (!stations || stations.length === 0) missing.push('profile.stations');
     else missing.push(...validateStationSequence(stations));
