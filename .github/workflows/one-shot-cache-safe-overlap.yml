@@ -1,0 +1,69 @@
+name: One-shot cache-safe overlap fix
+on:
+  push:
+    branches: ['fix/cache-safe-subedit-overlap']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply exact cache-safe UI patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          ASSET_VERSION = 'v1.1-rc4-20260820-overlap2'
+
+          index = Path('index.html')
+          s = index.read_text(encoding='utf-8')
+          old = '<link rel="stylesheet" href="styles.css" />'
+          new = f'<link rel="stylesheet" href="styles.css?v={ASSET_VERSION}" />'
+          if old not in s and new not in s:
+              raise SystemExit('styles.css link target not found')
+          s = s.replace(old, new)
+          old = '<script src="wheel-rotation.js"></script>'
+          new = f'<script src="wheel-rotation.js?v={ASSET_VERSION}"></script>'
+          if old not in s and new not in s:
+              raise SystemExit('wheel-rotation.js script target not found')
+          s = s.replace(old, new)
+          index.write_text(s, encoding='utf-8')
+
+          styles = Path('styles.css')
+          s = styles.read_text(encoding='utf-8')
+          rule = '''\n/* Keep the transient instruction card from overlapping the active sub-edit bar. */\n#subEditModeBar:not([hidden]) ~ .instruction-card {\n  display: none !important;\n}\n'''
+          if '#subEditModeBar:not([hidden]) ~ .instruction-card' not in s:
+              s = s.rstrip() + '\n' + rule
+          styles.write_text(s, encoding='utf-8')
+
+          wheel = Path('wheel-rotation.js')
+          s = wheel.read_text(encoding='utf-8')
+          old = "script.src = 'simple-ui.js';"
+          new = f"script.src = 'simple-ui.js?v={ASSET_VERSION}';"
+          if old not in s and new not in s:
+              raise SystemExit('simple-ui loader target not found')
+          s = s.replace(old, new)
+          old_style = "style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }\\nbody.simple-ui-enabled #subEditModeBar:not([hidden]) ~ .instruction-card { display: none !important; }';"
+          new_style = "style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }';"
+          if old_style in s:
+              s = s.replace(old_style, new_style)
+          elif new_style not in s:
+              raise SystemExit('runtime overlap style target not found')
+          wheel.write_text(s, encoding='utf-8')
+
+          test = Path('cache-safe-ui-assets.test.js')
+          test.write_text(f'''const test = require('node:test');\nconst assert = require('node:assert/strict');\nconst fs = require('node:fs');\n\nconst VERSION = '{ASSET_VERSION}';\n\ntest('sub-edit overlap suppression is static and cache-busted', () => {{\n  const index = fs.readFileSync('index.html', 'utf8');\n  const styles = fs.readFileSync('styles.css', 'utf8');\n  const wheel = fs.readFileSync('wheel-rotation.js', 'utf8');\n\n  assert.match(styles, /#subEditModeBar:not\\(\\[hidden\\]\\) ~ \\.instruction-card \\{{[\\s\\S]*display: none !important;/);\n  assert.match(index, new RegExp(`styles\\\\.css\\\\?v=${{VERSION}}`));\n  assert.match(index, new RegExp(`wheel-rotation\\\\.js\\\\?v=${{VERSION}}`));\n  assert.match(wheel, new RegExp(`simple-ui\\\\.js\\\\?v=${{VERSION}}`));\n  assert.doesNotMatch(wheel, /body\\.simple-ui-enabled #subEditModeBar:not\\(\\[hidden\\]\\) ~ \\.instruction-card/);\n}});\n''', encoding='utf-8')
+
+          Path('.github/workflows/one-shot-cache-safe-overlap.yml').unlink()
+          PY
+      - name: Commit patched files
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add index.html styles.css wheel-rotation.js cache-safe-ui-assets.test.js .github/workflows/one-shot-cache-safe-overlap.yml
+          git diff --cached --check
+          git commit -m "fix: make overlap suppression cache-safe"
+          git push
