@@ -1,0 +1,208 @@
+.presentation-entry-btn {
+  border-color: #8d5cf6 !important;
+  color: #e7dcff !important;
+}
+
+.presentation-view[hidden] { display: none !important; }
+.presentation-view {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #eef1f4;
+  color: #202428;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* The full-screen presentation replaces the editor while it is open.
+   Removing the editor from layout prevents its desktop workspace width from
+   expanding document.scrollWidth on phone-sized viewports. */
+body.presentation-mode-open {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+body.presentation-mode-open > #app {
+  display: none !important;
+}
+
+.presentation-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: end;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 10px 14px;
+  background: #fff;
+  border-bottom: 1px solid #d9dde1;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  overflow-x: auto;
+}
+
+.presentation-toolbar button,
+.presentation-toolbar input {
+  font: inherit;
+}
+
+.presentation-back,
+.presentation-primary,
+.presentation-choice {
+  min-height: 38px;
+  border: 1px solid #c9ced4;
+  border-radius: 9px;
+  background: #fff;
+  color: #30363b;
+  padding: 0 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.presentation-back:hover,
+.presentation-choice:hover { background: #f3f5f7; }
+
+.presentation-primary {
+  background: #252a30;
+  border-color: #252a30;
+  color: #fff;
+}
+.presentation-primary:hover { background: #14181c; }
+
+.presentation-choice.is-active {
+  color: #fff;
+  background: #505860;
+  border-color: #505860;
+}
+
+.presentation-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 150px;
+}
+.presentation-field span,
+.presentation-control-label {
+  color: #697178;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+.presentation-field input {
+  width: 170px;
+  height: 38px;
+  box-sizing: border-box;
+  border: 1px solid #c9ced4;
+  border-radius: 8px;
+  background: #fff;
+  color: #202428;
+  padding: 0 10px;
+  outline: none;
+}
+.presentation-field input:focus {
+  border-color: #6b75df;
+  box-shadow: 0 0 0 3px rgba(107,117,223,.12);
+}
+.presentation-field input.is-required {
+  border-color: #d44848;
+  box-shadow: 0 0 0 3px rgba(212,72,72,.14);
+}
+
+.presentation-control-group {
+  display: grid;
+  grid-template-columns: repeat(3, auto);
+  grid-template-rows: auto 38px;
+  gap: 3px 5px;
+  min-width: 0;
+  align-items: center;
+}
+.presentation-control-label {
+  grid-column: 1 / -1;
+}
+.presentation-control-group .presentation-choice { min-height: 38px; }
+
+.presentation-status {
+  align-self: center;
+  min-width: 0;
+  color: #687078;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.presentation-status.is-error { color: #c03939; font-weight: 800; }
+
+.presentation-stage {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 18px;
+}
+
+.presentation-canvas {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 105px);
+  width: auto;
+  height: auto;
+  background: transparent;
+  box-shadow: 0 10px 34px rgba(0,0,0,.16);
+}
+
+.presentation-print-sheet { display: none; }
+
+@media (max-width: 1100px) {
+  .presentation-toolbar {
+    align-items: center;
+    padding: 8px 10px;
+  }
+  .presentation-field { min-width: 132px; }
+  .presentation-field input { width: 145px; }
+  .presentation-status { display: none; }
+  .presentation-stage { padding: 10px; }
+  .presentation-canvas { max-height: calc(100vh - 96px); }
+}
+
+@media (max-width: 720px) {
+  .presentation-toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    align-items: end;
+    overflow-x: hidden;
+    max-height: 42vh;
+    overflow-y: auto;
+  }
+  .presentation-toolbar > * { min-width: 0; }
+  .presentation-back { grid-column: 1 / -1; }
+  .presentation-field,
+  .presentation-field input { width: 100%; min-width: 0; }
+  .presentation-control-group {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+  }
+  .presentation-control-group .presentation-choice {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .presentation-primary { width: 100%; min-width: 0; }
+  .presentation-stage { padding: 8px; overflow: hidden; }
+  .presentation-canvas { max-height: 56vh; max-width: 100%; }
+}

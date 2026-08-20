@@ -1,0 +1,74 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const DATA = require('./presentation-data.js');
+
+const catalog = {
+  PARTS: {
+    start: { name: 'スタート', geometry: { connectors: [{ x:-27,y:0,localZMm:0 }, { x:27,y:0,localZMm:0 }] } },
+    straight: { name: 'ストレート', geometry: { connectors: [{ x:-27,y:0,localZMm:0 }, { x:27,y:0,localZMm:0 }] } },
+    'corner-45-right': { name: '右', corner45:true, geometry:{ centerlineRadius:54, angleDeg:45 } },
+    'corner-45-left': { name: '左', corner45:true, geometry:{ centerlineRadius:54, angleDeg:45 } },
+    slope: { name:'スロープ', geometry:{ connectors:[{x:-27,y:0,localZMm:0},{x:27,y:0,localZMm:115}] } },
+    unknown: { name:'未定義' }
+  }
+};
+
+test('metadata requires only the first tournament-name line and keeps layouter optional', () => {
+  assert.equal(DATA.validateMetadata({ eventNameLine1:'  第19回  ', eventNameLine2:'大会', layouterName:'' }).valid, true);
+  assert.deepEqual(DATA.normalizeMetadata({ eventNameLine1:'  第19回\n', eventNameLine2:' 大会 ', layouterName:' GAKU ' }), {
+    eventNameLine1:'第19回', eventNameLine2:'大会', layouterName:'GAKU'
+  });
+  assert.equal(DATA.validateMetadata({ eventNameLine1:' ' }).reason, 'event-name-required');
+});
+
+test('part counts group left/right 45-degree corners and ignore color differences', () => {
+  const layout = {
+    start: { id:'start', colorKey:'red' },
+    parts: [
+      { id:'1', type:'straight', colorKey:'red' },
+      { id:'2', type:'straight', colorKey:'blue' },
+      { id:'3', type:'corner-45-right', colorKey:'green' },
+      { id:'4', type:'corner-45-left', colorKey:'orange' }
+    ]
+  };
+  const counts = DATA.collectPartCounts(layout, catalog);
+  assert.deepEqual(counts.map(item => [item.key, item.count]), [['start',1],['straight',2],['corner45',2]]);
+});
+
+test('track length uses centerline arc and 3D slope length rather than visual bounding width', () => {
+  const corner = DATA.partLengthCm('corner-45-right', catalog.PARTS['corner-45-right']);
+  assert.ok(Math.abs(corner - (54 * Math.PI / 4)) < 1e-9);
+  const slope = DATA.partLengthCm('slope', catalog.PARTS.slope);
+  assert.ok(Math.abs(slope - Math.hypot(54, 11.5)) < 1e-9);
+  const layout = { start:{}, parts:[{type:'straight'},{type:'corner-45-right'},{type:'slope'}] };
+  const total = DATA.computeTrackLength(layout, catalog);
+  assert.equal(total.available, true);
+  assert.equal(total.display, `${total.totalM.toFixed(2)} m`);
+});
+
+test('undefined length fails closed instead of treating the part as zero', () => {
+  const total = DATA.computeTrackLength({ parts:[{type:'unknown'}] }, catalog);
+  assert.equal(total.available, false);
+  assert.equal(total.display, '算出不可');
+  assert.deepEqual(total.unknownTypes, ['unknown']);
+});
+
+test('presentation model clones layout and keeps metadata out of mutable source state', () => {
+  const layout = { field:{ originX:0, originY:0, widthCm:500, heightCm:400 }, parts:[{id:'1',type:'straight'}], start:null };
+  const model = DATA.buildPresentationModel(layout, { eventNameLine1:'大会' }, catalog);
+  model.layout.parts[0].type = 'changed-copy';
+  assert.equal(layout.parts[0].type, 'straight');
+  assert.equal(model.metadata.layouterName, '');
+  assert.equal(model.field.widthCm, 500);
+});
+
+test('metadata can be embedded in JSON without changing the input layout', () => {
+  const layout = { app:'x', parts:[] };
+  const enriched = DATA.withMetadata(layout, { eventNameLine1:'大会', layouterName:'GAKU' });
+  assert.equal(layout.presentation, undefined);
+  assert.equal(enriched.presentation.eventNameLine1, '大会');
+  assert.equal(DATA.metadataFromLayout(enriched).layouterName, 'GAKU');
+  assert.equal(DATA.sanitizeFilename(enriched.presentation), '大会');
+});

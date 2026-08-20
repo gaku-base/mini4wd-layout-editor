@@ -73,16 +73,21 @@ test('toolbar helpers keep QA API enabled through app boot and disable it after 
   assert.doesNotMatch(WHEEL_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
 });
 
-test('Start replacement snap and marquee preview load before simple-ui hides the private editing bridge', () => {
+test('Start replacement snap, marquee preview and presentation mode load before simple-ui hides the private bridge', () => {
   const startSnapIndex = WHEEL_SOURCE.indexOf("script.src = 'start-replacement-snap.js?v=v1.1-rc4-20260821-start-resnap1'");
   const previewIndex = WHEEL_SOURCE.indexOf("script.src = 'marquee-target-preview.js?v=v1.1-rc4-20260821-marquee-preview1'");
+  const presentationIndex = WHEEL_SOURCE.indexOf("'presentation-mode.js?v=20260821-presentation1'");
   const simpleUiIndex = WHEEL_SOURCE.indexOf("script.src = 'simple-ui.js?v=v1.1-rc4-20260820-toolbar-trash1'");
   assert.ok(startSnapIndex >= 0, 'Start replacement snap loader must exist');
   assert.ok(previewIndex >= 0, 'marquee preview loader must exist');
+  assert.ok(presentationIndex >= 0, 'presentation mode loader must exist');
   assert.ok(simpleUiIndex >= 0, 'simple-ui loader must exist');
-  assert.ok(startSnapIndex > simpleUiIndex, 'loader definitions may appear after simple-ui definition');
   assert.match(WHEEL_SOURCE, /const loadStartReplacementSnap = \(\) => \{[\s\S]*loadMarqueePreview\(\);/);
-  assert.match(WHEEL_SOURCE, /const loadMarqueePreview = \(\) => \{[\s\S]*loadSimpleUi\(\);/);
+  assert.match(WHEEL_SOURCE, /const loadMarqueePreview = \(\) => \{[\s\S]*loadPresentationMode\(\);/);
+  assert.match(WHEEL_SOURCE, /const loadPresentationMode = \(\) => \{[\s\S]*loadSimpleUi\(\);/);
+  assert.match(WHEEL_SOURCE, /presentation-data\.js\?v=20260821-presentation1/);
+  assert.match(WHEEL_SOURCE, /presentation-renderer\.js\?v=20260821-presentation1/);
+  assert.match(WHEEL_SOURCE, /presentation-export\.js\?v=20260821-presentation1/);
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('load', continueBoot/);
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('error', continueBoot/);
 });
