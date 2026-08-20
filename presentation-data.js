@@ -190,7 +190,10 @@
   }
 
   function sanitizeFilename(value) {
-    const raw = [value?.eventNameLine1, value?.eventNameLine2].map(cleanText).filter(Boolean).join('_') || 'mini4wd-layout';
+    const raw = [value?.eventNameLine1, value?.eventNameLine2]
+      .map(item => cleanText(item))
+      .filter(Boolean)
+      .join('_') || 'mini4wd-layout';
     return raw.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').slice(0, 120);
   }
 
