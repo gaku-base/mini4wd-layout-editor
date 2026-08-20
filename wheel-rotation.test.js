@@ -1,7 +1,13 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { classifyWheelInput, createWheelRotationAccumulator } = require('./wheel-rotation.js');
+const {
+  classifyWheelInput,
+  canonicalSelectionIds,
+  createWheelRotationAccumulator
+} = require('./wheel-rotation.js');
+
+const WHEEL_SOURCE = fs.readFileSync(require.resolve('./wheel-rotation.js'), 'utf8');
 
 test('line and page wheel events rotate immediately as physical notches', () => {
   const wheel = createWheelRotationAccumulator();
@@ -34,6 +40,32 @@ test('fine pixel trackpad input accumulates while inertia remains suppressed', (
   assert.equal(wheel.push({ deltaY: 10, deltaMode: 0 }, 1020), 1);
   assert.equal(wheel.push({ deltaY: 8, deltaMode: 0 }, 1050), 0);
   assert.equal(wheel.push({ deltaY: 8, deltaMode: 0 }, 1120), 0);
+});
+
+test('selected part identity is complete, canonical, and order independent', () => {
+  assert.deepEqual(canonicalSelectionIds(['part-b', 'part-a']), ['part-a', 'part-b']);
+  assert.deepEqual(canonicalSelectionIds(['part-b', 'part-a', 'part-a']), ['part-a', 'part-b']);
+  assert.deepEqual(canonicalSelectionIds([42, 'part-a']), ['42', 'part-a']);
+  assert.deepEqual(canonicalSelectionIds(null), []);
+  assert.notDeepEqual(
+    canonicalSelectionIds(['part-a', 'part-b']),
+    canonicalSelectionIds(['part-a', 'part-c'])
+  );
+});
+
+test('simplified UI selection bridge injects complete selected IDs from diagnostic state', () => {
+  assert.match(WHEEL_SOURCE, /const snapshot = originalGetState\(context\);/);
+  assert.match(WHEEL_SOURCE, /canonicalize\(snapshot\?\.selectedIds\)/);
+  assert.match(WHEEL_SOURCE, /data-simple-ui-selection-identity/);
+  assert.match(WHEEL_SOURCE, /selection-ids:\$\{identity\}/);
+});
+
+test('simplified UI keeps a single workspace column at 720px and below', () => {
+  assert.match(
+    WHEEL_SOURCE,
+    /@media \(max-width: 720px\) \{ body\.simple-ui-enabled \.workspace-shell \{ grid-template-columns: minmax\(0, 1fr\) !important; \} \}/
+  );
+  assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*simpleUiNarrowLayoutOverride/);
 });
 
 test('course parts keep 45 degree steps while venue areas use 5 degree wheel and Z/X rotation', () => {
