@@ -74,6 +74,19 @@
   const canonicalize = root.M4WD_WHEEL_ROTATION?.canonicalSelectionIds;
   if (!loggerApi || typeof loggerApi.createDiagnosticLogger !== 'function' || typeof canonicalize !== 'function') return;
 
+  function ensureSelectionIdentityMarker() {
+    let marker = root.document.getElementById('simpleUiSelectionIdentity');
+    if (marker) return marker;
+    marker = root.document.createElement('span');
+    marker.id = 'simpleUiSelectionIdentity';
+    marker.hidden = true;
+    marker.setAttribute('aria-hidden', 'true');
+    marker.dataset.simpleUiSelectionIdentity = '1';
+    marker.dataset.selectedIds = '[]';
+    (root.document.body || root.document.documentElement).appendChild(marker);
+    return marker;
+  }
+
   const originalCreateDiagnosticLogger = loggerApi.createDiagnosticLogger.bind(loggerApi);
   root.M4WD_DIAGNOSTIC_LOGGER = Object.freeze({
     ...loggerApi,
@@ -86,22 +99,9 @@
         getState(context = {}) {
           const snapshot = originalGetState(context);
           try {
-            const selectionInfo = root.document.getElementById('selectionInfo');
-            if (selectionInfo) {
-              const canonicalIds = canonicalize(snapshot?.selectedIds);
-              const identity = JSON.stringify(canonicalIds);
-              let marker = selectionInfo.querySelector('[data-simple-ui-selection-identity]');
-              if (!marker) {
-                marker = root.document.createElement('span');
-                marker.hidden = true;
-                marker.setAttribute('aria-hidden', 'true');
-                marker.dataset.simpleUiSelectionIdentity = '1';
-                selectionInfo.appendChild(marker);
-              }
-              if (marker.dataset.selectedIds !== identity) marker.dataset.selectedIds = identity;
-              const markerText = ` selection-ids:${identity}`;
-              if (marker.textContent !== markerText) marker.textContent = markerText;
-            }
+            const marker = ensureSelectionIdentityMarker();
+            const identity = JSON.stringify(canonicalize(snapshot?.selectedIds));
+            if (marker.dataset.selectedIds !== identity) marker.dataset.selectedIds = identity;
           } catch (_) {}
           return snapshot;
         }
