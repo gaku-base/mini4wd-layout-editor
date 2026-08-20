@@ -68,6 +68,17 @@
     documentRef.documentElement.dataset.simpleUiInstalled = '1';
     body.classList.add('simple-ui-enabled');
 
+    let selectionIdentityMarker = documentRef.getElementById('simpleUiSelectionIdentity');
+    if (!selectionIdentityMarker) {
+      selectionIdentityMarker = documentRef.createElement('span');
+      selectionIdentityMarker.id = 'simpleUiSelectionIdentity';
+      selectionIdentityMarker.hidden = true;
+      selectionIdentityMarker.setAttribute('aria-hidden', 'true');
+      selectionIdentityMarker.dataset.simpleUiSelectionIdentity = '1';
+      selectionIdentityMarker.dataset.selectedIds = '[]';
+      body.appendChild(selectionIdentityMarker);
+    }
+
     const style = documentRef.createElement('style');
     style.id = 'simpleUiStyles';
     style.textContent = `
@@ -75,9 +86,7 @@
         grid-template-columns: 228px minmax(0, 1fr) !important;
         position: relative;
       }
-      body.simple-ui-enabled .canvas-area {
-        position: relative;
-      }
+      body.simple-ui-enabled .canvas-area { position: relative; }
       body.simple-ui-enabled .right-sidebar {
         display: block !important;
         position: absolute !important;
@@ -280,7 +289,11 @@
     function contextSnapshot() {
       const selectionCount = parseSelectionCount(statusSelected.textContent);
       const obstacleActive = Boolean(obstaclePanel && !obstaclePanel.hidden);
-      const selectionIdentity = normalizeContextIdentity(selectionInfo?.textContent || '');
+      const markerIdentity = normalizeContextIdentity(selectionIdentityMarker?.dataset?.selectedIds || '');
+      const presentationFallback = normalizeContextIdentity(selectionInfo?.textContent || '');
+      const selectionIdentity = selectionCount > 0 && markerIdentity && markerIdentity !== '[]'
+        ? markerIdentity
+        : presentationFallback;
       const obstacleIdentity = obstacleActive ? normalizeContextIdentity(obstacleNameInput?.value || '') : '';
       return {
         selectionCount,
@@ -379,6 +392,7 @@
     const contextObserver = new MutationObserver(() => renderDrawer());
     contextObserver.observe(statusSelected, { childList: true, subtree: true, characterData: true });
     if (selectionInfo) contextObserver.observe(selectionInfo, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+    contextObserver.observe(selectionIdentityMarker, { attributes: true, attributeFilter: ['data-selected-ids'] });
     if (obstaclePanel) contextObserver.observe(obstaclePanel, { attributes: true, attributeFilter: ['hidden'] });
 
     const scheduleContextRefresh = () => {
