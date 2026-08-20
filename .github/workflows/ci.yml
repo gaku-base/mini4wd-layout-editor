@@ -115,6 +115,12 @@ jobs:
           BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-marquee-preview-smoke.js
 
+          NODE_PATH="$smoke_root/node_modules" \
+          CHROME_BIN="$chrome_bin" \
+          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
+          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
+          node browser-start-resnap-smoke.js
+
       - name: Upload browser smoke failure screenshot
         if: failure()
         uses: actions/upload-artifact@v4
@@ -131,3 +137,4 @@ jobs:
           test -f AGENTS.md
           test -f index.html
           test -f marquee-target-preview.js
+          test -f start-replacement-snap.js

@@ -67,20 +67,24 @@ test('toolbar helpers keep QA API enabled through app boot and disable it after 
   assert.match(WHEEL_SOURCE, /function exposeCoursePartTrashBridgeApi/);
   assert.match(WHEEL_SOURCE, /root\.__COURSE_ENABLE_DEBUG__ = true/);
   assert.doesNotMatch(WHEEL_SOURCE, /setTimeout\(\(\) => \{ root\.__COURSE_ENABLE_DEBUG__ = false; \}, 0\)/);
-  assert.match(WHEEL_SOURCE, /DOMContentLoaded', loadMarqueePreview, \{ once: true \}/);
+  assert.match(WHEEL_SOURCE, /DOMContentLoaded', loadStartReplacementSnap, \{ once: true \}/);
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*root\.__COURSE_ENABLE_DEBUG__ = false/);
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('error',[\s\S]*root\.__COURSE_ENABLE_DEBUG__ = false/);
   assert.doesNotMatch(WHEEL_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
 });
 
-test('marquee target preview loads before simple-ui hides the private editing bridge', () => {
+test('Start replacement snap and marquee preview load before simple-ui hides the private editing bridge', () => {
+  const startSnapIndex = WHEEL_SOURCE.indexOf("script.src = 'start-replacement-snap.js?v=v1.1-rc4-20260821-start-resnap1'");
   const previewIndex = WHEEL_SOURCE.indexOf("script.src = 'marquee-target-preview.js?v=v1.1-rc4-20260821-marquee-preview1'");
   const simpleUiIndex = WHEEL_SOURCE.indexOf("script.src = 'simple-ui.js?v=v1.1-rc4-20260820-toolbar-trash1'");
+  assert.ok(startSnapIndex >= 0, 'Start replacement snap loader must exist');
   assert.ok(previewIndex >= 0, 'marquee preview loader must exist');
   assert.ok(simpleUiIndex >= 0, 'simple-ui loader must exist');
+  assert.ok(startSnapIndex > simpleUiIndex, 'loader definitions may appear after simple-ui definition');
+  assert.match(WHEEL_SOURCE, /const loadStartReplacementSnap = \(\) => \{[\s\S]*loadMarqueePreview\(\);/);
+  assert.match(WHEEL_SOURCE, /const loadMarqueePreview = \(\) => \{[\s\S]*loadSimpleUi\(\);/);
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('load', continueBoot/);
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('error', continueBoot/);
-  assert.match(WHEEL_SOURCE, /const continueBoot = \(\) => \{[\s\S]*loadSimpleUi\(\);/);
 });
 
 test('simplified UI keeps a single workspace column at 720px and below', () => {

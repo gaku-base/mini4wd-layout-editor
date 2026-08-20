@@ -115,9 +115,9 @@
   if (!root || !root.document || /test-index\.html$/.test(String(root.location?.pathname || ''))) return;
   if (Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) return;
 
-  // app.js exposes the small editing API required by the toolbar trash bridge
-  // and marquee target preview only when this flag is true. Keep it enabled
-  // until both helpers have captured the handle.
+  // app.js exposes the small editing API required by the toolbar trash bridge,
+  // marquee preview and Start replacement snap helper only when this flag is
+  // true. Keep it enabled until every helper has captured the handle.
   root.__COURSE_ENABLE_DEBUG__ = true;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
@@ -231,8 +231,8 @@
     script.dataset.m4wdSimpleUi = '1';
     script.addEventListener('load', () => {
       // app.js has already executed before DOMContentLoaded. The private bridge
-      // has now been captured by the preview and simple UI helpers; future app
-      // code must not expose it.
+      // has now been captured by all helper modules; future app code must not
+      // expose it.
       root.__COURSE_ENABLE_DEBUG__ = false;
       integrateModeHelpIntoToolbar();
       if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
@@ -268,13 +268,33 @@
     root.document.head.appendChild(script);
   };
 
+  const loadStartReplacementSnap = () => {
+    if (root.document.querySelector('script[data-m4wd-start-replacement-snap="1"]')) {
+      loadMarqueePreview();
+      return;
+    }
+    const script = root.document.createElement('script');
+    script.src = 'start-replacement-snap.js?v=v1.1-rc4-20260821-start-resnap1';
+    script.async = false;
+    script.dataset.m4wdStartReplacementSnap = '1';
+    let continued = false;
+    const continueBoot = () => {
+      if (continued) return;
+      continued = true;
+      loadMarqueePreview();
+    };
+    script.addEventListener('load', continueBoot, { once: true });
+    script.addEventListener('error', continueBoot, { once: true });
+    root.document.head.appendChild(script);
+  };
+
   // app.js is the parser-blocking script immediately after wheel-rotation.js.
   // Loading helpers only after DOMContentLoaded guarantees app.js has exposed
-  // the private bridge. The marquee preview captures it before simple-ui hides
-  // the public handle again.
+  // the private bridge. Start replacement snap captures it first, then marquee
+  // preview, then simple-ui hides the public handle again.
   if (root.document.readyState === 'loading') {
-    root.document.addEventListener('DOMContentLoaded', loadMarqueePreview, { once: true });
+    root.document.addEventListener('DOMContentLoaded', loadStartReplacementSnap, { once: true });
   } else {
-    loadMarqueePreview();
+    loadStartReplacementSnap();
   }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
