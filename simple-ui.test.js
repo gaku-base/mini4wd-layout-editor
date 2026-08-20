@@ -16,6 +16,22 @@ test('parseSelectionCount accepts positive integer text and fails closed otherwi
   assert.equal(UI.parseSelectionCount(null), 0);
 });
 
+test('context signature changes when selection identity changes at the same count', () => {
+  const first = UI.buildContextSignature({ selectionCount: 1, selectionIdentity: 'Straight A' });
+  const second = UI.buildContextSignature({ selectionCount: 1, selectionIdentity: 'Straight B' });
+  assert.notEqual(first, second);
+});
+
+test('context signature changes when switching directly between obstacles', () => {
+  const first = UI.buildContextSignature({ obstacleActive: true, obstacleIdentity: '柱 1' });
+  const second = UI.buildContextSignature({ obstacleActive: true, obstacleIdentity: '柱 2' });
+  assert.notEqual(first, second);
+});
+
+test('context identity normalization ignores presentation-only whitespace', () => {
+  assert.equal(UI.normalizeContextIdentity('  Straight\n  A  '), 'Straight A');
+});
+
 test('drawer remains closed without manual request or active context', () => {
   assert.deepEqual(
     UI.computeDrawerState({ manualOpen: false, contextActive: false, contextSuppressed: false }),
@@ -86,4 +102,16 @@ test('drag trash is an overlay with a stable footprint instead of reflowing the 
   const activeBlock = SOURCE.match(/body\.simple-ui-enabled \.drag-trash\.is-dragging,[\s\S]*?\{([\s\S]*?)\n\s*\}/)?.[1] || '';
   assert.doesNotMatch(activeBlock, /height|margin|min-height|max-height|top|left|right/);
   assert.match(activeBlock, /opacity:\s*1;/);
+});
+
+test('overflow controls render in a fixed body portal outside the toolbar scrollport', () => {
+  const block = SOURCE.match(/body\.simple-ui-enabled \.simple-toolbar-more-menu \{([\s\S]*?)\n\s*\}/)?.[1] || '';
+  assert.match(block, /position:\s*fixed;/);
+  assert.match(SOURCE, /documentRef\.body\.appendChild\(toolbarMoreMenu\)/);
+  assert.doesNotMatch(SOURCE, /rightToolbarGroup\.append\([^\n]*toolbarMoreMenu/);
+});
+
+test('canvas selection completion schedules a post-handler context refresh', () => {
+  assert.match(SOURCE, /courseCanvas\?\.addEventListener\?\.\('pointerup', scheduleContextRefresh\)/);
+  assert.match(SOURCE, /setTimeout\(\(\) => renderDrawer\(\), 0\)/);
 });
