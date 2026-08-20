@@ -44,10 +44,144 @@
     ].join('|');
   }
 
-  function computeDrawerState({ manualOpen = false, contextActive = false, contextSuppressed = false } = {}) {
-    const autoOpen = Boolean(contextActive && !contextSuppressed);
-    const open = Boolean(manualOpen || autoOpen);
-    return Object.freeze({ open, contextOnly: Boolean(open && autoOpen && !manualOpen) });
+  // The editor is keyboard/left-toolbar first. Selection context must never
+  // steal horizontal space; the detail drawer is opened explicitly only.
+  function computeDrawerState({ manualOpen = false } = {}) {
+    const open = Boolean(manualOpen);
+    return Object.freeze({ open, contextOnly: false });
+  }
+
+  function pointInsideElement(event, element) {
+    if (!event || !element?.getBoundingClientRect) return false;
+    const rect = element.getBoundingClientRect();
+    return event.clientX >= rect.left && event.clientX <= rect.right
+      && event.clientY >= rect.top && event.clientY <= rect.bottom;
+  }
+
+  // app.js keeps its editing state private. For production we borrow the
+  // existing QA bridge only long enough to wire course-part drag-to-trash,
+  // then remove the public debug handle again. The bridge rolls an in-progress
+  // move back before deleting so one Undo restores the exact pre-drag layout.
+  function installCoursePartTrashBridge(documentRef, rootRef, courseCanvas, dragTrash) {
+    if (!documentRef || !rootRef || !courseCanvas || !dragTrash || rootRef.__M4WD_COURSE_PART_TRASH_BRIDGE_INSTALLED__) return false;
+    rootRef.__M4WD_COURSE_PART_TRASH_BRIDGE_INSTALLED__ = true;
+
+    let attachAttempts = 0;
+    const attach = () => {
+      const debug = rootRef.__mini4wdCourseDebug;
+      if (!debug || typeof debug.getState !== 'function' || typeof debug.getRuntimeState !== 'function'
+        || typeof debug.setSelectedIds !== 'function' || typeof debug.deleteParts !== 'function') {
+        attachAttempts += 1;
+        if (attachAttempts < 50 && rootRef.setTimeout) rootRef.setTimeout(attach, 0);
+        return;
+      }
+
+      const testPage = /test-index\.html$/.test(String(rootRef.location?.pathname || ''));
+      if (!testPage) {
+        try { delete rootRef.__mini4wdCourseDebug; } catch (_) {}
+      }
+
+      let pendingDrag = null;
+      let activeDrag = null;
+
+      const setTrashVisual = over => {
+        dragTrash.classList.add('is-dragging');
+        dragTrash.classList.toggle('is-delete-target', Boolean(over));
+        const label = dragTrash.querySelector('#dragTrashLabel');
+        if (label) label.textContent = over ? '離すと削除' : '削除';
+      };
+
+      const clearTrashVisual = () => {
+        dragTrash.classList.remove('is-dragging', 'is-delete-target');
+        const label = dragTrash.querySelector('#dragTrashLabel');
+        if (label) label.textContent = '削除';
+      };
+
+      const cancelBridgeDrag = () => {
+        pendingDrag = null;
+        activeDrag = null;
+        clearTrashVisual();
+      };
+
+      documentRef.addEventListener('pointerdown', event => {
+        if (event.button !== 0 || event.shiftKey || event.target !== courseCanvas) return;
+        let runtime;
+        let layout;
+        try {
+          runtime = debug.getRuntimeState();
+          layout = debug.getState();
+        } catch (_) { return; }
+        if (runtime?.mode !== 'move') return;
+        pendingDrag = {
+          pointerId: event.pointerId,
+          historyLength: Number(runtime.historyLength) || 0,
+          layout
+        };
+        if (!rootRef.setTimeout) return;
+        rootRef.setTimeout(() => {
+          if (!pendingDrag || pendingDrag.pointerId !== event.pointerId) return;
+          let after;
+          try { after = debug.getRuntimeState(); } catch (_) { pendingDrag = null; return; }
+          const ids = Array.isArray(after?.selectedIds) ? [...after.selectedIds] : [];
+          if (after?.mode !== 'move' || !ids.length) {
+            pendingDrag = null;
+            return;
+          }
+          activeDrag = { ...pendingDrag, ids };
+          pendingDrag = null;
+          setTrashVisual(false);
+        }, 0);
+      }, true);
+
+      documentRef.addEventListener('pointermove', event => {
+        if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
+        setTrashVisual(pointInsideElement(event, dragTrash));
+      }, true);
+
+      documentRef.addEventListener('pointerup', event => {
+        if (!activeDrag || activeDrag.pointerId !== event.pointerId) return;
+        const drag = activeDrag;
+        const overTrash = pointInsideElement(event, dragTrash);
+        if (!overTrash) {
+          cancelBridgeDrag();
+          return;
+        }
+
+        // Stop app.js from committing the same pointerup as a normal move.
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        activeDrag = null;
+        pendingDrag = null;
+
+        try {
+          const runtime = debug.getRuntimeState();
+          if ((Number(runtime?.historyLength) || 0) > drag.historyLength && rootRef.KeyboardEvent) {
+            documentRef.dispatchEvent(new rootRef.KeyboardEvent('keydown', {
+              key: 'z', code: 'KeyZ', ctrlKey: true, bubbles: true, cancelable: true
+            }));
+          }
+          debug.setSelectedIds(drag.ids);
+          debug.deleteParts(drag.ids);
+        } finally {
+          clearTrashVisual();
+          try {
+            const cancelEvent = rootRef.PointerEvent
+              ? new rootRef.PointerEvent('pointercancel', { bubbles: true, pointerId: event.pointerId })
+              : new rootRef.Event('pointercancel', { bubbles: true });
+            courseCanvas.dispatchEvent(cancelEvent);
+          } catch (_) {}
+        }
+      }, true);
+
+      documentRef.addEventListener('pointercancel', event => {
+        if (activeDrag?.pointerId === event.pointerId || pendingDrag?.pointerId === event.pointerId) cancelBridgeDrag();
+      }, true);
+      courseCanvas.addEventListener('lostpointercapture', cancelBridgeDrag);
+    };
+
+    if (rootRef.setTimeout) rootRef.setTimeout(attach, 0);
+    else attach();
+    return true;
   }
 
   function install(documentRef, rootRef) {
@@ -57,6 +191,7 @@
     const drawer = documentRef.querySelector('.right-sidebar');
     const canvasToolbar = documentRef.getElementById('canvasToolbar');
     const courseCanvas = documentRef.getElementById('courseCanvas');
+    const dragTrash = documentRef.getElementById('dragTrash');
     const statusBar = documentRef.getElementById('statusBar');
     const selectionInfo = documentRef.getElementById('selectionInfo');
     const selectionPanel = documentRef.querySelector('.selection-panel');
@@ -180,23 +315,44 @@
         background: #1b2a36;
       }
       body.simple-ui-enabled .drag-trash {
-        position: absolute !important;
-        z-index: 24;
-        top: 56px;
-        left: 12px;
-        right: 12px;
-        height: 42px;
-        min-height: 42px !important;
-        max-height: 42px;
+        position: static !important;
+        z-index: auto;
+        width: 38px;
+        height: 32px;
+        min-height: 32px !important;
+        max-height: 32px;
+        flex: 0 0 38px;
         margin: 0 !important;
-        border-width: 2px !important;
-        opacity: 0;
-        overflow: hidden;
-        pointer-events: none;
-      }
-      body.simple-ui-enabled .drag-trash.is-dragging,
-      body.simple-ui-enabled .drag-trash.is-delete-target {
+        padding: 0;
+        border: 1px solid var(--line) !important;
+        border-radius: 7px;
+        background: var(--panel);
+        color: var(--muted);
         opacity: 1;
+        overflow: hidden;
+        pointer-events: auto;
+      }
+      body.simple-ui-enabled .drag-trash .drag-trash-icon { font-size: 15px; }
+      body.simple-ui-enabled .drag-trash #dragTrashLabel {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      body.simple-ui-enabled .drag-trash.is-dragging {
+        border-color: #d1a32c !important;
+        background: #2a2411;
+        color: #ffe4a0;
+      }
+      body.simple-ui-enabled .drag-trash.is-delete-target {
+        border-color: #ff6072 !important;
+        background: #481823;
+        color: #fff1f3;
       }
       body.simple-ui-enabled .simple-detail-status-list {
         display: grid;
@@ -279,11 +435,15 @@
       const button = documentRef.getElementById(id);
       if (button) toolbarMoreMenu.appendChild(button);
     }
+    if (dragTrash) {
+      dragTrash.title = 'パーツをドラッグして削除';
+      dragTrash.setAttribute('aria-label', 'パーツをドラッグして削除');
+      rightToolbarGroup.append(dragTrash);
+    }
     rightToolbarGroup.append(detailsToggleBtn, toolbarMoreTrigger);
     documentRef.body.appendChild(toolbarMoreMenu);
 
     let manualOpen = false;
-    let contextSuppressed = false;
     let lastContextSignature = '';
 
     function contextSnapshot() {
@@ -310,21 +470,14 @@
       }
     }
 
-    function renderDrawer({ allowContextReset = true } = {}) {
+    function renderDrawer() {
       const context = contextSnapshot();
-      if (allowContextReset && context.signature !== lastContextSignature) {
-        contextSuppressed = false;
-        lastContextSignature = context.signature;
-      }
-      const state = computeDrawerState({ manualOpen, contextActive: context.active, contextSuppressed });
+      lastContextSignature = context.signature;
+      const state = computeDrawerState({ manualOpen });
       drawer.classList.toggle('simple-drawer-open', state.open);
-      drawer.classList.toggle('simple-context-only', state.contextOnly);
+      drawer.classList.remove('simple-context-only');
       detailsToggleBtn.setAttribute('aria-expanded', String(state.open));
-      detailsToggleBtn.textContent = state.contextOnly ? '詳細' : (state.open ? '詳細を閉じる' : '詳細');
-      if (state.contextOnly) {
-        const target = context.obstacleActive ? obstaclePanel : selectionPanel;
-        if (target && typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'start' });
-      }
+      detailsToggleBtn.textContent = state.open ? '詳細を閉じる' : '詳細';
       return state;
     }
 
@@ -352,21 +505,13 @@
     }
 
     detailsToggleBtn.addEventListener('click', () => {
-      const current = computeDrawerState({ manualOpen, contextActive: contextSnapshot().active, contextSuppressed });
-      if (!current.open || current.contextOnly) {
-        manualOpen = true;
-        contextSuppressed = false;
-      } else {
-        manualOpen = false;
-        if (contextSnapshot().active) contextSuppressed = true;
-      }
-      renderDrawer({ allowContextReset: false });
+      manualOpen = !manualOpen;
+      renderDrawer();
     });
 
     drawerHeader.querySelector('.simple-drawer-close')?.addEventListener('click', () => {
       manualOpen = false;
-      if (contextSnapshot().active) contextSuppressed = true;
-      renderDrawer({ allowContextReset: false });
+      renderDrawer();
     });
 
     toolbarMoreTrigger.addEventListener('click', event => {
@@ -407,7 +552,8 @@
 
     lastContextSignature = contextSnapshot().signature;
     refreshStatusMirrors();
-    renderDrawer({ allowContextReset: false });
+    renderDrawer();
+    installCoursePartTrashBridge(documentRef, rootRef, courseCanvas, dragTrash);
 
     const notifyLayoutChange = () => {
       if (!rootRef || typeof rootRef.dispatchEvent !== 'function' || typeof rootRef.Event !== 'function') return;
@@ -425,6 +571,7 @@
     normalizeContextIdentity,
     buildContextSignature,
     computeDrawerState,
+    pointInsideElement,
     install
   });
 });
