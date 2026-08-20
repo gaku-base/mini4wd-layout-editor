@@ -71,6 +71,13 @@ test('simplified UI keeps a single workspace column at 720px and below', () => {
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*simpleUiNarrowLayoutOverride/);
 });
 
+test('sub-edit bar suppresses the overlapping instruction card', () => {
+  assert.match(
+    WHEEL_SOURCE,
+    /body\.simple-ui-enabled #subEditModeBar:not\(\[hidden\]\) ~ \.instruction-card \{ display: none !important; \}/
+  );
+});
+
 test('course parts keep 45 degree steps while venue areas use 5 degree wheel and Z/X rotation', () => {
   const app = fs.readFileSync('app.js', 'utf8');
   const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));

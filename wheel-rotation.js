@@ -122,7 +122,7 @@
     if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
     const style = root.document.createElement('style');
     style.id = 'simpleUiNarrowLayoutOverride';
-    style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }';
+    style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }\nbody.simple-ui-enabled #subEditModeBar:not([hidden]) ~ .instruction-card { display: none !important; }';
     root.document.head.appendChild(style);
   }, { once: true });
   root.document.head.appendChild(script);
