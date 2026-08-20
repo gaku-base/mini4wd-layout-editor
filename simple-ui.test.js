@@ -17,8 +17,8 @@ test('parseSelectionCount accepts positive integer text and fails closed otherwi
 });
 
 test('context signature changes when selection identity changes at the same count', () => {
-  const first = UI.buildContextSignature({ selectionCount: 1, selectionIdentity: 'Straight A' });
-  const second = UI.buildContextSignature({ selectionCount: 1, selectionIdentity: 'Straight B' });
+  const first = UI.buildContextSignature({ selectionCount: 1, selectionIdentity: '["part-a","part-b"]' });
+  const second = UI.buildContextSignature({ selectionCount: 1, selectionIdentity: '["part-a","part-c"]' });
   assert.notEqual(first, second);
 });
 
@@ -114,4 +114,12 @@ test('overflow controls render in a fixed body portal outside the toolbar scroll
 test('canvas selection completion schedules a post-handler context refresh', () => {
   assert.match(SOURCE, /courseCanvas\?\.addEventListener\?\.\('pointerup', scheduleContextRefresh\)/);
   assert.match(SOURCE, /setTimeout\(\(\) => renderDrawer\(\), 0\)/);
+});
+
+test('selection identity is stored outside selectionInfo and observed directly', () => {
+  assert.match(SOURCE, /getElementById\('simpleUiSelectionIdentity'\)/);
+  assert.match(SOURCE, /selectionIdentityMarker\.id = 'simpleUiSelectionIdentity'/);
+  assert.match(SOURCE, /body\.appendChild\(selectionIdentityMarker\)/);
+  assert.match(SOURCE, /selectionIdentityMarker\?\.dataset\?\.selectedIds/);
+  assert.match(SOURCE, /contextObserver\.observe\(selectionIdentityMarker, \{ attributes: true, attributeFilter: \['data-selected-ids'\] \}\)/);
 });
