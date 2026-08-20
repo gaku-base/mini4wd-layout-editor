@@ -52,3 +52,14 @@
 
   return Object.freeze({ DOM_DELTA_PIXEL, PIXEL_NOTCH_MIN, classifyWheelInput, createWheelRotationAccumulator });
 });
+
+(function loadSimpleEditorUi(root) {
+  'use strict';
+  if (!root || !root.document || root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__) return;
+  root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__ = true;
+  const script = root.document.createElement('script');
+  script.src = 'simple-ui.js';
+  script.async = false;
+  script.dataset.m4wdSimpleUi = '1';
+  root.document.head.appendChild(script);
+})(typeof globalThis !== 'undefined' ? globalThis : this);
