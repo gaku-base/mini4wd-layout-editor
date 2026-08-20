@@ -115,14 +115,14 @@
   if (!root || !root.document || root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__) return;
   root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__ = true;
   const script = root.document.createElement('script');
-  script.src = 'simple-ui.js';
+  script.src = 'simple-ui.js?v=v1.1-rc4-20260820-overlap2';
   script.async = false;
   script.dataset.m4wdSimpleUi = '1';
   script.addEventListener('load', () => {
     if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
     const style = root.document.createElement('style');
     style.id = 'simpleUiNarrowLayoutOverride';
-    style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }\nbody.simple-ui-enabled #subEditModeBar:not([hidden]) ~ .instruction-card { display: none !important; }';
+    style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }';
     root.document.head.appendChild(style);
   }, { once: true });
   root.document.head.appendChild(script);
