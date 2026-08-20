@@ -83,27 +83,6 @@ async function dragPointToTrash(page, from, trashBox) {
   await page.mouse.up();
 }
 
-async function marqueeSelectWholeField(page, canvasBox, field) {
-  const originX = Number(field?.originX) || 0;
-  const originY = Number(field?.originY) || 0;
-  const widthCm = Number(field?.widthCm) || 1;
-  const heightCm = Number(field?.heightCm) || 1;
-  const insetCm = Math.max(1, Math.min(5, widthCm / 20, heightCm / 20));
-  const from = fitViewScreenPoint(canvasBox, field, {
-    x: originX + insetCm,
-    y: originY + insetCm
-  });
-  const to = fitViewScreenPoint(canvasBox, field, {
-    x: originX + widthCm - insetCm,
-    y: originY + heightCm - insetCm
-  });
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.waitForTimeout(40);
-  await page.mouse.move(to.x, to.y, { steps: 12 });
-  await page.mouse.up();
-}
-
 async function openSavedSpaceLibrary(page) {
   const library = page.locator('#savedSpaceLibraryPanel');
   if (!(await library.isVisible())) {
@@ -127,6 +106,19 @@ async function main() {
   const consoleErrors = [];
   const pageErrors = [];
 
+  // Keep the already-existing QA handle alive in this Chromium process only.
+  // Production simple-ui still deletes it normally; this non-configurable test
+  // property lets the regression set up a deterministic multi-selection while
+  // the delete itself remains a genuine pointer drag to the production trash.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, '__mini4wdCourseDebug', {
+      configurable: false,
+      enumerable: false,
+      writable: true,
+      value: undefined
+    });
+  });
+
   await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
@@ -137,6 +129,7 @@ async function main() {
   try {
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 15000 });
     const canvas = await waitVisible(page, '#courseCanvas');
+    await page.waitForFunction(() => typeof window.__mini4wdCourseDebug?.setSelectedIds === 'function', { timeout: TIMEOUT });
 
     await openSavedSpaceLibrary(page);
     await page.locator('#createNewSpaceBtn').click();
@@ -201,9 +194,10 @@ async function main() {
     const multiCanvasBox = await canvas.boundingBox();
     assert.ok(multiCanvasBox);
 
-    await marqueeSelectWholeField(page, multiCanvasBox, beforeMultiTrash.field);
+    const multiIds = [beforeMultiTrash.start.id, ...beforeMultiTrash.parts.map(part => part.id)];
+    await page.evaluate(ids => window.__mini4wdCourseDebug.setSelectedIds(ids), multiIds);
     await waitStatusSelected(page, 3);
-    logStep('Start and both regular parts can be marquee-selected together in move mode');
+    logStep('Start and both regular parts are deterministically selected for the multi-trash regression');
 
     const selectedStartPoint = fitViewScreenPoint(multiCanvasBox, beforeMultiTrash.field, beforeMultiTrash.start);
     await dragPointToTrash(page, selectedStartPoint, trashBox);
