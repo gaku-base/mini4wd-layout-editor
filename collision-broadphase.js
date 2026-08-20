@@ -38,13 +38,28 @@
       .map(nonEmptyId)
       .filter(Boolean)
   )];
+  const strictPlacementWallKeys = value => {
+    if (!Array.isArray(value) || value.length === 0) return [];
+    const keys = [];
+    const seen = new Set();
+    for (const item of value) {
+      if (typeof item !== 'string') return [];
+      const key = item.trim();
+      if (!key) return [];
+      if (!seen.has(key)) {
+        seen.add(key);
+        keys.push(key);
+      }
+    }
+    return keys;
+  };
   const hasOwn = (value, key) => Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
   function wallSchemaForPlacement(placementValue, options = {}) {
     const placementSpecified = hasOwn(placementValue, 'requiredWallKeys');
     const source = placementSpecified ? 'placement.requiredWallKeys' : 'options.requiredWallKeys';
-    const keys = requiredWallKeys({
-      requiredWallKeys: placementSpecified ? placementValue.requiredWallKeys : options.requiredWallKeys
-    });
+    const keys = placementSpecified
+      ? strictPlacementWallKeys(placementValue.requiredWallKeys)
+      : requiredWallKeys({ requiredWallKeys: options.requiredWallKeys });
     return { keys, source, placementSpecified };
   }
 
