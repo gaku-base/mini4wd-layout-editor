@@ -54,6 +54,24 @@ async function readSavedSpaceLibrary(page) {
   });
 }
 
+function fitViewScreenPoint(canvasBox, field, point) {
+  const margin = 42;
+  const widthCm = Number(field?.widthCm) || 1;
+  const heightCm = Number(field?.heightCm) || 1;
+  const originX = Number(field?.originX) || 0;
+  const originY = Number(field?.originY) || 0;
+  const scale = Math.min(
+    (canvasBox.width - margin * 2) / widthCm,
+    (canvasBox.height - margin * 2) / heightCm
+  );
+  const offsetX = (canvasBox.width - widthCm * scale) / 2 - originX * scale;
+  const offsetY = (canvasBox.height - heightCm * scale) / 2 - originY * scale;
+  return {
+    x: canvasBox.x + offsetX + Number(point?.x || 0) * scale,
+    y: canvasBox.y + offsetY + Number(point?.y || 0) * scale
+  };
+}
+
 async function openSavedSpaceLibrary(page) {
   const library = page.locator('#savedSpaceLibraryPanel');
   if (!(await library.isVisible())) {
@@ -82,8 +100,6 @@ async function main() {
   const pageErrors = [];
   const dialogs = [];
 
-  // Chromium may request /favicon.ico even when the application does not define one.
-  // Fulfil only that browser-generated request so real application resource 404s still fail the smoke test.
   await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
 
   page.on('console', message => {
@@ -138,11 +154,17 @@ async function main() {
     const obstacleY = centerY - Math.min(120, box.height * 0.16);
     await page.mouse.move(obstacleX, obstacleY);
     await page.mouse.click(obstacleX, obstacleY);
-    await waitVisible(page, '#obstacleEditorPanel');
     await waitUnavailableAreaCount(page, 1);
+    assert.equal(await page.locator('#detailsToggleBtn').getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#obstacleEditorPanel').isVisible(), false);
+    logStep('selecting an unavailable area does not auto-open the detail drawer');
+
+    await page.locator('#detailsToggleBtn').click();
+    await waitVisible(page, '#obstacleEditorPanel');
+    assert.equal(await page.locator('#detailsToggleBtn').getAttribute('aria-expanded'), 'true');
     assert.equal(await page.locator('#obstacleWidthInput').inputValue(), '0.60');
     assert.equal(await page.locator('#obstacleDepthInput').inputValue(), '0.40');
-    logStep('dimension placement creates one unavailable area');
+    logStep('detail button manually opens the selected unavailable area editor');
 
     const obstacleNameInput = page.locator('#obstacleNameInput');
     await obstacleNameInput.fill('Smoke Obstacle');
@@ -169,6 +191,13 @@ async function main() {
     await page.locator('#deleteObstacleBtn').click();
     await waitUnavailableAreaCount(page, 1);
     logStep('unlocked duplicate can be deleted without removing the locked original');
+
+    const drawerCloseButton = page.locator('.simple-drawer-close');
+    await drawerCloseButton.waitFor({ state: 'visible', timeout: TIMEOUT });
+    await drawerCloseButton.click();
+    await page.waitForFunction(() => document.querySelector('#detailsToggleBtn')?.getAttribute('aria-expanded') === 'false', { timeout: TIMEOUT });
+    assert.equal(await page.locator('#obstacleEditorPanel').isVisible(), false);
+    logStep('detail drawer closes only by explicit user action');
 
     await page.locator('#savedSpaceNameInput').fill('Smoke Test Space');
     await page.locator('#saveSpaceAndStartBtn').click();
@@ -209,6 +238,32 @@ async function main() {
     await page.locator('#redoBtn').click();
     await waitStatusCount(page, 2);
     logStep('Redo restores the placed Straight');
+
+    await page.keyboard.press('q');
+    await page.waitForFunction(() => /パーツ移動/.test(document.querySelector('#statusMode')?.textContent || ''), { timeout: TIMEOUT });
+    assert.equal(await page.locator('#detailsToggleBtn').getAttribute('aria-expanded'), 'false');
+    const trash = page.locator('#dragTrash');
+    await trash.waitFor({ state: 'visible', timeout: TIMEOUT });
+    const trashBox = await trash.boundingBox();
+    assert.ok(trashBox && trashBox.width >= 30 && trashBox.height >= 28, 'toolbar trash has a usable drop target');
+
+    const dragLayout = await readCurrentLayout(page);
+    const dragCanvasBox = await canvas.boundingBox();
+    assert.ok(dragLayout?.start && dragCanvasBox, 'Start and current canvas geometry are available before trash drag');
+    const startScreen = fitViewScreenPoint(dragCanvasBox, dragLayout.field, dragLayout.start);
+    await page.mouse.move(startScreen.x, startScreen.y);
+    await page.mouse.down();
+    await page.waitForTimeout(40);
+    await page.mouse.move(trashBox.x + trashBox.width / 2, trashBox.y + trashBox.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await waitStatusCount(page, 1);
+    assert.match(await text(page.locator('#startText')), /未設定/);
+    logStep('Start can be dragged to the top toolbar trash without opening details');
+
+    await page.locator('#undoBtn').click();
+    await waitStatusCount(page, 2);
+    assert.doesNotMatch(await text(page.locator('#startText')), /未設定/);
+    logStep('one Undo restores the pre-drag Start and course state');
 
     await page.reload({ waitUntil: 'networkidle', timeout: 15000 });
     await waitVisible(page, '#courseCanvas');
