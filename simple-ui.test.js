@@ -2,7 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const UI = require('./simple-ui.js');
+
+const SOURCE = fs.readFileSync(require.resolve('./simple-ui.js'), 'utf8');
 
 test('parseSelectionCount accepts positive integer text and fails closed otherwise', () => {
   assert.equal(UI.parseSelectionCount('2'), 2);
@@ -65,4 +68,22 @@ test('less-used canvas display controls are grouped in overflow instead of remov
     'topLeftFitBtn',
     'autoFitFieldBtn'
   ]);
+});
+
+test('simplified drawer overrides the legacy responsive display-none rule', () => {
+  assert.match(
+    SOURCE,
+    /body\.simple-ui-enabled \.right-sidebar \{[\s\S]*?display:\s*block !important;/
+  );
+});
+
+test('drag trash is an overlay with a stable footprint instead of reflowing the canvas', () => {
+  const block = SOURCE.match(/body\.simple-ui-enabled \.drag-trash \{([\s\S]*?)\n\s*\}/)?.[1] || '';
+  assert.match(block, /position:\s*absolute !important;/);
+  assert.match(block, /height:\s*42px;/);
+  assert.match(block, /min-height:\s*42px !important;/);
+  assert.match(block, /margin:\s*0 !important;/);
+  const activeBlock = SOURCE.match(/body\.simple-ui-enabled \.drag-trash\.is-dragging,[\s\S]*?\{([\s\S]*?)\n\s*\}/)?.[1] || '';
+  assert.doesNotMatch(activeBlock, /height|margin|min-height|max-height|top|left|right/);
+  assert.match(activeBlock, /opacity:\s*1;/);
 });
