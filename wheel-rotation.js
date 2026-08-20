@@ -110,6 +110,30 @@
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
+(function exposeCoursePartTrashBridgeApiOnce(root) {
+  'use strict';
+  if (!root || !root.document || /test-index\.html$/.test(String(root.location?.pathname || ''))) return;
+  if (Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) return;
+
+  // app.js already owns a QA-only editing bridge. Allow exactly its creation
+  // read, then turn the debug flag off before app initialization/rendering.
+  // simple-ui.js captures the bridge privately and removes the public handle.
+  let firstRead = true;
+  Object.defineProperty(root, '__COURSE_ENABLE_DEBUG__', {
+    configurable: true,
+    get() {
+      if (!firstRead) return false;
+      firstRead = false;
+      Object.defineProperty(root, '__COURSE_ENABLE_DEBUG__', {
+        configurable: true,
+        writable: true,
+        value: false
+      });
+      return true;
+    }
+  });
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+
 (function loadSimpleEditorUi(root) {
   'use strict';
   if (!root || !root.document || root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__) return;
@@ -123,7 +147,7 @@
   }
 
   const script = root.document.createElement('script');
-  script.src = 'simple-ui.js?v=v1.1-rc4-20260820-overlap2';
+  script.src = 'simple-ui.js?v=v1.1-rc4-20260820-toolbar-trash1';
   script.async = false;
   script.dataset.m4wdSimpleUi = '1';
   script.addEventListener('load', () => {
