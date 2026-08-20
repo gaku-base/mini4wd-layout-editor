@@ -115,14 +115,10 @@
   if (!root || !root.document || /test-index\.html$/.test(String(root.location?.pathname || ''))) return;
   if (Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) return;
 
-  // app.js already exposes the editing operations required by the QA bridge
-  // when this flag is true. Keep it true only through synchronous app boot;
-  // the first timer turns diagnostics back off, while simple-ui.js privately
-  // captures and then removes the public bridge handle.
+  // app.js exposes the small editing API required by the toolbar trash bridge
+  // only when this flag is true. Keep it enabled until app.js has completed
+  // parser-time boot; the simple-ui loader turns it back off after it loads.
   root.__COURSE_ENABLE_DEBUG__ = true;
-  if (root.setTimeout) {
-    root.setTimeout(() => { root.__COURSE_ENABLE_DEBUG__ = false; }, 0);
-  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 (function loadSimpleEditorUi(root) {
@@ -137,16 +133,36 @@
     root.document.head.appendChild(hiddenGuard);
   }
 
-  const script = root.document.createElement('script');
-  script.src = 'simple-ui.js?v=v1.1-rc4-20260820-toolbar-trash1';
-  script.async = false;
-  script.dataset.m4wdSimpleUi = '1';
-  script.addEventListener('load', () => {
-    if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
-    const style = root.document.createElement('style');
-    style.id = 'simpleUiNarrowLayoutOverride';
-    style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }';
-    root.document.head.appendChild(style);
-  }, { once: true });
-  root.document.head.appendChild(script);
+  const loadSimpleUi = () => {
+    if (root.document.querySelector('script[data-m4wd-simple-ui="1"]')) return;
+
+    const script = root.document.createElement('script');
+    script.src = 'simple-ui.js?v=v1.1-rc4-20260820-toolbar-trash1';
+    script.async = false;
+    script.dataset.m4wdSimpleUi = '1';
+    script.addEventListener('load', () => {
+      // app.js has already executed before DOMContentLoaded. The private bridge
+      // may now capture the QA handle safely; future app code must not expose it.
+      root.__COURSE_ENABLE_DEBUG__ = false;
+      if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
+      const style = root.document.createElement('style');
+      style.id = 'simpleUiNarrowLayoutOverride';
+      style.textContent = '@media (max-width: 720px) { body.simple-ui-enabled .workspace-shell { grid-template-columns: minmax(0, 1fr) !important; } }';
+      root.document.head.appendChild(style);
+    }, { once: true });
+    script.addEventListener('error', () => {
+      root.__COURSE_ENABLE_DEBUG__ = false;
+      try { delete root.__mini4wdCourseDebug; } catch (_) {}
+    }, { once: true });
+    root.document.head.appendChild(script);
+  };
+
+  // app.js is the parser-blocking script immediately after wheel-rotation.js.
+  // Loading simple-ui only after DOMContentLoaded guarantees app.js has seen
+  // __COURSE_ENABLE_DEBUG__ before simple-ui tries to capture the bridge.
+  if (root.document.readyState === 'loading') {
+    root.document.addEventListener('DOMContentLoaded', loadSimpleUi, { once: true });
+  } else {
+    loadSimpleUi();
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
