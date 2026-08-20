@@ -54,6 +54,24 @@ async function readSavedSpaceLibrary(page) {
   });
 }
 
+function fitViewScreenPoint(canvasBox, field, point) {
+  const margin = 42;
+  const widthCm = Number(field?.widthCm) || 1;
+  const heightCm = Number(field?.heightCm) || 1;
+  const originX = Number(field?.originX) || 0;
+  const originY = Number(field?.originY) || 0;
+  const scale = Math.min(
+    (canvasBox.width - margin * 2) / widthCm,
+    (canvasBox.height - margin * 2) / heightCm
+  );
+  const offsetX = (canvasBox.width - widthCm * scale) / 2 - originX * scale;
+  const offsetY = (canvasBox.height - heightCm * scale) / 2 - originY * scale;
+  return {
+    x: canvasBox.x + offsetX + Number(point?.x || 0) * scale,
+    y: canvasBox.y + offsetY + Number(point?.y || 0) * scale
+  };
+}
+
 async function openSavedSpaceLibrary(page) {
   const library = page.locator('#savedSpaceLibraryPanel');
   if (!(await library.isVisible())) {
@@ -82,8 +100,6 @@ async function main() {
   const pageErrors = [];
   const dialogs = [];
 
-  // Chromium may request /favicon.ico even when the application does not define one.
-  // Fulfil only that browser-generated request so real application resource 404s still fail the smoke test.
   await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
 
   page.on('console', message => {
@@ -228,7 +244,12 @@ async function main() {
     await trash.waitFor({ state: 'visible', timeout: TIMEOUT });
     const trashBox = await trash.boundingBox();
     assert.ok(trashBox && trashBox.width >= 30 && trashBox.height >= 28, 'toolbar trash has a usable drop target');
-    await page.mouse.move(centerX, centerY);
+
+    const dragLayout = await readCurrentLayout(page);
+    const dragCanvasBox = await canvas.boundingBox();
+    assert.ok(dragLayout?.start && dragCanvasBox, 'Start and current canvas geometry are available before trash drag');
+    const startScreen = fitViewScreenPoint(dragCanvasBox, dragLayout.field, dragLayout.start);
+    await page.mouse.move(startScreen.x, startScreen.y);
     await page.mouse.down();
     await page.waitForTimeout(40);
     await page.mouse.move(trashBox.x + trashBox.width / 2, trashBox.y + trashBox.height / 2, { steps: 8 });
