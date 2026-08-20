@@ -79,6 +79,14 @@ test('sub-edit bar suppresses the overlapping instruction card', () => {
   );
 });
 
+test('hidden sub-edit bar cannot be revived by the base display grid rule', () => {
+  assert.match(
+    WHEEL_SOURCE,
+    /\.sub-edit-mode-bar\[hidden\] \{ display: none !important; \}/
+  );
+  assert.match(WHEEL_SOURCE, /hiddenGuard\.id = 'subEditHiddenGuard'/);
+});
+
 test('course parts keep 45 degree steps while venue areas use 5 degree wheel and Z/X rotation', () => {
   const app = fs.readFileSync('app.js', 'utf8');
   const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));
