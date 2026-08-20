@@ -95,6 +95,134 @@
     };
   }
 
+  function readStatusRotation(documentValue) {
+    const text = documentValue?.getElementById?.('statusRotation')?.textContent;
+    const match = String(text == null ? '' : text).match(/-?\d+(?:\.\d+)?/);
+    return match ? Number(match[0]) : null;
+  }
+
+  function rotatedRectSize(width, height, rotationDeg) {
+    const w = Number(width);
+    const h = Number(height);
+    const rotation = Number(rotationDeg);
+    if (![w, h, rotation].every(Number.isFinite) || w <= 0 || h <= 0) return null;
+    const radians = rotation * Math.PI / 180;
+    const cos = Math.abs(Math.cos(radians));
+    const sin = Math.abs(Math.sin(radians));
+    return { w: w * cos + h * sin, h: w * sin + h * cos };
+  }
+
+  function startOutlineGuideGeometry(definition, sourceRect, rotationDeg, lineWidth = 0) {
+    const width = Number(definition?.w);
+    const height = Number(definition?.h);
+    const x = Number(sourceRect?.x);
+    const y = Number(sourceRect?.y);
+    const sourceWidth = Number(sourceRect?.w);
+    const sourceHeight = Number(sourceRect?.h);
+    const rotation = Number(rotationDeg);
+    const strokeWidth = Number(lineWidth);
+    if (![width, height, x, y, sourceWidth, sourceHeight, rotation, strokeWidth].every(Number.isFinite)
+        || width <= 0 || height <= 0 || sourceWidth < 0 || sourceHeight < 0 || strokeWidth < 0) return null;
+    const padding = strokeWidth / 2;
+    return {
+      center: { x: x + sourceWidth / 2, y: y + sourceHeight / 2 },
+      rotationDeg: normalizeAngle(rotation),
+      rect: {
+        x: -width / 2 - padding,
+        y: -height / 2 - padding,
+        w: width + padding * 2,
+        h: height + padding * 2
+      }
+    };
+  }
+
+  function sourceRectMatchesRotatedStart(definition, sourceRect, rotationDeg, epsilon = 1e-6) {
+    const expected = rotatedRectSize(definition?.w, definition?.h, rotationDeg);
+    const sourceWidth = Number(sourceRect?.w);
+    const sourceHeight = Number(sourceRect?.h);
+    const tolerance = Number(epsilon);
+    if (!expected || ![sourceWidth, sourceHeight, tolerance].every(Number.isFinite) || tolerance < 0) return false;
+    return Math.abs(sourceWidth - expected.w) <= tolerance
+      && Math.abs(sourceHeight - expected.h) <= tolerance;
+  }
+
+  function sourceRectIsPhysicalStartBody(definition, sourceRect, epsilon = 1e-6) {
+    const width = Number(definition?.w);
+    const height = Number(definition?.h);
+    const x = Number(sourceRect?.x);
+    const y = Number(sourceRect?.y);
+    const sourceWidth = Number(sourceRect?.w);
+    const sourceHeight = Number(sourceRect?.h);
+    const tolerance = Number(epsilon);
+    if (![width, height, x, y, sourceWidth, sourceHeight, tolerance].every(Number.isFinite)
+        || width <= 0 || height <= 0 || tolerance < 0) return false;
+    return Math.abs(x + width / 2) <= tolerance
+      && Math.abs(y + height / 2) <= tolerance
+      && Math.abs(sourceWidth - width) <= tolerance
+      && Math.abs(sourceHeight - height) <= tolerance;
+  }
+
+  function isPhysicalStartBodyStroke(context, startDefinition, sourceRect) {
+    if (!context || context.canvas?.id !== 'courseCanvas') return false;
+    if (!context.canvas.classList?.contains?.('mode-start-position')) return false;
+    const dash = typeof context.getLineDash === 'function' ? context.getLineDash() : [];
+    if (Array.isArray(dash) && dash.length !== 0) return false;
+    return sourceRectIsPhysicalStartBody(startDefinition, sourceRect);
+  }
+
+  function shouldReplaceStartGuideStroke(context, documentValue, startDefinition, sourceRect, pendingStartGuide = false) {
+    if (!pendingStartGuide) return false;
+    if (!context || context.canvas?.id !== 'courseCanvas') return false;
+    if (!context.canvas.classList?.contains?.('mode-start-position')) return false;
+    const dash = typeof context.getLineDash === 'function' ? context.getLineDash() : [];
+    if (!Array.isArray(dash) || dash.length === 0) return false;
+    const rotation = readStatusRotation(documentValue);
+    if (!Number.isFinite(rotation)) return false;
+    return sourceRectMatchesRotatedStart(startDefinition, sourceRect, rotation);
+  }
+
+  function installStartPlacementOutlineGuide(rootValue) {
+    const root = rootValue || (typeof window !== 'undefined' ? window : null);
+    const prototype = root?.CanvasRenderingContext2D?.prototype;
+    if (!prototype || typeof prototype.strokeRect !== 'function') return false;
+    if (prototype.__m4wdStartOutlineGuideInstalled) return true;
+    const originalStrokeRect = prototype.strokeRect;
+    const pendingStartGuideContexts = new WeakSet();
+    Object.defineProperty(prototype, '__m4wdStartOutlineGuideInstalled', {
+      configurable: true,
+      value: true
+    });
+    prototype.strokeRect = function (x, y, w, h) {
+      const documentValue = root.document;
+      const startDefinition = root.M4WD_PART_CATALOG?.PARTS?.start;
+      const sourceRect = { x, y, w, h };
+      if (isPhysicalStartBodyStroke(this, startDefinition, sourceRect)) {
+        pendingStartGuideContexts.add(this);
+        return originalStrokeRect.call(this, x, y, w, h);
+      }
+      const pendingStartGuide = pendingStartGuideContexts.has(this);
+      if (pendingStartGuide) pendingStartGuideContexts.delete(this);
+      if (shouldReplaceStartGuideStroke(this, documentValue, startDefinition, sourceRect, pendingStartGuide)) {
+        const geometry = startOutlineGuideGeometry(
+          startDefinition,
+          sourceRect,
+          readStatusRotation(documentValue),
+          Number(this.lineWidth) || 0
+        );
+        if (geometry) {
+          this.save();
+          this.translate(geometry.center.x, geometry.center.y);
+          this.rotate(geometry.rotationDeg * Math.PI / 180);
+          originalStrokeRect.call(this, geometry.rect.x, geometry.rect.y, geometry.rect.w, geometry.rect.h);
+          this.restore();
+          return;
+        }
+      }
+      return originalStrokeRect.call(this, x, y, w, h);
+    };
+    return true;
+  }
+
   const api = Object.freeze({
     resolvePartPose,
     cornerGeometry,
@@ -102,9 +230,20 @@
     transformPoint,
     tracePartPath,
     traceConnectors,
-    tracePart
+    tracePart,
+    readStatusRotation,
+    rotatedRectSize,
+    startOutlineGuideGeometry,
+    sourceRectMatchesRotatedStart,
+    sourceRectIsPhysicalStartBody,
+    isPhysicalStartBodyStroke,
+    shouldReplaceStartGuideStroke,
+    installStartPlacementOutlineGuide
   });
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  if (typeof window !== 'undefined') window.M4WD_PART_RENDER_POSE = api;
+  if (typeof window !== 'undefined') {
+    window.M4WD_PART_RENDER_POSE = api;
+    installStartPlacementOutlineGuide(window);
+  }
 })();
