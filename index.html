@@ -4,7 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Mini 4WD Course Layout</title>
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=v1.1-rc4-20260820-overlap2" />
+  <style id="criticalUiOverlapFix">
+    #subEditModeBar:not([hidden]) ~ .instruction-card { display: none !important; }
+  </style>
 </head>
 <body>
   <div id="app" class="app" aria-label="ミニ四駆コースレイアウトメーカー">
@@ -357,7 +360,6 @@
       </section>
     </form>
   </dialog>
-
   <dialog id="exportRangeDialog" class="export-range-dialog">
     <form method="dialog">
       <h2>作成範囲外のパーツがあります</h2>
@@ -398,7 +400,7 @@
   <script src="room-boundary.js"></script>
   <script src="render-scheduler.js"></script>
   <script src="diagnostic-logger.js"></script>
-  <script src="wheel-rotation.js"></script>
+  <script src="wheel-rotation.js?v=v1.1-rc4-20260820-overlap2"></script>
   <script src="app.js"></script>
 </body>
 </html>
