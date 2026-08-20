@@ -114,6 +114,14 @@
   'use strict';
   if (!root || !root.document || root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__) return;
   root.__M4WD_SIMPLE_UI_LOADER_INSTALLED__ = true;
+
+  if (!root.document.getElementById('subEditHiddenGuard')) {
+    const hiddenGuard = root.document.createElement('style');
+    hiddenGuard.id = 'subEditHiddenGuard';
+    hiddenGuard.textContent = '.sub-edit-mode-bar[hidden] { display: none !important; }';
+    root.document.head.appendChild(hiddenGuard);
+  }
+
   const script = root.document.createElement('script');
   script.src = 'simple-ui.js?v=v1.1-rc4-20260820-overlap2';
   script.async = false;
