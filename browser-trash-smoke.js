@@ -83,15 +83,24 @@ async function dragPointToTrash(page, from, trashBox) {
   await page.mouse.up();
 }
 
-async function marqueeSelectWholeCanvas(page, canvasBox) {
-  const inset = 8;
-  await page.mouse.move(canvasBox.x + inset, canvasBox.y + inset);
+async function marqueeSelectWholeField(page, canvasBox, field) {
+  const originX = Number(field?.originX) || 0;
+  const originY = Number(field?.originY) || 0;
+  const widthCm = Number(field?.widthCm) || 1;
+  const heightCm = Number(field?.heightCm) || 1;
+  const insetCm = Math.max(1, Math.min(5, widthCm / 20, heightCm / 20));
+  const from = fitViewScreenPoint(canvasBox, field, {
+    x: originX + insetCm,
+    y: originY + insetCm
+  });
+  const to = fitViewScreenPoint(canvasBox, field, {
+    x: originX + widthCm - insetCm,
+    y: originY + heightCm - insetCm
+  });
+  await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(
-    canvasBox.x + canvasBox.width - inset,
-    canvasBox.y + canvasBox.height - inset,
-    { steps: 12 }
-  );
+  await page.waitForTimeout(40);
+  await page.mouse.move(to.x, to.y, { steps: 12 });
   await page.mouse.up();
 }
 
@@ -192,7 +201,7 @@ async function main() {
     const multiCanvasBox = await canvas.boundingBox();
     assert.ok(multiCanvasBox);
 
-    await marqueeSelectWholeCanvas(page, multiCanvasBox);
+    await marqueeSelectWholeField(page, multiCanvasBox, beforeMultiTrash.field);
     await waitStatusSelected(page, 3);
     logStep('Start and both regular parts can be marquee-selected together in move mode');
 
