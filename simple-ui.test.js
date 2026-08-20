@@ -32,32 +32,38 @@ test('context identity normalization ignores presentation-only whitespace', () =
   assert.equal(UI.normalizeContextIdentity('  Straight\n  A  '), 'Straight A');
 });
 
-test('drawer remains closed without manual request or active context', () => {
+test('drawer remains closed until manually requested', () => {
   assert.deepEqual(
     UI.computeDrawerState({ manualOpen: false, contextActive: false, contextSuppressed: false }),
     { open: false, contextOnly: false }
   );
 });
 
-test('selection context auto-opens drawer in context-only mode', () => {
+test('selection context does not auto-open drawer', () => {
   assert.deepEqual(
     UI.computeDrawerState({ manualOpen: false, contextActive: true, contextSuppressed: false }),
-    { open: true, contextOnly: true }
+    { open: false, contextOnly: false }
   );
 });
 
-test('manual drawer open exposes all details even while context is active', () => {
+test('obstacle context does not auto-open drawer', () => {
+  assert.deepEqual(
+    UI.computeDrawerState({ manualOpen: false, contextActive: true, contextSuppressed: true }),
+    { open: false, contextOnly: false }
+  );
+});
+
+test('manual drawer open exposes details even while context is active', () => {
   assert.deepEqual(
     UI.computeDrawerState({ manualOpen: true, contextActive: true, contextSuppressed: false }),
     { open: true, contextOnly: false }
   );
 });
 
-test('explicitly dismissed context does not force drawer back open until context changes', () => {
-  assert.deepEqual(
-    UI.computeDrawerState({ manualOpen: false, contextActive: true, contextSuppressed: true }),
-    { open: false, contextOnly: false }
-  );
+test('pointInsideElement uses viewport coordinates for toolbar trash hit testing', () => {
+  const element = { getBoundingClientRect: () => ({ left: 10, right: 50, top: 20, bottom: 60 }) };
+  assert.equal(UI.pointInsideElement({ clientX: 30, clientY: 40 }, element), true);
+  assert.equal(UI.pointInsideElement({ clientX: 9, clientY: 40 }, element), false);
 });
 
 test('compact status keeps diagnostic values available as secondary detail fields', () => {
@@ -93,15 +99,27 @@ test('simplified drawer overrides the legacy responsive display-none rule', () =
   );
 });
 
-test('drag trash is an overlay with a stable footprint instead of reflowing the canvas', () => {
+test('drag trash is a compact always-visible toolbar target', () => {
   const block = SOURCE.match(/body\.simple-ui-enabled \.drag-trash \{([\s\S]*?)\n\s*\}/)?.[1] || '';
-  assert.match(block, /position:\s*absolute !important;/);
-  assert.match(block, /height:\s*42px;/);
-  assert.match(block, /min-height:\s*42px !important;/);
+  assert.match(block, /position:\s*static !important;/);
+  assert.match(block, /width:\s*38px;/);
+  assert.match(block, /height:\s*32px;/);
+  assert.match(block, /min-height:\s*32px !important;/);
   assert.match(block, /margin:\s*0 !important;/);
-  const activeBlock = SOURCE.match(/body\.simple-ui-enabled \.drag-trash\.is-dragging,[\s\S]*?\{([\s\S]*?)\n\s*\}/)?.[1] || '';
-  assert.doesNotMatch(activeBlock, /height|margin|min-height|max-height|top|left|right/);
-  assert.match(activeBlock, /opacity:\s*1;/);
+  assert.match(block, /opacity:\s*1;/);
+  assert.match(SOURCE, /rightToolbarGroup\.append\(dragTrash\)/);
+  assert.match(SOURCE, /dragTrash\.title = 'パーツをドラッグして削除'/);
+});
+
+test('course-part trash bridge rolls back an in-progress move before one-step delete', () => {
+  assert.match(SOURCE, /function installCoursePartTrashBridge/);
+  assert.match(SOURCE, /documentRef\.addEventListener\('pointerup',[\s\S]*true\);/);
+  assert.match(SOURCE, /historyLength:\s*Number\(runtime\.historyLength\) \|\| 0/);
+  assert.match(SOURCE, /new rootRef\.KeyboardEvent\('keydown',[\s\S]*ctrlKey:\s*true/);
+  assert.match(SOURCE, /debug\.setSelectedIds\(drag\.ids\)/);
+  assert.match(SOURCE, /debug\.deleteParts\(drag\.ids\)/);
+  assert.match(SOURCE, /event\.stopImmediatePropagation\(\)/);
+  assert.match(SOURCE, /new rootRef\.PointerEvent\('pointercancel'/);
 });
 
 test('overflow controls render in a fixed body portal outside the toolbar scrollport', () => {
@@ -111,9 +129,10 @@ test('overflow controls render in a fixed body portal outside the toolbar scroll
   assert.doesNotMatch(SOURCE, /rightToolbarGroup\.append\([^\n]*toolbarMoreMenu/);
 });
 
-test('canvas selection completion schedules a post-handler context refresh', () => {
+test('canvas selection completion can refresh presentation without forcing drawer open', () => {
   assert.match(SOURCE, /courseCanvas\?\.addEventListener\?\.\('pointerup', scheduleContextRefresh\)/);
   assert.match(SOURCE, /setTimeout\(\(\) => renderDrawer\(\), 0\)/);
+  assert.match(SOURCE, /const state = computeDrawerState\(\{ manualOpen \}\)/);
 });
 
 test('selection identity is stored outside selectionInfo and observed directly', () => {
