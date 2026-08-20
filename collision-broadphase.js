@@ -38,6 +38,30 @@
       .map(nonEmptyId)
       .filter(Boolean)
   )];
+  const strictPlacementWallKeys = value => {
+    if (!Array.isArray(value) || value.length === 0) return [];
+    const keys = [];
+    const seen = new Set();
+    for (const item of value) {
+      if (typeof item !== 'string') return [];
+      const key = item.trim();
+      if (!key) return [];
+      if (!seen.has(key)) {
+        seen.add(key);
+        keys.push(key);
+      }
+    }
+    return keys;
+  };
+  const hasOwn = (value, key) => Boolean(value && Object.prototype.hasOwnProperty.call(value, key));
+  function wallSchemaForPlacement(placementValue, options = {}) {
+    const placementSpecified = hasOwn(placementValue, 'requiredWallKeys');
+    const source = placementSpecified ? 'placement.requiredWallKeys' : 'options.requiredWallKeys';
+    const keys = placementSpecified
+      ? strictPlacementWallKeys(placementValue.requiredWallKeys)
+      : requiredWallKeys({ requiredWallKeys: options.requiredWallKeys });
+    return { keys, source, placementSpecified };
+  }
 
   function normalizeAngleDeg(value) { return angle(value); }
 
@@ -180,8 +204,9 @@
     collectPolyline(station?.runningSurfacePolylineYZMm, `${prefix}.runningSurfacePolylineYZMm`, options.requireRunningSurface !== false, center, tangent, placement, points, missing);
     collectPolyline(station?.undersidePolylineYZMm, `${prefix}.undersidePolylineYZMm`, options.requireUnderside !== false, center, tangent, placement, points, missing);
 
-    const requiredWalls = requiredWallKeys(options);
-    if (requiredWalls.length === 0) missing.push('options.requiredWallKeys(non-empty wall schema required)');
+    const wallSchema = wallSchemaForPlacement(placementValue, options);
+    const requiredWalls = wallSchema.keys;
+    if (requiredWalls.length === 0) missing.push(`${wallSchema.source}(non-empty wall schema required)`);
     const polyWalls = station?.sideWallPolylinesYZMm || {};
     const objectWalls = station?.walls || {};
     const keys = new Set([...Object.keys(polyWalls), ...Object.keys(objectWalls), ...requiredWalls]);
@@ -237,9 +262,15 @@
   function buildWorldAabb(placementValue, options = {}) {
     const placement = validatePlacement(placementValue);
     const profile = placementValue?.profile;
-    const collisionOptions = { ...options, requireRunningSurface: true, requireUnderside: true };
+    const wallSchema = wallSchemaForPlacement(placementValue, options);
+    const collisionOptions = {
+      ...options,
+      requiredWallKeys: wallSchema.keys,
+      requireRunningSurface: true,
+      requireUnderside: true
+    };
     const missing = placement.missing.map(item => `placement.${item}`);
-    if (requiredWallKeys(collisionOptions).length === 0) missing.push('options.requiredWallKeys(non-empty wall schema required)');
+    if (wallSchema.keys.length === 0) missing.push(`${wallSchema.source}(non-empty wall schema required)`);
     if (!profile || typeof profile !== 'object') missing.push('profile');
     if (profile && !['verified', 'provisional'].includes(String(profile.status))) missing.push('profile.status(collision-ready verified/provisional required)');
     if (profile && profile.coordinateFrame !== 'part-local-xyz') missing.push('profile.coordinateFrame(part-local-xyz required)');

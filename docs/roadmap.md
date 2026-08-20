@@ -115,6 +115,15 @@ Phase 2の干渉エンジンへ進む前に、Issue #6として実施する。
 - 後続のnarrow-phase／赤色表示へ渡せる`candidateRangeMm`を返す
 - 現行productionは直接読込JavaScript構成のためPhase 2.0は既存module方式で実装し、TypeScript build pathはIssue #67で分離して整備する
 
+### Phase 2.1：editor placement adapter
+
+- 現行editor runtimeの`x/y(cm) + zMm(mm)`をbroad-phase入力のmm XYZへ境界で明示変換する
+- missing / invalid数値、ID、rotationを0・推測値・合法値へ補正せず、後段`indeterminate`を維持する
+- collision profileはcaller resolverでのみ解決し、未登録profileやwall schemaを推測しない
+- placementごとの`requiredWallKeys`を優先し、未指定placementだけlegacy global schemaをfallbackとして使う
+- slope-style `left/right` と bank-style `inner/outer` を同一layoutで安全に混在可能にする
+- この段階ではapp.js常時解析・UI赤表示・保存形式変更は行わない
+
 ## Phase 3：高速2D配置エディター
 
 - 数字キー選択
