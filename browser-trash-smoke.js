@@ -76,6 +76,15 @@ async function dragPointToTrash(page, from, trashBox) {
   await page.mouse.up();
 }
 
+async function openSavedSpaceLibrary(page) {
+  const library = page.locator('#savedSpaceLibraryPanel');
+  if (!(await library.isVisible())) {
+    await page.locator('#newBtn').click();
+  }
+  await library.waitFor({ state: 'visible', timeout: TIMEOUT });
+  return library;
+}
+
 async function main() {
   if (!CHROME_BIN) throw new Error('CHROME_BIN is required for browser smoke tests');
 
@@ -101,8 +110,7 @@ async function main() {
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 15000 });
     const canvas = await waitVisible(page, '#courseCanvas');
 
-    await page.locator('#newBtn').click();
-    await waitVisible(page, '#savedSpaceLibraryPanel');
+    await openSavedSpaceLibrary(page);
     await page.locator('#createNewSpaceBtn').click();
     await waitVisible(page, '#layoutSpacePanel');
     await page.locator('#setupForm').evaluate(form => form.requestSubmit());
