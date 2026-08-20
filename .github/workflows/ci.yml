@@ -103,6 +103,12 @@ jobs:
           BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-trash-smoke.js
 
+          NODE_PATH="$smoke_root/node_modules" \
+          CHROME_BIN="$chrome_bin" \
+          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
+          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
+          node browser-mode-help-smoke.js
+
       - name: Upload browser smoke failure screenshot
         if: failure()
         uses: actions/upload-artifact@v4
