@@ -63,10 +63,13 @@ test('simplified UI selection bridge keeps complete IDs outside the rewritten se
   assert.doesNotMatch(WHEEL_SOURCE, /selectionInfo\.appendChild\(marker\)/);
 });
 
-test('toolbar trash bridge enables the QA API only through synchronous app boot', () => {
+test('toolbar trash bridge keeps QA API enabled through app boot and disables it after simple-ui loads', () => {
   assert.match(WHEEL_SOURCE, /function exposeCoursePartTrashBridgeApi/);
   assert.match(WHEEL_SOURCE, /root\.__COURSE_ENABLE_DEBUG__ = true/);
-  assert.match(WHEEL_SOURCE, /setTimeout\(\(\) => \{ root\.__COURSE_ENABLE_DEBUG__ = false; \}, 0\)/);
+  assert.doesNotMatch(WHEEL_SOURCE, /setTimeout\(\(\) => \{ root\.__COURSE_ENABLE_DEBUG__ = false; \}, 0\)/);
+  assert.match(WHEEL_SOURCE, /DOMContentLoaded', loadSimpleUi, \{ once: true \}/);
+  assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*root\.__COURSE_ENABLE_DEBUG__ = false/);
+  assert.match(WHEEL_SOURCE, /script\.addEventListener\('error',[\s\S]*root\.__COURSE_ENABLE_DEBUG__ = false/);
   assert.doesNotMatch(WHEEL_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
 });
 
