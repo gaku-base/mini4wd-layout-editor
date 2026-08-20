@@ -133,6 +133,95 @@
     root.document.head.appendChild(hiddenGuard);
   }
 
+  function integrateModeHelpIntoToolbar() {
+    const toolbar = root.document.getElementById('canvasToolbar');
+    const instruction = root.document.getElementById('instruction');
+    if (!toolbar || !instruction || instruction.dataset.toolbarModeHelp === '1') return false;
+
+    const groups = toolbar.querySelectorAll('.toolbar-group');
+    const rightGroup = groups[groups.length - 1] || null;
+    instruction.dataset.toolbarModeHelp = '1';
+    instruction.classList.add('toolbar-mode-help');
+    if (rightGroup) toolbar.insertBefore(instruction, rightGroup);
+    else toolbar.appendChild(instruction);
+
+    if (!root.document.getElementById('toolbarModeHelpStyles')) {
+      const style = root.document.createElement('style');
+      style.id = 'toolbarModeHelpStyles';
+      style.textContent = `
+        .canvas-toolbar .toolbar-mode-help {
+          position: static !important;
+          left: auto !important;
+          top: auto !important;
+          transform: none !important;
+          flex: 1 1 300px;
+          min-width: 180px;
+          max-width: 560px;
+          height: 32px;
+          padding: 0 10px;
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 8px;
+          border: 0 !important;
+          border-left: 2px solid var(--primary) !important;
+          border-radius: 0;
+          background: transparent !important;
+          box-shadow: none !important;
+          overflow: hidden;
+          white-space: nowrap;
+          pointer-events: none;
+        }
+        .canvas-toolbar .toolbar-mode-help strong {
+          flex: 0 0 auto;
+          font-size: 11px;
+          line-height: 1.2;
+          white-space: nowrap;
+        }
+        .canvas-toolbar .toolbar-mode-help span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          color: var(--muted);
+          font-size: 9px;
+          line-height: 1.2;
+        }
+        .canvas-toolbar .toolbar-mode-help.has-warning {
+          border-left-color: var(--danger) !important;
+        }
+        .canvas-toolbar .toolbar-mode-help.hidden,
+        .canvas-toolbar .toolbar-mode-help.is-sub-edit-active {
+          display: none !important;
+        }
+        @media (max-width: 1180px) {
+          .canvas-toolbar .toolbar-mode-help {
+            order: 3;
+            flex: 1 0 100%;
+            max-width: none;
+            height: 28px;
+            padding: 0 4px;
+          }
+        }
+      `;
+      root.document.head.appendChild(style);
+    }
+
+    const subEditBar = root.document.getElementById('subEditModeBar');
+    const syncSubEditVisibility = () => {
+      instruction.classList.toggle('is-sub-edit-active', Boolean(subEditBar && !subEditBar.hidden));
+    };
+    syncSubEditVisibility();
+    if (subEditBar && root.MutationObserver) {
+      new root.MutationObserver(syncSubEditVisibility).observe(subEditBar, {
+        attributes: true,
+        attributeFilter: ['hidden']
+      });
+    }
+    return true;
+  }
+
   const loadSimpleUi = () => {
     if (root.document.querySelector('script[data-m4wd-simple-ui="1"]')) return;
 
@@ -144,6 +233,7 @@
       // app.js has already executed before DOMContentLoaded. The private bridge
       // may now capture the QA handle safely; future app code must not expose it.
       root.__COURSE_ENABLE_DEBUG__ = false;
+      integrateModeHelpIntoToolbar();
       if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
       const style = root.document.createElement('style');
       style.id = 'simpleUiNarrowLayoutOverride';
