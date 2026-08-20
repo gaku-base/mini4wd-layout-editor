@@ -53,11 +53,14 @@ test('selected part identity is complete, canonical, and order independent', () 
   );
 });
 
-test('simplified UI selection bridge injects complete selected IDs from diagnostic state', () => {
+test('simplified UI selection bridge keeps complete IDs outside the rewritten selection summary', () => {
   assert.match(WHEEL_SOURCE, /const snapshot = originalGetState\(context\);/);
   assert.match(WHEEL_SOURCE, /canonicalize\(snapshot\?\.selectedIds\)/);
-  assert.match(WHEEL_SOURCE, /data-simple-ui-selection-identity/);
-  assert.match(WHEEL_SOURCE, /selection-ids:\$\{identity\}/);
+  assert.match(WHEEL_SOURCE, /getElementById\('simpleUiSelectionIdentity'\)/);
+  assert.match(WHEEL_SOURCE, /marker\.id = 'simpleUiSelectionIdentity'/);
+  assert.match(WHEEL_SOURCE, /\(root\.document\.body \|\| root\.document\.documentElement\)\.appendChild\(marker\)/);
+  assert.match(WHEEL_SOURCE, /marker\.dataset\.selectedIds = identity/);
+  assert.doesNotMatch(WHEEL_SOURCE, /selectionInfo\.appendChild\(marker\)/);
 });
 
 test('simplified UI keeps a single workspace column at 720px and below', () => {
