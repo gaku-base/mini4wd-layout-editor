@@ -18,6 +18,11 @@ async function main() {
   const page = await context.newPage();
   const pageErrors = [];
   const consoleErrors = [];
+  let stage = 'boot';
+  const mark = name => {
+    stage = name;
+    console.log(`→ rehearsal stage: ${name}`);
+  };
 
   await page.addInitScript(() => {
     Object.defineProperty(window, '__mini4wdCourseDebug', {
@@ -30,10 +35,12 @@ async function main() {
   page.on('dialog', async dialog => dialog.accept());
 
   try {
+    mark('load-app');
     await page.goto(BASE_URL, { waitUntil:'networkidle', timeout:20000 });
     await page.waitForFunction(() => typeof window.__mini4wdCourseDebug?.loadState === 'function', {timeout:TIMEOUT});
     await page.waitForFunction(() => window.M4WD_PRESENTATION?.version === 2 && document.querySelector('#presentationBtn'), {timeout:TIMEOUT});
 
+    mark('load-mixed-layout');
     await page.evaluate(() => {
       const debug = window.__mini4wdCourseDebug;
       const base = debug.getState();
@@ -60,13 +67,23 @@ async function main() {
     await page.waitForFunction(() => !document.querySelector('#setupDialog')?.open, {timeout:TIMEOUT});
 
     const stateBefore = await page.evaluate(() => window.__mini4wdCourseDebug.getState());
+
+    mark('open-grid-presentation');
     await page.locator('#presentationBtn').click();
     await page.locator('#presentationView').waitFor({state:'visible',timeout:TIMEOUT});
-    await page.waitForFunction(() => window.M4WD_PRESENTATION.getDiagnostics()?.render?.courseGridCm === 100, {timeout:TIMEOUT});
+    await page.waitForFunction(() => {
+      const d = window.M4WD_PRESENTATION.getDiagnostics();
+      return d?.background === 'grid' && d?.render?.courseGridCm === 100;
+    }, {timeout:TIMEOUT});
     console.log('✓ presentation view opens with a real 1m Grid on white');
 
+    mark('metadata-and-counts');
     await page.locator('#presentationEventName1').fill('第19回');
     await page.locator('#presentationEventName2').fill('テストミニ四駆大会');
+    await page.waitForFunction(() => {
+      const d = window.M4WD_PRESENTATION.getDiagnostics();
+      return d?.metadata?.eventNameLine1 === '第19回' && d?.metadata?.eventNameLine2 === 'テストミニ四駆大会';
+    }, {timeout:TIMEOUT});
     let diagnostics = await page.evaluate(() => window.M4WD_PRESENTATION.getDiagnostics());
     assert.equal(diagnostics.metadata.eventNameLine1, '第19回');
     assert.equal(diagnostics.metadata.eventNameLine2, 'テストミニ四駆大会');
@@ -79,12 +96,15 @@ async function main() {
     assert.ok(diagnostics.length.totalM > 0);
     console.log('✓ two-line tournament name, optional layouter, counts and total length are correct');
 
+    mark('optional-layouter');
     await page.locator('#presentationLayouter').fill('GAKU');
-    await page.waitForFunction(() => window.M4WD_PRESENTATION.getMetadata().layouterName === 'GAKU');
+    await page.waitForFunction(() => window.M4WD_PRESENTATION.getMetadata().layouterName === 'GAKU', {timeout:TIMEOUT});
     diagnostics = await page.evaluate(() => window.M4WD_PRESENTATION.getDiagnostics());
     assert.equal(diagnostics.metadata.layouterName, 'GAKU');
     console.log('✓ layouter is included only after input');
 
+    mark('part-color-coverage');
+    await page.waitForTimeout(50);
     const colorCoverage = await page.evaluate(() => {
       const canvas = document.querySelector('#presentationCanvas');
       const data = canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
@@ -100,19 +120,32 @@ async function main() {
     for (const [color,count] of Object.entries(colorCoverage)) assert.ok(count > 10, `${color} presentation pixels missing: ${count}`);
     console.log('✓ editor part colors are preserved in the flat presentation plan');
 
+    mark('background-white');
     await page.locator('#presentationBgWhite').click();
-    await page.waitForFunction(() => window.M4WD_PRESENTATION.getDiagnostics().background === 'white');
-    assert.equal((await page.evaluate(() => window.M4WD_PRESENTATION.getDiagnostics())).render.courseGridCm, null);
+    await page.waitForFunction(() => {
+      const d = window.M4WD_PRESENTATION.getDiagnostics();
+      return d?.background === 'white' && d?.render?.courseGridCm === null;
+    }, {timeout:TIMEOUT});
+
+    mark('background-transparent');
     await page.locator('#presentationBgTransparent').click();
+    await page.waitForFunction(() => window.M4WD_PRESENTATION.getDiagnostics()?.background === 'transparent', {timeout:TIMEOUT});
+    await page.waitForTimeout(50);
     const transparentAlpha = await page.evaluate(() => {
       const {canvas} = window.M4WD_PRESENTATION.composeForTest({background:'transparent',width:900,height:636});
       return canvas.getContext('2d').getImageData(0,0,1,1).data[3];
     });
     assert.equal(transparentAlpha, 0, 'transparent output must have real alpha=0 background');
+
+    mark('background-grid');
     await page.locator('#presentationBgGrid').click();
-    await page.waitForFunction(() => window.M4WD_PRESENTATION.getDiagnostics().render.courseGridCm === 100);
+    await page.waitForFunction(() => {
+      const d = window.M4WD_PRESENTATION.getDiagnostics();
+      return d?.background === 'grid' && d?.render?.courseGridCm === 100;
+    }, {timeout:TIMEOUT});
     console.log('✓ Grid / White / Transparent backgrounds switch correctly, including real alpha transparency');
 
+    mark('a4-300dpi-composition');
     const a4 = await page.evaluate(() => {
       const result = window.M4WD_PRESENTATION.composeForTest({background:'grid',orientation:'auto',dpi:300});
       return { width:result.canvas.width, height:result.canvas.height, orientation:result.diagnostics.orientation, gridCm:result.diagnostics.courseDiagnostics.gridCm };
@@ -120,6 +153,7 @@ async function main() {
     assert.deepEqual(a4, {width:3508,height:2480,orientation:'landscape',gridCm:100});
     console.log('✓ high-resolution PNG composition is A4 300dpi and keeps the 1m grid');
 
+    mark('png-download');
     const pngDownloadPromise = page.waitForEvent('download', {timeout:TIMEOUT});
     await page.locator('#presentationPngBtn').click();
     const pngDownload = await pngDownloadPromise;
@@ -128,6 +162,7 @@ async function main() {
     assert.ok(pngPath && fs.statSync(pngPath).size > 20000, 'high-resolution PNG download should contain rendered image data');
     console.log('✓ PNG download completes with a safe tournament-based filename');
 
+    mark('a4-print');
     await page.locator('#presentationOrientationPortrait').click();
     await page.evaluate(() => { window.__presentationPrintCalled = false; window.print = () => { window.__presentationPrintCalled = true; }; });
     await page.locator('#presentationPrintBtn').click();
@@ -142,6 +177,7 @@ async function main() {
     assert.match(printState.image, /^data:image\/png;base64,/);
     console.log('✓ A4 portrait print prepares a one-page image and explicit 10mm page margins');
 
+    mark('json-save-with-presentation-metadata');
     const jsonDownloadPromise = page.waitForEvent('download', {timeout:TIMEOUT});
     await page.locator('#saveBtn').evaluate(button => button.click());
     const jsonDownload = await jsonDownloadPromise;
@@ -151,6 +187,7 @@ async function main() {
     assert.equal(saved.parts.length, stateBefore.parts.length);
     console.log('✓ normal JSON save carries presentation metadata without changing the course schema');
 
+    mark('mobile-390x844');
     await page.setViewportSize({width:390,height:844});
     await page.waitForTimeout(100);
     const mobile = await page.evaluate(() => ({
@@ -165,19 +202,29 @@ async function main() {
     await page.screenshot({path:path.join(ARTIFACT_DIR,'presentation-rehearsal-preview.png'),fullPage:true});
     console.log('✓ presentation view remains usable at iPhone-class viewport width');
 
+    mark('return-to-editor-state-integrity');
     await page.locator('#presentationBackBtn').click();
     await page.locator('#presentationView').waitFor({state:'hidden',timeout:TIMEOUT});
     const stateAfter = await page.evaluate(() => window.__mini4wdCourseDebug.getState());
     assert.deepEqual(stateAfter, stateBefore, 'presentation workflow must not mutate editor state or Undo/Redo snapshots');
     console.log('✓ returning to edit preserves the complete editor state');
 
+    mark('error-free-finish');
     assert.deepEqual(pageErrors, [], `page errors:\n${pageErrors.join('\n')}`);
     assert.deepEqual(consoleErrors, [], `console errors:\n${consoleErrors.join('\n')}`);
     await page.screenshot({path:path.join(ARTIFACT_DIR,'presentation-rehearsal-success.png'),fullPage:true});
+    fs.writeFileSync(path.join(ARTIFACT_DIR,'presentation-rehearsal-result.txt'), 'ALL GREEN\n', 'utf8');
     console.log('Presentation mode full rehearsal passed: ALL GREEN.');
   } catch (error) {
     const screenshot = path.join(ARTIFACT_DIR,'presentation-rehearsal-failure.png');
     try { await page.screenshot({path:screenshot,fullPage:true}); } catch (_) {}
+    const report = [
+      `stage=${stage}`,
+      error?.stack || String(error),
+      pageErrors.length ? `\nPage errors:\n${pageErrors.join('\n')}` : '',
+      consoleErrors.length ? `\nConsole errors:\n${consoleErrors.join('\n')}` : ''
+    ].join('\n');
+    fs.writeFileSync(path.join(ARTIFACT_DIR,'presentation-rehearsal-error.txt'), report, 'utf8');
     if (pageErrors.length) console.error(`Page errors:\n${pageErrors.join('\n')}`);
     if (consoleErrors.length) console.error(`Console errors:\n${consoleErrors.join('\n')}`);
     throw error;
