@@ -123,7 +123,7 @@
     const strokeWidth = Number(lineWidth);
     if (![width, height, x, y, sourceWidth, sourceHeight, rotation, strokeWidth].every(Number.isFinite)
         || width <= 0 || height <= 0 || sourceWidth < 0 || sourceHeight < 0 || strokeWidth < 0) return null;
-    const padding = strokeWidth;
+    const padding = strokeWidth / 2;
     return {
       center: { x: x + sourceWidth / 2, y: y + sourceHeight / 2 },
       rotationDeg: normalizeAngle(rotation),
@@ -146,7 +146,32 @@
       && Math.abs(sourceHeight - expected.h) <= tolerance;
   }
 
-  function shouldReplaceStartGuideStroke(context, documentValue, startDefinition, sourceRect) {
+  function sourceRectIsPhysicalStartBody(definition, sourceRect, epsilon = 1e-6) {
+    const width = Number(definition?.w);
+    const height = Number(definition?.h);
+    const x = Number(sourceRect?.x);
+    const y = Number(sourceRect?.y);
+    const sourceWidth = Number(sourceRect?.w);
+    const sourceHeight = Number(sourceRect?.h);
+    const tolerance = Number(epsilon);
+    if (![width, height, x, y, sourceWidth, sourceHeight, tolerance].every(Number.isFinite)
+        || width <= 0 || height <= 0 || tolerance < 0) return false;
+    return Math.abs(x + width / 2) <= tolerance
+      && Math.abs(y + height / 2) <= tolerance
+      && Math.abs(sourceWidth - width) <= tolerance
+      && Math.abs(sourceHeight - height) <= tolerance;
+  }
+
+  function isPhysicalStartBodyStroke(context, startDefinition, sourceRect) {
+    if (!context || context.canvas?.id !== 'courseCanvas') return false;
+    if (!context.canvas.classList?.contains?.('mode-start-position')) return false;
+    const dash = typeof context.getLineDash === 'function' ? context.getLineDash() : [];
+    if (Array.isArray(dash) && dash.length !== 0) return false;
+    return sourceRectIsPhysicalStartBody(startDefinition, sourceRect);
+  }
+
+  function shouldReplaceStartGuideStroke(context, documentValue, startDefinition, sourceRect, pendingStartGuide = false) {
+    if (!pendingStartGuide) return false;
     if (!context || context.canvas?.id !== 'courseCanvas') return false;
     if (!context.canvas.classList?.contains?.('mode-start-position')) return false;
     const dash = typeof context.getLineDash === 'function' ? context.getLineDash() : [];
@@ -162,6 +187,7 @@
     if (!prototype || typeof prototype.strokeRect !== 'function') return false;
     if (prototype.__m4wdStartOutlineGuideInstalled) return true;
     const originalStrokeRect = prototype.strokeRect;
+    const pendingStartGuideContexts = new WeakSet();
     Object.defineProperty(prototype, '__m4wdStartOutlineGuideInstalled', {
       configurable: true,
       value: true
@@ -170,7 +196,13 @@
       const documentValue = root.document;
       const startDefinition = root.M4WD_PART_CATALOG?.PARTS?.start;
       const sourceRect = { x, y, w, h };
-      if (shouldReplaceStartGuideStroke(this, documentValue, startDefinition, sourceRect)) {
+      if (isPhysicalStartBodyStroke(this, startDefinition, sourceRect)) {
+        pendingStartGuideContexts.add(this);
+        return originalStrokeRect.call(this, x, y, w, h);
+      }
+      const pendingStartGuide = pendingStartGuideContexts.has(this);
+      if (pendingStartGuide) pendingStartGuideContexts.delete(this);
+      if (shouldReplaceStartGuideStroke(this, documentValue, startDefinition, sourceRect, pendingStartGuide)) {
         const geometry = startOutlineGuideGeometry(
           startDefinition,
           sourceRect,
@@ -203,6 +235,8 @@
     rotatedRectSize,
     startOutlineGuideGeometry,
     sourceRectMatchesRotatedStart,
+    sourceRectIsPhysicalStartBody,
+    isPhysicalStartBodyStroke,
     shouldReplaceStartGuideStroke,
     installStartPlacementOutlineGuide
   });
