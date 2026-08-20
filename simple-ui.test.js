@@ -66,6 +66,18 @@ test('pointInsideElement uses viewport coordinates for toolbar trash hit testing
   assert.equal(UI.pointInsideElement({ clientX: 9, clientY: 40 }, element), false);
 });
 
+test('trash drag preserves a multi-selection when pointerdown collapses to one selected member', () => {
+  assert.deepEqual(UI.resolveTrashDragIds(['start', 'part-a', 'part-b'], ['part-a']), ['start', 'part-a', 'part-b']);
+  assert.deepEqual(UI.resolveTrashDragIds(['start', 'part-a', 'part-b'], ['outside']), ['outside']);
+  assert.deepEqual(UI.resolveTrashDragIds(['part-a'], ['part-a']), ['part-a']);
+  assert.deepEqual(UI.resolveTrashDragIds([], ['part-a']), ['part-a']);
+});
+
+test('trash drag ID resolution normalizes duplicates and empty values safely', () => {
+  assert.deepEqual(UI.resolveTrashDragIds([' part-a ', 'part-a', '', null], ['part-a']), ['part-a']);
+  assert.deepEqual(UI.resolveTrashDragIds(['part-a', 'part-b'], [' part-b ']), ['part-a', 'part-b']);
+});
+
 test('compact status keeps diagnostic values available as secondary detail fields', () => {
   const ids = UI.SECONDARY_STATUS_IDS.map(([id]) => id);
   assert.deepEqual(ids, [
@@ -115,6 +127,8 @@ test('course-part trash bridge rolls back an in-progress move before one-step de
   assert.match(SOURCE, /function installCoursePartTrashBridge/);
   assert.match(SOURCE, /documentRef\.addEventListener\('pointerup',[\s\S]*true\);/);
   assert.match(SOURCE, /historyLength:\s*Number\(runtime\.historyLength\) \|\| 0/);
+  assert.match(SOURCE, /selectedIdsBefore:\s*Array\.isArray\(runtime\.selectedIds\)/);
+  assert.match(SOURCE, /resolveTrashDragIds\(pendingDrag\.selectedIdsBefore, after\?\.selectedIds\)/);
   assert.match(SOURCE, /new rootRef\.KeyboardEvent\('keydown',[\s\S]*ctrlKey:\s*true/);
   assert.match(SOURCE, /debug\.setSelectedIds\(drag\.ids\)/);
   assert.match(SOURCE, /debug\.deleteParts\(drag\.ids\)/);
