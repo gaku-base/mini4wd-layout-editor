@@ -188,6 +188,12 @@ async function main() {
     );
     logStep('one Undo restores the exact pre-drag X/Y coordinates');
 
+    // Deleting Start intentionally switches the editor to placement mode.
+    // Undo restores layout/history state, not the user's active tool, so start
+    // the independent multi-trash scenario by explicitly re-entering move mode.
+    await page.keyboard.press('q');
+    await page.waitForFunction(() => /パーツ移動/.test(document.querySelector('#statusMode')?.textContent || ''), { timeout: TIMEOUT });
+
     const beforeMultiTrash = await readCurrentLayout(page);
     assert.ok(beforeMultiTrash?.start && beforeMultiTrash?.parts?.length === 2);
     const beforeMultiCoordinates = coordinateSnapshot(beforeMultiTrash);
