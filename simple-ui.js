@@ -29,6 +29,21 @@
     return Number.isFinite(count) && count > 0 ? count : 0;
   }
 
+  function normalizeContextIdentity(value) {
+    return String(value ?? '').replace(/\s+/g, ' ').trim();
+  }
+
+  function buildContextSignature({ selectionCount = 0, obstacleActive = false, selectionIdentity = '', obstacleIdentity = '' } = {}) {
+    const count = parseSelectionCount(selectionCount);
+    const obstacle = Boolean(obstacleActive);
+    return [
+      count,
+      obstacle ? 1 : 0,
+      normalizeContextIdentity(selectionIdentity),
+      obstacle ? normalizeContextIdentity(obstacleIdentity) : ''
+    ].join('|');
+  }
+
   function computeDrawerState({ manualOpen = false, contextActive = false, contextSuppressed = false } = {}) {
     const autoOpen = Boolean(contextActive && !contextSuppressed);
     const open = Boolean(manualOpen || autoOpen);
@@ -41,10 +56,12 @@
     const workspace = documentRef.querySelector('.workspace-shell');
     const drawer = documentRef.querySelector('.right-sidebar');
     const canvasToolbar = documentRef.getElementById('canvasToolbar');
+    const courseCanvas = documentRef.getElementById('courseCanvas');
     const statusBar = documentRef.getElementById('statusBar');
     const selectionInfo = documentRef.getElementById('selectionInfo');
     const selectionPanel = documentRef.querySelector('.selection-panel');
     const obstaclePanel = documentRef.getElementById('obstacleEditorPanel');
+    const obstacleNameInput = documentRef.getElementById('obstacleNameInput');
     const statusSelected = documentRef.getElementById('statusSelected');
     if (!body || !workspace || !drawer || !canvasToolbar || !statusBar || !statusSelected) return false;
 
@@ -113,8 +130,7 @@
         grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
       }
       body.simple-ui-enabled .statusbar > .simple-status-secondary { display: none !important; }
-      body.simple-ui-enabled .simple-toolbar-more { position: relative; }
-      body.simple-ui-enabled .simple-toolbar-more > summary {
+      body.simple-ui-enabled .simple-toolbar-more-trigger {
         height: 32px;
         min-width: 34px;
         padding: 0 10px;
@@ -123,17 +139,18 @@
         border: 1px solid var(--line);
         border-radius: 7px;
         background: var(--panel);
+        color: var(--text);
         cursor: pointer;
-        list-style: none;
         font-size: 18px;
         line-height: 1;
       }
-      body.simple-ui-enabled .simple-toolbar-more > summary::-webkit-details-marker { display: none; }
+      body.simple-ui-enabled .simple-toolbar-more-trigger[aria-expanded="true"] {
+        border-color: var(--accent);
+        background: #1b2a36;
+      }
       body.simple-ui-enabled .simple-toolbar-more-menu {
-        position: absolute;
-        z-index: 40;
-        top: calc(100% + 7px);
-        right: 0;
+        position: fixed;
+        z-index: 60;
         width: 210px;
         padding: 8px;
         display: grid;
@@ -143,6 +160,7 @@
         background: #111922;
         box-shadow: var(--shadow);
       }
+      body.simple-ui-enabled .simple-toolbar-more-menu[hidden] { display: none !important; }
       body.simple-ui-enabled .simple-toolbar-more-menu .toolbar-button {
         width: 100%;
         height: 34px;
@@ -233,20 +251,27 @@
     detailsToggleBtn.setAttribute('aria-expanded', 'false');
     drawer.id = drawer.id || 'simpleEditorDrawer';
 
-    const toolbarMore = documentRef.createElement('details');
-    toolbarMore.className = 'simple-toolbar-more';
-    const toolbarMoreSummary = documentRef.createElement('summary');
-    toolbarMoreSummary.setAttribute('aria-label', 'その他の表示操作');
-    toolbarMoreSummary.title = 'その他の表示操作';
-    toolbarMoreSummary.textContent = '⋯';
+    const toolbarMoreTrigger = documentRef.createElement('button');
+    toolbarMoreTrigger.id = 'simpleToolbarMoreBtn';
+    toolbarMoreTrigger.className = 'simple-toolbar-more-trigger';
+    toolbarMoreTrigger.type = 'button';
+    toolbarMoreTrigger.setAttribute('aria-label', 'その他の表示操作');
+    toolbarMoreTrigger.setAttribute('aria-controls', 'simpleToolbarMoreMenu');
+    toolbarMoreTrigger.setAttribute('aria-expanded', 'false');
+    toolbarMoreTrigger.textContent = '⋯';
+
     const toolbarMoreMenu = documentRef.createElement('div');
+    toolbarMoreMenu.id = 'simpleToolbarMoreMenu';
     toolbarMoreMenu.className = 'simple-toolbar-more-menu';
-    toolbarMore.append(toolbarMoreSummary, toolbarMoreMenu);
+    toolbarMoreMenu.hidden = true;
+    toolbarMoreMenu.setAttribute('role', 'group');
+    toolbarMoreMenu.setAttribute('aria-label', 'その他の表示操作');
     for (const id of SECONDARY_TOOLBAR_IDS) {
       const button = documentRef.getElementById(id);
       if (button) toolbarMoreMenu.appendChild(button);
     }
-    rightToolbarGroup.append(detailsToggleBtn, toolbarMore);
+    rightToolbarGroup.append(detailsToggleBtn, toolbarMoreTrigger);
+    documentRef.body.appendChild(toolbarMoreMenu);
 
     let manualOpen = false;
     let contextSuppressed = false;
@@ -255,11 +280,13 @@
     function contextSnapshot() {
       const selectionCount = parseSelectionCount(statusSelected.textContent);
       const obstacleActive = Boolean(obstaclePanel && !obstaclePanel.hidden);
+      const selectionIdentity = normalizeContextIdentity(selectionInfo?.textContent || '');
+      const obstacleIdentity = obstacleActive ? normalizeContextIdentity(obstacleNameInput?.value || '') : '';
       return {
         selectionCount,
         obstacleActive,
         active: selectionCount > 0 || obstacleActive,
-        signature: `${selectionCount}:${obstacleActive ? 1 : 0}`
+        signature: buildContextSignature({ selectionCount, obstacleActive, selectionIdentity, obstacleIdentity })
       };
     }
 
@@ -288,6 +315,29 @@
       return state;
     }
 
+    function positionToolbarMoreMenu() {
+      if (toolbarMoreMenu.hidden || !rootRef) return;
+      const rect = toolbarMoreTrigger.getBoundingClientRect();
+      const viewportWidth = Number(rootRef.innerWidth) || documentRef.documentElement.clientWidth || 0;
+      const viewportHeight = Number(rootRef.innerHeight) || documentRef.documentElement.clientHeight || 0;
+      const menuWidth = toolbarMoreMenu.offsetWidth || 210;
+      const menuHeight = toolbarMoreMenu.offsetHeight || 160;
+      const left = Math.max(8, Math.min(rect.right - menuWidth, viewportWidth - menuWidth - 8));
+      const preferredTop = rect.bottom + 7;
+      const top = preferredTop + menuHeight <= viewportHeight - 8
+        ? preferredTop
+        : Math.max(8, rect.top - menuHeight - 7);
+      toolbarMoreMenu.style.left = `${left}px`;
+      toolbarMoreMenu.style.top = `${top}px`;
+    }
+
+    function setToolbarMoreOpen(open) {
+      const nextOpen = Boolean(open);
+      toolbarMoreMenu.hidden = !nextOpen;
+      toolbarMoreTrigger.setAttribute('aria-expanded', String(nextOpen));
+      if (nextOpen) positionToolbarMoreMenu();
+    }
+
     detailsToggleBtn.addEventListener('click', () => {
       const current = computeDrawerState({ manualOpen, contextActive: contextSnapshot().active, contextSuppressed });
       if (!current.open || current.contextOnly) {
@@ -306,14 +356,37 @@
       renderDrawer({ allowContextReset: false });
     });
 
+    toolbarMoreTrigger.addEventListener('click', event => {
+      event.stopPropagation();
+      setToolbarMoreOpen(toolbarMoreMenu.hidden);
+    });
     toolbarMoreMenu.addEventListener('click', event => {
-      if (event.target?.closest?.('button')) toolbarMore.open = false;
+      if (event.target?.closest?.('button')) setToolbarMoreOpen(false);
+    });
+    documentRef.addEventListener('click', event => {
+      if (!toolbarMoreMenu.hidden && !toolbarMoreMenu.contains(event.target) && event.target !== toolbarMoreTrigger) {
+        setToolbarMoreOpen(false);
+      }
+    });
+    documentRef.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !toolbarMoreMenu.hidden) setToolbarMoreOpen(false);
+    });
+    canvasToolbar.addEventListener('scroll', () => setToolbarMoreOpen(false), { passive: true });
+    rootRef?.addEventListener?.('resize', () => {
+      if (!toolbarMoreMenu.hidden) positionToolbarMoreMenu();
     });
 
     const contextObserver = new MutationObserver(() => renderDrawer());
     contextObserver.observe(statusSelected, { childList: true, subtree: true, characterData: true });
     if (selectionInfo) contextObserver.observe(selectionInfo, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
     if (obstaclePanel) contextObserver.observe(obstaclePanel, { attributes: true, attributeFilter: ['hidden'] });
+
+    const scheduleContextRefresh = () => {
+      if (rootRef?.setTimeout) rootRef.setTimeout(() => renderDrawer(), 0);
+      else renderDrawer();
+    };
+    courseCanvas?.addEventListener?.('pointerup', scheduleContextRefresh);
+    documentRef.addEventListener('click', scheduleContextRefresh);
 
     const statusObserver = new MutationObserver(refreshStatusMirrors);
     statusObserver.observe(statusBar, { childList: true, subtree: true, characterData: true });
@@ -331,5 +404,13 @@
     return true;
   }
 
-  return Object.freeze({ SECONDARY_STATUS_IDS, SECONDARY_TOOLBAR_IDS, parseSelectionCount, computeDrawerState, install });
+  return Object.freeze({
+    SECONDARY_STATUS_IDS,
+    SECONDARY_TOOLBAR_IDS,
+    parseSelectionCount,
+    normalizeContextIdentity,
+    buildContextSignature,
+    computeDrawerState,
+    install
+  });
 });
