@@ -58,6 +58,16 @@
       && event.clientY >= rect.top && event.clientY <= rect.bottom;
   }
 
+  function resolveTrashDragIds(beforeIds, afterIds) {
+    const normalizeIds = value => Array.isArray(value)
+      ? [...new Set(value.map(id => String(id ?? '').trim()).filter(Boolean))]
+      : [];
+    const before = normalizeIds(beforeIds);
+    const after = normalizeIds(afterIds);
+    if (before.length > 1 && after.length === 1 && before.includes(after[0])) return before;
+    return after;
+  }
+
   // app.js keeps its editing state private. For production we borrow the
   // existing QA bridge only long enough to wire course-part drag-to-trash,
   // then remove the public debug handle again. The bridge rolls an in-progress
@@ -115,14 +125,15 @@
         pendingDrag = {
           pointerId: event.pointerId,
           historyLength: Number(runtime.historyLength) || 0,
-          layout
+          layout,
+          selectedIdsBefore: Array.isArray(runtime.selectedIds) ? [...runtime.selectedIds] : []
         };
         if (!rootRef.setTimeout) return;
         rootRef.setTimeout(() => {
           if (!pendingDrag || pendingDrag.pointerId !== event.pointerId) return;
           let after;
           try { after = debug.getRuntimeState(); } catch (_) { pendingDrag = null; return; }
-          const ids = Array.isArray(after?.selectedIds) ? [...after.selectedIds] : [];
+          const ids = resolveTrashDragIds(pendingDrag.selectedIdsBefore, after?.selectedIds);
           if (after?.mode !== 'move' || !ids.length) {
             pendingDrag = null;
             return;
@@ -572,6 +583,7 @@
     buildContextSignature,
     computeDrawerState,
     pointInsideElement,
+    resolveTrashDragIds,
     install
   });
 });
