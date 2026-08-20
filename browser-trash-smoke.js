@@ -35,6 +35,33 @@ async function readCurrentLayout(page) {
   });
 }
 
+async function readSelectedIds(page) {
+  return page.evaluate(() => {
+    const raw = document.querySelector('#simpleUiSelectionIdentity')?.dataset.selectedIds || '[]';
+    try {
+      const ids = JSON.parse(raw);
+      return Array.isArray(ids) ? ids : [];
+    } catch (_) {
+      return [];
+    }
+  });
+}
+
+async function waitSelectedIds(page, expectedIds) {
+  const expected = [...expectedIds].map(String).sort();
+  await page.waitForFunction(expectedSelection => {
+    const raw = document.querySelector('#simpleUiSelectionIdentity')?.dataset.selectedIds || '[]';
+    try {
+      const actual = JSON.parse(raw);
+      if (!Array.isArray(actual)) return false;
+      return JSON.stringify([...actual].map(String).sort()) === JSON.stringify(expectedSelection);
+    } catch (_) {
+      return false;
+    }
+  }, expected, { timeout: TIMEOUT });
+  assert.deepEqual((await readSelectedIds(page)).map(String).sort(), expected);
+}
+
 function fitViewScreenPoint(canvasBox, field, point) {
   const margin = 42;
   const widthCm = Number(field?.widthCm) || 1;
@@ -72,6 +99,18 @@ async function dragPointToTrash(page, from, trashBox) {
     trashBox.x + trashBox.width / 2,
     trashBox.y + trashBox.height / 2,
     { steps: 8 }
+  );
+  await page.mouse.up();
+}
+
+async function marqueeSelectWholeCanvas(page, canvasBox) {
+  const inset = 8;
+  await page.mouse.move(canvasBox.x + inset, canvasBox.y + inset);
+  await page.mouse.down();
+  await page.mouse.move(
+    canvasBox.x + canvasBox.width - inset,
+    canvasBox.y + canvasBox.height - inset,
+    { steps: 12 }
   );
   await page.mouse.up();
 }
@@ -172,33 +211,34 @@ async function main() {
     const beforeMultiCoordinates = coordinateSnapshot(beforeMultiTrash);
     const multiCanvasBox = await canvas.boundingBox();
     assert.ok(multiCanvasBox);
-    const firstPartPoint = fitViewScreenPoint(multiCanvasBox, beforeMultiTrash.field, beforeMultiTrash.parts[0]);
-    const secondPartPoint = fitViewScreenPoint(multiCanvasBox, beforeMultiTrash.field, beforeMultiTrash.parts[1]);
+    const expectedSelectedIds = [
+      beforeMultiTrash.start.id,
+      ...beforeMultiTrash.parts.map(part => part.id)
+    ].map(String).sort();
 
-    await page.mouse.click(firstPartPoint.x, firstPartPoint.y);
-    await page.keyboard.down('Shift');
-    await page.mouse.click(secondPartPoint.x, secondPartPoint.y);
-    await page.keyboard.up('Shift');
-    await page.waitForFunction(() => /2個選択/.test(document.querySelector('#selectionInfo')?.textContent || ''), { timeout: TIMEOUT });
-    logStep('two regular course parts can be selected together in move mode');
+    await marqueeSelectWholeCanvas(page, multiCanvasBox);
+    await waitSelectedIds(page, expectedSelectedIds);
+    logStep('Start and both regular parts can be marquee-selected together in move mode');
 
-    await dragPointToTrash(page, firstPartPoint, trashBox);
-    await waitStatusCount(page, 1);
+    const selectedStartPoint = fitViewScreenPoint(multiCanvasBox, beforeMultiTrash.field, beforeMultiTrash.start);
+    await dragPointToTrash(page, selectedStartPoint, trashBox);
+    await waitStatusCount(page, 0);
     const afterMultiDelete = await readCurrentLayout(page);
-    assert.ok(afterMultiDelete?.start, 'Start must remain after deleting the selected regular parts');
-    assert.equal(afterMultiDelete?.parts?.length, 0, 'both selected regular parts must be deleted together');
-    logStep('dragging either selected part to trash deletes the full two-part selection');
+    assert.equal(afterMultiDelete?.start, null, 'selected Start must be deleted with the selection');
+    assert.equal(afterMultiDelete?.parts?.length, 0, 'both selected regular parts must be deleted with the selection');
+    logStep('dragging one selected object to trash deletes the full three-object selection');
 
     await page.locator('#undoBtn').click();
     await waitStatusCount(page, 3);
     const afterMultiUndo = await readCurrentLayout(page);
-    assert.equal(afterMultiUndo?.parts?.length, 2);
+    assert.ok(afterMultiUndo?.start, 'Start must be restored by one Undo');
+    assert.equal(afterMultiUndo?.parts?.length, 2, 'both regular parts must be restored by one Undo');
     assert.deepEqual(
       coordinateSnapshot(afterMultiUndo),
       beforeMultiCoordinates,
-      'one Undo after multi-selection trash must restore all deleted parts at exact coordinates'
+      'one Undo after multi-selection trash must restore every selected object at exact coordinates'
     );
-    logStep('one Undo restores both deleted parts at their exact original coordinates');
+    logStep('one Undo restores the full multi-selection at exact original coordinates');
 
     assert.deepEqual(pageErrors, [], `page errors:\n${pageErrors.join('\n')}`);
     assert.deepEqual(consoleErrors, [], `console errors:\n${consoleErrors.join('\n')}`);
