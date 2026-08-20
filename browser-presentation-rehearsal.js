@@ -54,7 +54,10 @@ async function main() {
         ],
         connections:[], activeConnection:null, selectedType:'straight', rotation:0
       });
+      const setupDialog = document.querySelector('#setupDialog');
+      if (setupDialog?.open) setupDialog.close();
     });
+    await page.waitForFunction(() => !document.querySelector('#setupDialog')?.open, {timeout:TIMEOUT});
 
     const stateBefore = await page.evaluate(() => window.__mini4wdCourseDebug.getState());
     await page.locator('#presentationBtn').click();
@@ -158,6 +161,8 @@ async function main() {
     assert.equal(mobile.viewVisible,true);
     assert.ok(mobile.scrollWidth <= mobile.innerWidth + 2, `mobile presentation must not overflow page: ${JSON.stringify(mobile)}`);
     await page.setViewportSize({width:1600,height:1000});
+    await page.waitForTimeout(100);
+    await page.screenshot({path:path.join(ARTIFACT_DIR,'presentation-rehearsal-preview.png'),fullPage:true});
     console.log('✓ presentation view remains usable at iPhone-class viewport width');
 
     await page.locator('#presentationBackBtn').click();
