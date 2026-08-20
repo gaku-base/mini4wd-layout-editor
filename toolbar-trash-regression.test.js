@@ -29,9 +29,10 @@ test('course-part drop on trash consumes normal move pointerup and keeps one-ste
   assert.match(ui, /PointerEvent\('pointercancel'/);
 });
 
-test('private production bridge is cache-busted and does not leave debug mode enabled', () => {
-  assert.match(wheel, /exposeCoursePartTrashBridgeApiOnce/);
-  assert.match(wheel, /value: false/);
+test('private production bridge is cache-busted and debug mode is turned back off', () => {
+  assert.match(wheel, /exposeCoursePartTrashBridgeApi/);
+  assert.match(wheel, /root\.__COURSE_ENABLE_DEBUG__ = true/);
+  assert.match(wheel, /root\.__COURSE_ENABLE_DEBUG__ = false/);
   assert.match(wheel, /simple-ui\.js\?v=v1\.1-rc4-20260820-toolbar-trash1/);
   assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc4-20260820-toolbar-trash1/);
 });
