@@ -81,6 +81,21 @@ test('simplified UI keeps a single workspace column at 720px and below', () => {
   assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*simpleUiNarrowLayoutOverride/);
 });
 
+test('mode instruction is integrated into the canvas toolbar instead of floating over the course', () => {
+  assert.match(WHEEL_SOURCE, /function integrateModeHelpIntoToolbar\(\)/);
+  assert.match(WHEEL_SOURCE, /getElementById\('canvasToolbar'\)/);
+  assert.match(WHEEL_SOURCE, /getElementById\('instruction'\)/);
+  assert.match(WHEEL_SOURCE, /toolbar\.insertBefore\(instruction, rightGroup\)/);
+  assert.match(WHEEL_SOURCE, /instruction\.classList\.add\('toolbar-mode-help'\)/);
+  assert.match(WHEEL_SOURCE, /\.canvas-toolbar \.toolbar-mode-help \{[\s\S]*position:\s*static !important;/);
+  assert.match(WHEEL_SOURCE, /background:\s*transparent !important;/);
+  assert.match(WHEEL_SOURCE, /box-shadow:\s*none !important;/);
+  assert.match(WHEEL_SOURCE, /flex-direction:\s*row;/);
+  assert.match(WHEEL_SOURCE, /text-overflow:\s*ellipsis;/);
+  assert.match(WHEEL_SOURCE, /is-sub-edit-active/);
+  assert.match(WHEEL_SOURCE, /integrateModeHelpIntoToolbar\(\);/);
+});
+
 test('sub-edit bar suppresses the overlapping instruction card', () => {
   const index = fs.readFileSync('index.html', 'utf8');
   assert.match(
