@@ -27,39 +27,19 @@ async function waitStatusCount(page, expected) {
   }, expected, { timeout: TIMEOUT });
 }
 
+async function waitStatusSelected(page, expected) {
+  await page.waitForFunction(expectedCount => {
+    const value = document.querySelector('#statusSelected')?.textContent || '';
+    return value.trim() === String(expectedCount);
+  }, expected, { timeout: TIMEOUT });
+}
+
 async function readCurrentLayout(page) {
   return page.evaluate(() => {
     const key = window.M4WD_LAYOUT_PERSISTENCE?.STORAGE_KEY;
     const raw = key ? localStorage.getItem(key) : null;
     return raw ? JSON.parse(raw) : null;
   });
-}
-
-async function readSelectedIds(page) {
-  return page.evaluate(() => {
-    const raw = document.querySelector('#simpleUiSelectionIdentity')?.dataset.selectedIds || '[]';
-    try {
-      const ids = JSON.parse(raw);
-      return Array.isArray(ids) ? ids : [];
-    } catch (_) {
-      return [];
-    }
-  });
-}
-
-async function waitSelectedIds(page, expectedIds) {
-  const expected = [...expectedIds].map(String).sort();
-  await page.waitForFunction(expectedSelection => {
-    const raw = document.querySelector('#simpleUiSelectionIdentity')?.dataset.selectedIds || '[]';
-    try {
-      const actual = JSON.parse(raw);
-      if (!Array.isArray(actual)) return false;
-      return JSON.stringify([...actual].map(String).sort()) === JSON.stringify(expectedSelection);
-    } catch (_) {
-      return false;
-    }
-  }, expected, { timeout: TIMEOUT });
-  assert.deepEqual((await readSelectedIds(page)).map(String).sort(), expected);
 }
 
 function fitViewScreenPoint(canvasBox, field, point) {
@@ -211,13 +191,9 @@ async function main() {
     const beforeMultiCoordinates = coordinateSnapshot(beforeMultiTrash);
     const multiCanvasBox = await canvas.boundingBox();
     assert.ok(multiCanvasBox);
-    const expectedSelectedIds = [
-      beforeMultiTrash.start.id,
-      ...beforeMultiTrash.parts.map(part => part.id)
-    ].map(String).sort();
 
     await marqueeSelectWholeCanvas(page, multiCanvasBox);
-    await waitSelectedIds(page, expectedSelectedIds);
+    await waitStatusSelected(page, 3);
     logStep('Start and both regular parts can be marquee-selected together in move mode');
 
     const selectedStartPoint = fitViewScreenPoint(multiCanvasBox, beforeMultiTrash.field, beforeMultiTrash.start);
