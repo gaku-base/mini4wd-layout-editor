@@ -23,9 +23,6 @@
     return Object.freeze(ids);
   }
 
-  // Line/page events and sufficiently large pixel events are physical wheel
-  // notches: each must rotate immediately, even when they arrive rapidly.
-  // Only fine-grained pixel input uses accumulation and inertia suppression.
   function createWheelRotationAccumulator(threshold = 30, cooldownMs = 100, pixelNotchMin = PIXEL_NOTCH_MIN) {
     let accumulated = 0;
     let lastTrackpadRotationAt = -Infinity;
@@ -114,10 +111,6 @@
   'use strict';
   if (!root || !root.document || /test-index\.html$/.test(String(root.location?.pathname || ''))) return;
   if (Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) return;
-
-  // app.js exposes the small editing API required by the toolbar trash bridge,
-  // marquee preview and Start replacement snap helper only when this flag is
-  // true. Keep it enabled until every helper has captured the handle.
   root.__COURSE_ENABLE_DEBUG__ = true;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
@@ -230,9 +223,6 @@
     script.async = false;
     script.dataset.m4wdSimpleUi = '1';
     script.addEventListener('load', () => {
-      // app.js has already executed before DOMContentLoaded. The private bridge
-      // has now been captured by all helper modules; future app code must not
-      // expose it.
       root.__COURSE_ENABLE_DEBUG__ = false;
       integrateModeHelpIntoToolbar();
       if (root.document.getElementById('simpleUiNarrowLayoutOverride')) return;
@@ -248,9 +238,43 @@
     root.document.head.appendChild(script);
   };
 
+  const loadPresentationMode = () => {
+    const resources = [
+      ['presentation-data.js?v=20260821-presentation1', 'm4wdPresentationData'],
+      ['presentation-renderer.js?v=20260821-presentation1', 'm4wdPresentationRenderer'],
+      ['presentation-export.js?v=20260821-presentation1', 'm4wdPresentationExport'],
+      ['presentation-mode.js?v=20260821-presentation1', 'm4wdPresentationMode']
+    ];
+    const loadAt = index => {
+      if (index >= resources.length) {
+        loadSimpleUi();
+        return;
+      }
+      const [src, key] = resources[index];
+      if (root.document.querySelector(`script[data-${key}="1"]`)) {
+        loadAt(index + 1);
+        return;
+      }
+      const script = root.document.createElement('script');
+      script.src = src;
+      script.async = false;
+      script.dataset[key] = '1';
+      let continued = false;
+      const continueBoot = () => {
+        if (continued) return;
+        continued = true;
+        loadAt(index + 1);
+      };
+      script.addEventListener('load', continueBoot, { once:true });
+      script.addEventListener('error', continueBoot, { once:true });
+      root.document.head.appendChild(script);
+    };
+    loadAt(0);
+  };
+
   const loadMarqueePreview = () => {
     if (root.document.querySelector('script[data-m4wd-marquee-preview="1"]')) {
-      loadSimpleUi();
+      loadPresentationMode();
       return;
     }
     const script = root.document.createElement('script');
@@ -261,7 +285,7 @@
     const continueBoot = () => {
       if (continued) return;
       continued = true;
-      loadSimpleUi();
+      loadPresentationMode();
     };
     script.addEventListener('load', continueBoot, { once: true });
     script.addEventListener('error', continueBoot, { once: true });
@@ -288,10 +312,6 @@
     root.document.head.appendChild(script);
   };
 
-  // app.js is the parser-blocking script immediately after wheel-rotation.js.
-  // Loading helpers only after DOMContentLoaded guarantees app.js has exposed
-  // the private bridge. Start replacement snap captures it first, then marquee
-  // preview, then simple-ui hides the public handle again.
   if (root.document.readyState === 'loading') {
     root.document.addEventListener('DOMContentLoaded', loadStartReplacementSnap, { once: true });
   } else {
