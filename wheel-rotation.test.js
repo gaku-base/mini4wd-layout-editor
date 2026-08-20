@@ -72,9 +72,10 @@ test('simplified UI keeps a single workspace column at 720px and below', () => {
 });
 
 test('sub-edit bar suppresses the overlapping instruction card', () => {
+  const index = fs.readFileSync('index.html', 'utf8');
   assert.match(
-    WHEEL_SOURCE,
-    /body\.simple-ui-enabled #subEditModeBar:not\(\[hidden\]\) ~ \.instruction-card \{ display: none !important; \}/
+    index,
+    /#subEditModeBar:not\(\[hidden\]\) ~ \.instruction-card \{ display: none !important; \}/
   );
 });
 
