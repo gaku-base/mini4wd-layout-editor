@@ -63,12 +63,11 @@ test('simplified UI selection bridge keeps complete IDs outside the rewritten se
   assert.doesNotMatch(WHEEL_SOURCE, /selectionInfo\.appendChild\(marker\)/);
 });
 
-test('toolbar trash bridge gets a one-read QA API without leaving debug mode enabled', () => {
-  assert.match(WHEEL_SOURCE, /function exposeCoursePartTrashBridgeApiOnce/);
-  assert.match(WHEEL_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
-  assert.match(WHEEL_SOURCE, /let firstRead = true/);
-  assert.match(WHEEL_SOURCE, /firstRead = false/);
-  assert.match(WHEEL_SOURCE, /value: false/);
+test('toolbar trash bridge enables the QA API only through synchronous app boot', () => {
+  assert.match(WHEEL_SOURCE, /function exposeCoursePartTrashBridgeApi/);
+  assert.match(WHEEL_SOURCE, /root\.__COURSE_ENABLE_DEBUG__ = true/);
+  assert.match(WHEEL_SOURCE, /setTimeout\(\(\) => \{ root\.__COURSE_ENABLE_DEBUG__ = false; \}, 0\)/);
+  assert.doesNotMatch(WHEEL_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
 });
 
 test('simplified UI keeps a single workspace column at 720px and below', () => {
