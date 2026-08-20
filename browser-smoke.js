@@ -192,7 +192,9 @@ async function main() {
     await waitUnavailableAreaCount(page, 1);
     logStep('unlocked duplicate can be deleted without removing the locked original');
 
-    await page.locator('#detailsToggleBtn').click();
+    const drawerCloseButton = page.locator('.simple-drawer-close');
+    await drawerCloseButton.waitFor({ state: 'visible', timeout: TIMEOUT });
+    await drawerCloseButton.click();
     await page.waitForFunction(() => document.querySelector('#detailsToggleBtn')?.getAttribute('aria-expanded') === 'false', { timeout: TIMEOUT });
     assert.equal(await page.locator('#obstacleEditorPanel').isVisible(), false);
     logStep('detail drawer closes only by explicit user action');
