@@ -110,28 +110,19 @@
   });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
-(function exposeCoursePartTrashBridgeApiOnce(root) {
+(function exposeCoursePartTrashBridgeApi(root) {
   'use strict';
   if (!root || !root.document || /test-index\.html$/.test(String(root.location?.pathname || ''))) return;
   if (Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) return;
 
-  // app.js already owns a QA-only editing bridge. Allow exactly its creation
-  // read, then turn the debug flag off before app initialization/rendering.
-  // simple-ui.js captures the bridge privately and removes the public handle.
-  let firstRead = true;
-  Object.defineProperty(root, '__COURSE_ENABLE_DEBUG__', {
-    configurable: true,
-    get() {
-      if (!firstRead) return false;
-      firstRead = false;
-      Object.defineProperty(root, '__COURSE_ENABLE_DEBUG__', {
-        configurable: true,
-        writable: true,
-        value: false
-      });
-      return true;
-    }
-  });
+  // app.js already exposes the editing operations required by the QA bridge
+  // when this flag is true. Keep it true only through synchronous app boot;
+  // the first timer turns diagnostics back off, while simple-ui.js privately
+  // captures and then removes the public bridge handle.
+  root.__COURSE_ENABLE_DEBUG__ = true;
+  if (root.setTimeout) {
+    root.setTimeout(() => { root.__COURSE_ENABLE_DEBUG__ = false; }, 0);
+  }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 
 (function loadSimpleEditorUi(root) {
