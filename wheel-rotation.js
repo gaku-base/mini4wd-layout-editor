@@ -112,9 +112,31 @@
     });
   }
 
-  if (root.document.querySelector('script[data-m4wd-editor-extensions-bootstrap="1"]')) return;
+  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc6-health1';
+  const canonicalScriptKey = src => {
+    const raw = String(src || '').trim();
+    if (!raw) return '';
+    try {
+      const url = new root.URL(raw, root.document.baseURI || root.location?.href);
+      return `${url.origin}${url.pathname}`;
+    } catch (_) {
+      return raw.split('#', 1)[0].split('?', 1)[0];
+    }
+  };
+  const bootstrapKey = canonicalScriptKey(bootstrapSrc);
+  const existingBootstrap = Array.from(root.document.querySelectorAll('script[src]')).find(candidate => {
+    const candidateSrc = candidate.getAttribute?.('src') || candidate.src || '';
+    return candidate?.dataset?.m4wdEditorExtensionsBootstrap === '1'
+      || canonicalScriptKey(candidateSrc) === bootstrapKey;
+  });
+
+  if (existingBootstrap) {
+    if (existingBootstrap.dataset) existingBootstrap.dataset.m4wdEditorExtensionsBootstrap = '1';
+    return;
+  }
+
   const script = root.document.createElement('script');
-  script.src = 'editor-extensions-bootstrap.js?v=v1.1-rc6-health1';
+  script.src = bootstrapSrc;
   script.async = false;
   script.dataset.m4wdEditorExtensionsBootstrap = '1';
   root.document.head.appendChild(script);
