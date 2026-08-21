@@ -26,7 +26,7 @@ test('presentation UI uses condensed racing typography without remote font depen
 
 test('cache-safe racing stylesheet is preloaded before presentation mode opens', () => {
   assert.match(snap, /presentationModeStyles/);
-  assert.match(snap, /presentation-mode\.css\?v=v1\.1-rc5-20260821-racing1/);
+  assert.match(snap, /presentation-mode\.css\?v=v1\.1-rc6-20260821-racing2/);
 });
 
 test('presentation output remains print-friendly Grid White Transparent rather than dark paper', () => {
