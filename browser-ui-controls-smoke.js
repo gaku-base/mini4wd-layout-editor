@@ -26,6 +26,11 @@ async function main() {
     await page.goto(BASE_URL, { waitUntil:'networkidle', timeout:20000 });
     await page.waitForFunction(() => document.documentElement.dataset.uiControlsCleanupInstalled === '1', {timeout:TIMEOUT});
     await page.waitForFunction(() => document.querySelector('#presentationBtn')?.textContent?.includes('発表・出力'), {timeout:TIMEOUT});
+    await page.evaluate(() => {
+      const setupDialog = document.querySelector('#setupDialog');
+      if (setupDialog?.open) setupDialog.close();
+    });
+    await page.waitForFunction(() => !document.querySelector('#setupDialog')?.open, {timeout:TIMEOUT});
 
     const top = await page.evaluate(() => ({
       newText:document.querySelector('#newBtn')?.textContent?.trim(),
