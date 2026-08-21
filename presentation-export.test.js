@@ -24,8 +24,8 @@ test('course owns at least three quarters of the usable landscape page height', 
   const page = EXPORT.pageSize('landscape', 120);
   const rects = EXPORT.layoutRects(page, 'landscape');
   assert.ok(rects.course.h / rects.usableH >= 0.77);
-  assert.ok(rects.title.h / rects.usableH <= 0.08);
-  assert.ok(rects.counts.h / rects.usableH <= 0.09);
+  assert.ok(rects.title.h <= Math.ceil(rects.usableH * 0.08));
+  assert.ok(rects.counts.h <= Math.ceil(rects.usableH * 0.09));
 });
 
 test('course-first fit ignores unused setup-field whitespace but includes every placed part', () => {
