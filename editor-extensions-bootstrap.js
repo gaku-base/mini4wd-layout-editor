@@ -6,6 +6,70 @@
   const documentRef = root.document;
   const CACHE_KEY = 'v1.1-rc6-health1';
 
+  function canonicalScriptKey(src) {
+    const raw = String(src || '').trim();
+    if (!raw) return '';
+    try {
+      const url = new root.URL(raw, documentRef.baseURI || root.location?.href);
+      return `${url.origin}${url.pathname}`;
+    } catch (_) {
+      return raw.split('#', 1)[0].split('?', 1)[0];
+    }
+  }
+
+  function findExistingScript(src, marker) {
+    const targetKey = canonicalScriptKey(src);
+    const scripts = Array.from(documentRef.querySelectorAll('script[src]'));
+    return scripts.find(script => script?.dataset?.[marker] === '1')
+      || scripts.find(script => {
+        const candidateSrc = script.getAttribute?.('src') || script.src || '';
+        return canonicalScriptKey(candidateSrc) === targetKey;
+      })
+      || null;
+  }
+
+  function continueWhenSettled(script, marker, next) {
+    if (script.dataset) script.dataset[marker] = '1';
+    const state = script.dataset?.m4wdLoadState;
+    if (state !== 'loading') {
+      next(state === 'error' ? 'error' : 'existing');
+      return;
+    }
+
+    let continued = false;
+    const continueBoot = event => {
+      if (continued) return;
+      continued = true;
+      next(event?.type === 'error' ? 'error' : 'load');
+    };
+    script.addEventListener('load', continueBoot, { once: true });
+    script.addEventListener('error', continueBoot, { once: true });
+  }
+
+  function loadScript(src, marker, next) {
+    const existing = findExistingScript(src, marker);
+    if (existing) {
+      continueWhenSettled(existing, marker, next);
+      return;
+    }
+
+    const script = documentRef.createElement('script');
+    script.src = src;
+    script.async = false;
+    script.dataset[marker] = '1';
+    script.dataset.m4wdLoadState = 'loading';
+    let continued = false;
+    const settle = status => {
+      script.dataset.m4wdLoadState = status;
+      if (continued) return;
+      continued = true;
+      next(status);
+    };
+    script.addEventListener('load', () => settle('loaded'), { once: true });
+    script.addEventListener('error', () => settle('error'), { once: true });
+    documentRef.head.appendChild(script);
+  }
+
   function ensureStyleLink(id, href) {
     if (documentRef.getElementById(id)) return;
     const link = documentRef.createElement('link');
@@ -112,26 +176,6 @@
     return true;
   }
 
-  function loadScript(src, marker, next) {
-    if (documentRef.querySelector(`script[data-${marker}="1"]`)) {
-      next();
-      return;
-    }
-    const script = documentRef.createElement('script');
-    script.src = src;
-    script.async = false;
-    script.dataset[marker] = '1';
-    let continued = false;
-    const continueBoot = () => {
-      if (continued) return;
-      continued = true;
-      next();
-    };
-    script.addEventListener('load', continueBoot, { once: true });
-    script.addEventListener('error', continueBoot, { once: true });
-    documentRef.head.appendChild(script);
-  }
-
   function finishSimpleUiBoot() {
     root.__COURSE_ENABLE_DEBUG__ = false;
     integrateModeHelpIntoToolbar();
@@ -145,20 +189,14 @@
   }
 
   function loadSimpleUi() {
-    if (documentRef.querySelector('script[data-m4wd-simple-ui="1"]')) {
-      finishSimpleUiBoot();
-      return;
-    }
-    const script = documentRef.createElement('script');
-    script.src = `simple-ui.js?v=${CACHE_KEY}`;
-    script.async = false;
-    script.dataset.m4wdSimpleUi = '1';
-    script.addEventListener('load', finishSimpleUiBoot, { once: true });
-    script.addEventListener('error', () => {
+    loadScript(`simple-ui.js?v=${CACHE_KEY}`, 'm4wdSimpleUi', status => {
+      if (status !== 'error') {
+        finishSimpleUiBoot();
+        return;
+      }
       root.__COURSE_ENABLE_DEBUG__ = false;
       try { delete root.__mini4wdCourseDebug; } catch (_) {}
-    }, { once: true });
-    documentRef.head.appendChild(script);
+    });
   }
 
   function loadPresentationMode() {
