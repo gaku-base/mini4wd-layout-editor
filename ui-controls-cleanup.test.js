@@ -49,7 +49,7 @@ test('legacy course-only PNG is preserved inside presentation output', () => {
   assert.match(SOURCE, /exportButton\.classList\.add\('ui-legacy-export-source'\)/);
 });
 
-test('cleanup is loaded from the already-required snap toggle entry point with RC5 cache busting', () => {
-  assert.match(SNAP_SOURCE, /ui-controls-cleanup\.js\?v=v1\.1-rc5-20260821-ui2/);
+test('cleanup is loaded from the already-required snap toggle entry point with RC6 cache busting', () => {
+  assert.match(SNAP_SOURCE, /ui-controls-cleanup\.js\?v=v1\.1-rc6-20260821-ui3/);
   assert.match(SNAP_SOURCE, /uiControlsCleanupLoader/);
 });
