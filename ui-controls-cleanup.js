@@ -7,6 +7,9 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
+  const APP_VERSION = 'v1.1 RC5';
+  const APP_VERSION_SLUG = 'v1.1-rc5';
+
   const TOP_ACTION_LABELS = Object.freeze({
     newBtn: '＋ 新規作成',
     saveBtn: '💾 レイアウト保存',
@@ -40,6 +43,16 @@
     if (!element || element.textContent === text) return false;
     element.textContent = text;
     return true;
+  }
+
+  function applyVersionLabel(documentRef) {
+    const version = documentRef.querySelector?.('.version');
+    const changed = setText(version, APP_VERSION);
+    if (documentRef.documentElement) documentRef.documentElement.dataset.appVersion = APP_VERSION_SLUG;
+    if (documentRef.title && !documentRef.title.includes(APP_VERSION)) {
+      documentRef.title = `Mini 4WD Course Layout — ${APP_VERSION}`;
+    }
+    return changed;
   }
 
   function setFileLabel(documentRef) {
@@ -287,6 +300,7 @@
   }
 
   function syncAll(documentRef) {
+    applyVersionLabel(documentRef);
     applyTopActions(documentRef);
     applyToolbarStructure(documentRef);
     applyPresentationActions(documentRef);
@@ -324,11 +338,14 @@
   }
 
   return Object.freeze({
+    APP_VERSION,
+    APP_VERSION_SLUG,
     TOP_ACTION_LABELS,
     EDITOR_ACTION_LABELS,
     OVERFLOW_ACTIONS,
     PRESENTATION_ACTION_LABELS,
     setText,
+    applyVersionLabel,
     install
   });
 });
