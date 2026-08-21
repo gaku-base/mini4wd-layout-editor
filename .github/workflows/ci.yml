@@ -127,6 +127,12 @@ jobs:
           BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-presentation-rehearsal.js
 
+          NODE_PATH="$smoke_root/node_modules" \
+          CHROME_BIN="$chrome_bin" \
+          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
+          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
+          node browser-ui-controls-smoke.js
+
       - name: Upload browser smoke failure screenshot
         if: failure()
         uses: actions/upload-artifact@v4
@@ -149,3 +155,5 @@ jobs:
           test -f presentation-export.js
           test -f presentation-mode.js
           test -f browser-presentation-rehearsal.js
+          test -f ui-controls-cleanup.js
+          test -f browser-ui-controls-smoke.js
