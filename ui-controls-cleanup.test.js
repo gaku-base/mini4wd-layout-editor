@@ -7,6 +7,7 @@ const UI = require('./ui-controls-cleanup.js');
 
 const SOURCE = fs.readFileSync(require.resolve('./ui-controls-cleanup.js'), 'utf8');
 const SNAP_SOURCE = fs.readFileSync(require.resolve('./snap-toggle.js'), 'utf8');
+const BOOTSTRAP_SOURCE = fs.readFileSync(require.resolve('./editor-extensions-bootstrap.js'), 'utf8');
 
 test('top actions use user-facing names and hide JSON terminology', () => {
   assert.deepEqual(UI.TOP_ACTION_LABELS, {
@@ -49,7 +50,9 @@ test('legacy course-only PNG is preserved inside presentation output', () => {
   assert.match(SOURCE, /exportButton\.classList\.add\('ui-legacy-export-source'\)/);
 });
 
-test('cleanup is loaded from the already-required snap toggle entry point with RC6 cache busting', () => {
-  assert.match(SNAP_SOURCE, /ui-controls-cleanup\.js\?v=v1\.1-rc6-20260821-ui3/);
-  assert.match(SNAP_SOURCE, /uiControlsCleanupLoader/);
+test('UI cleanup loading belongs to the editor extension bootstrap, not snap state', () => {
+  assert.match(BOOTSTRAP_SOURCE, /ui-controls-cleanup\.js\?v=\$\{CACHE_KEY\}/);
+  assert.match(BOOTSTRAP_SOURCE, /m4wdUiControlsCleanup/);
+  assert.doesNotMatch(SNAP_SOURCE, /ui-controls-cleanup\.js/);
+  assert.doesNotMatch(SNAP_SOURCE, /presentation-mode\.css/);
 });

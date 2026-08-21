@@ -6,6 +6,7 @@ const fs = require('node:fs');
 
 const ui = fs.readFileSync('simple-ui.js', 'utf8');
 const wheel = fs.readFileSync('wheel-rotation.js', 'utf8');
+const bootstrap = fs.readFileSync('editor-extensions-bootstrap.js', 'utf8');
 const index = fs.readFileSync('index.html', 'utf8');
 
 test('detail drawer is manual-only and selection changes cannot auto-open it', () => {
@@ -29,10 +30,13 @@ test('course-part drop on trash consumes normal move pointerup and keeps one-ste
   assert.match(ui, /PointerEvent\('pointercancel'/);
 });
 
-test('private production bridge is cache-busted and debug mode is turned back off', () => {
-  assert.match(wheel, /exposeCoursePartTrashBridgeApi/);
+test('private production bridge is temporary, cache-busted, and shut down by the bootstrap', () => {
+  assert.match(wheel, /prepareEditorExtensionBridge/);
   assert.match(wheel, /root\.__COURSE_ENABLE_DEBUG__ = true/);
-  assert.match(wheel, /root\.__COURSE_ENABLE_DEBUG__ = false/);
-  assert.match(wheel, /simple-ui\.js\?v=v1\.1-rc4-20260820-toolbar-trash1/);
-  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc4-20260820-toolbar-trash1/);
+  assert.match(wheel, /editor-extensions-bootstrap\.js\?v=v1\.1-rc6-health1/);
+  assert.match(bootstrap, /simple-ui\.js\?v=\$\{CACHE_KEY\}/);
+  assert.match(bootstrap, /root\.__COURSE_ENABLE_DEBUG__ = false/);
+  assert.match(bootstrap, /delete root\.__mini4wdCourseDebug/);
+  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc6-health1/);
+  assert.doesNotMatch(wheel, /simple-ui\.js\?v=/);
 });
