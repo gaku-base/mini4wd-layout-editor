@@ -6,7 +6,7 @@
   if (root && root.document && !root.document.getElementById('uiControlsCleanupLoader')) {
     const script = root.document.createElement('script');
     script.id = 'uiControlsCleanupLoader';
-    script.src = 'ui-controls-cleanup.js?v=20260821-ui1';
+    script.src = 'ui-controls-cleanup.js?v=v1.1-rc5-20260821-ui2';
     script.async = false;
     (root.document.head || root.document.documentElement).appendChild(script);
   }
