@@ -1,10 +1,20 @@
 .presentation-entry-btn {
-  border-color: #8d5cf6 !important;
-  color: #e7dcff !important;
+  border-color: #e52f38 !important;
+  color: #ffdfe2 !important;
 }
 
 .presentation-view[hidden] { display: none !important; }
 .presentation-view {
+  --pr-bg: #070b10;
+  --pr-panel: #0e141c;
+  --pr-panel-2: #141c26;
+  --pr-line: #273342;
+  --pr-line-soft: #202a36;
+  --pr-text: #f4f7fb;
+  --pr-muted: #8e9bac;
+  --pr-red: #e52f38;
+  --pr-red-bright: #ff3346;
+  --pr-font: "Bahnschrift SemiCondensed", "Arial Narrow", "Roboto Condensed", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
   position: fixed;
   inset: 0;
   z-index: 10000;
@@ -16,128 +26,150 @@
   min-height: 0;
   box-sizing: border-box;
   overflow: hidden;
-  background: #eef1f4;
-  color: #202428;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 52% 18%, rgba(229,47,56,.065), transparent 34%),
+    linear-gradient(135deg, rgba(255,255,255,.015) 25%, transparent 25%) 0 0/12px 12px,
+    linear-gradient(315deg, rgba(255,255,255,.012) 25%, transparent 25%) 0 0/12px 12px,
+    var(--pr-bg);
+  color: var(--pr-text);
+  font-family: var(--pr-font);
 }
 
-/* The full-screen presentation replaces the editor while it is open.
-   Removing the editor from layout prevents its desktop workspace width from
-   expanding document.scrollWidth on phone-sized viewports. */
 body.presentation-mode-open {
   width: 100%;
   max-width: 100%;
   overflow: hidden;
 }
-body.presentation-mode-open > #app {
-  display: none !important;
-}
+body.presentation-mode-open > #app { display: none !important; }
 
 .presentation-toolbar {
   flex: 0 0 auto;
   display: flex;
+  flex-wrap: wrap;
   align-items: end;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 10px 14px;
-  background: #fff;
-  border-bottom: 1px solid #d9dde1;
-  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  padding: 10px 14px 11px;
+  background: rgba(11,15,20,.97);
+  border-bottom: 1px solid var(--pr-line);
+  box-shadow: 0 8px 28px rgba(0,0,0,.32);
   overflow-x: auto;
 }
 
 .presentation-toolbar button,
-.presentation-toolbar input {
-  font: inherit;
-}
+.presentation-toolbar input { font: inherit; }
 
 .presentation-back,
 .presentation-primary,
 .presentation-choice {
   min-height: 38px;
-  border: 1px solid #c9ced4;
-  border-radius: 9px;
-  background: #fff;
-  color: #30363b;
+  border: 1px solid var(--pr-line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #18212c, #111821);
+  color: var(--pr-text);
   padding: 0 13px;
-  font-weight: 700;
+  font-weight: 780;
+  letter-spacing: .02em;
   cursor: pointer;
   white-space: nowrap;
+  transition: border-color .14s ease, background .14s ease, transform .14s ease, box-shadow .14s ease;
+}
+.presentation-back:hover,
+.presentation-choice:hover {
+  border-color: #48586c;
+  background: #1a2531;
+  transform: translateY(-1px);
 }
 
-.presentation-back:hover,
-.presentation-choice:hover { background: #f3f5f7; }
+.presentation-back {
+  color: #dce5ef;
+  border-color: #344152;
+}
 
 .presentation-primary {
-  background: #252a30;
-  border-color: #252a30;
+  background: linear-gradient(180deg, #f02f3d, #b70e1c);
+  border-color: #ff4050;
   color: #fff;
+  box-shadow: 0 0 0 1px rgba(255,45,61,.15), 0 8px 22px rgba(185,12,27,.22);
+  font-style: italic;
+  font-weight: 850;
 }
-.presentation-primary:hover { background: #14181c; }
+.presentation-primary:hover {
+  background: linear-gradient(180deg, #ff3b4b, #cb1020);
+  border-color: #ff6975;
+  box-shadow: 0 0 16px rgba(229,47,56,.24);
+}
 
 .presentation-choice.is-active {
   color: #fff;
-  background: #505860;
-  border-color: #505860;
+  background: linear-gradient(180deg, #d6202e, #a60e1a);
+  border-color: var(--pr-red-bright);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 0 12px rgba(229,47,56,.14);
 }
 
 .presentation-field {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  min-width: 150px;
+  gap: 4px;
+  min-width: 142px;
 }
 .presentation-field span,
 .presentation-control-label {
-  color: #697178;
+  color: var(--pr-muted);
   font-size: 10px;
   font-weight: 800;
-  letter-spacing: .02em;
+  letter-spacing: .07em;
+  text-transform: uppercase;
 }
 .presentation-field input {
-  width: 170px;
+  width: 160px;
   height: 38px;
   box-sizing: border-box;
-  border: 1px solid #c9ced4;
+  border: 1px solid var(--pr-line);
   border-radius: 8px;
-  background: #fff;
-  color: #202428;
+  background: #0b1118;
+  color: var(--pr-text);
   padding: 0 10px;
   outline: none;
+  font-weight: 700;
 }
+.presentation-field input::placeholder { color: #596779; }
 .presentation-field input:focus {
-  border-color: #6b75df;
-  box-shadow: 0 0 0 3px rgba(107,117,223,.12);
+  border-color: var(--pr-red-bright);
+  box-shadow: 0 0 0 3px rgba(229,47,56,.13);
 }
 .presentation-field input.is-required {
-  border-color: #d44848;
-  box-shadow: 0 0 0 3px rgba(212,72,72,.14);
+  border-color: #ff5362;
+  box-shadow: 0 0 0 3px rgba(255,83,98,.15);
 }
 
 .presentation-control-group {
   display: grid;
   grid-template-columns: repeat(3, auto);
   grid-template-rows: auto 38px;
-  gap: 3px 5px;
+  gap: 4px 5px;
   min-width: 0;
   align-items: center;
+  padding-left: 8px;
+  border-left: 1px solid var(--pr-line-soft);
 }
-.presentation-control-label {
-  grid-column: 1 / -1;
+.presentation-control-label { grid-column: 1 / -1; }
+.presentation-control-group .presentation-choice {
+  min-height: 38px;
+  padding-inline: 11px;
 }
-.presentation-control-group .presentation-choice { min-height: 38px; }
 
 .presentation-status {
   align-self: center;
   min-width: 0;
-  color: #687078;
-  font-size: 11px;
+  color: var(--pr-muted);
+  font-size: 10px;
   white-space: nowrap;
 }
-.presentation-status.is-error { color: #c03939; font-weight: 800; }
+.presentation-status.is-error { color: #ff6b78; font-weight: 800; }
 
 .presentation-stage {
   flex: 1 1 auto;
@@ -149,31 +181,37 @@ body.presentation-mode-open > #app {
   display: grid;
   place-items: center;
   overflow: auto;
-  padding: 18px;
+  padding: 14px 18px 18px;
+  background:
+    linear-gradient(115deg, transparent 0 48%, rgba(255,255,255,.012) 48% 52%, transparent 52% 100%) 0 0/18px 18px,
+    radial-gradient(circle at center, #111821 0%, #090e14 70%);
 }
 
 .presentation-canvas {
   display: block;
-  max-width: 100%;
-  max-height: calc(100vh - 105px);
+  max-width: min(100%, 1500px);
+  max-height: calc(100vh - 104px);
   width: auto;
   height: auto;
   background: transparent;
-  box-shadow: 0 10px 34px rgba(0,0,0,.16);
+  border: 1px solid #313d4b;
+  border-radius: 7px;
+  box-shadow: 0 18px 58px rgba(0,0,0,.52), 0 0 0 1px rgba(229,47,56,.06);
 }
 
+.simple-course-only-export {
+  color: #d9e1e9 !important;
+  border-color: #3b4655 !important;
+}
 .presentation-print-sheet { display: none; }
 
-@media (max-width: 1100px) {
-  .presentation-toolbar {
-    align-items: center;
-    padding: 8px 10px;
-  }
-  .presentation-field { min-width: 132px; }
-  .presentation-field input { width: 145px; }
+@media (max-width: 1200px) {
+  .presentation-toolbar { align-items: center; padding: 8px 10px; }
+  .presentation-field { min-width: 126px; }
+  .presentation-field input { width: 140px; }
   .presentation-status { display: none; }
   .presentation-stage { padding: 10px; }
-  .presentation-canvas { max-height: calc(100vh - 96px); }
+  .presentation-canvas { max-height: calc(100vh - 134px); }
 }
 
 @media (max-width: 720px) {
@@ -182,7 +220,7 @@ body.presentation-mode-open > #app {
     grid-template-columns: repeat(2, minmax(0,1fr));
     align-items: end;
     overflow-x: hidden;
-    max-height: 42vh;
+    max-height: 44vh;
     overflow-y: auto;
   }
   .presentation-toolbar > * { min-width: 0; }
@@ -193,16 +231,21 @@ body.presentation-mode-open > #app {
     grid-column: 1 / -1;
     width: 100%;
     min-width: 0;
+    padding-left: 0;
+    padding-top: 7px;
+    border-left: 0;
+    border-top: 1px solid var(--pr-line-soft);
     grid-template-columns: repeat(3, minmax(0,1fr));
   }
   .presentation-control-group .presentation-choice {
     width: 100%;
     min-width: 0;
-    padding-inline: 6px;
+    padding-inline: 5px;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .presentation-primary { width: 100%; min-width: 0; }
-  .presentation-stage { padding: 8px; overflow: hidden; }
-  .presentation-canvas { max-height: 56vh; max-width: 100%; }
+  .presentation-primary,
+  .simple-course-only-export { width: 100%; min-width: 0; }
+  .presentation-stage { padding: 7px; overflow: hidden; }
+  .presentation-canvas { max-height: 54vh; max-width: 100%; }
 }
