@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const css = fs.readFileSync(require.resolve('./presentation-mode.css'), 'utf8');
-const snap = fs.readFileSync(require.resolve('./snap-toggle.js'), 'utf8');
+const bootstrap = fs.readFileSync(require.resolve('./editor-extensions-bootstrap.js'), 'utf8');
 const exportSource = fs.readFileSync(require.resolve('./presentation-export.js'), 'utf8');
 
 test('presentation shell follows the editor dark theme with racing red accents', () => {
@@ -24,9 +24,10 @@ test('presentation UI uses condensed racing typography without remote font depen
   assert.match(exportSource, /Bahnschrift SemiCondensed/);
 });
 
-test('cache-safe racing stylesheet is preloaded before presentation mode opens', () => {
-  assert.match(snap, /presentationModeStyles/);
-  assert.match(snap, /presentation-mode\.css\?v=v1\.1-rc6-20260821-racing2/);
+test('cache-safe racing stylesheet is preloaded by the editor extension bootstrap', () => {
+  assert.match(bootstrap, /presentationModeStyles/);
+  assert.match(bootstrap, /presentation-mode\.css\?v=\$\{CACHE_KEY\}/);
+  assert.match(bootstrap, /const CACHE_KEY = 'v1\.1-rc6-health1'/);
 });
 
 test('presentation output remains print-friendly Grid White Transparent rather than dark paper', () => {
