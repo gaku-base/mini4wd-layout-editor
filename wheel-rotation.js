@@ -74,8 +74,7 @@
   'use strict';
   if (!root || !root.document) return;
 
-  if (!/test-index\.html$/.test(String(root.location?.pathname || ''))
-    && !Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) {
+  if (!Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) {
     root.__COURSE_ENABLE_DEBUG__ = true;
   }
 
