@@ -37,6 +37,6 @@ test('private production bridge is temporary, cache-busted, and shut down by the
   assert.match(bootstrap, /simple-ui\.js\?v=\$\{CACHE_KEY\}/);
   assert.match(bootstrap, /root\.__COURSE_ENABLE_DEBUG__ = false/);
   assert.match(bootstrap, /delete root\.__mini4wdCourseDebug/);
-  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc4-20260820-toolbar-trash1/);
+  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc6-health1/);
   assert.doesNotMatch(wheel, /simple-ui\.js\?v=/);
 });
