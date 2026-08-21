@@ -7,14 +7,14 @@
     const link = root.document.createElement('link');
     link.id = 'presentationModeStyles';
     link.rel = 'stylesheet';
-    link.href = 'presentation-mode.css?v=v1.1-rc5-20260821-racing1';
+    link.href = 'presentation-mode.css?v=v1.1-rc6-20260821-racing2';
     (root.document.head || root.document.documentElement).appendChild(link);
   }
 
   if (root && root.document && !root.document.getElementById('uiControlsCleanupLoader')) {
     const script = root.document.createElement('script');
     script.id = 'uiControlsCleanupLoader';
-    script.src = 'ui-controls-cleanup.js?v=v1.1-rc5-20260821-ui2';
+    script.src = 'ui-controls-cleanup.js?v=v1.1-rc6-20260821-ui3';
     script.async = false;
     (root.document.head || root.document.documentElement).appendChild(script);
   }
