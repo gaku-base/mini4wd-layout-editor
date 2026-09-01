@@ -120,17 +120,35 @@
           appliesTo: ['left', 'right'],
           source: 'project-owner-approved-2026-09-01'
         },
-        upperSideWallCurveRadiusMm: {
+        lowerLongitudinalCurveRadiusMm: {
           value: 398,
-          status: 'provisional',
-          confidence: 'medium',
-          source: 'speakerdeck-slope-assembly-drawing-2026-09-01-review'
+          status: 'verified',
+          confidence: 'high',
+          source: 'project-owner-approved-2026-09-01'
         },
-        openingUndersideCurveRadiusMm: {
+        middleStraightLengthMm: {
+          value: 169.10056179681956,
+          status: 'verified',
+          confidence: 'high',
+          source: 'derived-from-approved-r398-r803-540-115-2026-09-01'
+        },
+        middleStraightAngleDeg: {
+          value: 18.423741009432902,
+          status: 'verified',
+          confidence: 'high',
+          source: 'derived-from-approved-r398-r803-540-115-2026-09-01'
+        },
+        upperLongitudinalCurveRadiusMm: {
           value: 803,
-          status: 'provisional',
-          confidence: 'medium',
-          source: 'speakerdeck-slope-assembly-drawing-2026-09-01-review'
+          status: 'verified',
+          confidence: 'high',
+          source: 'project-owner-approved-2026-09-01'
+        },
+        longitudinalProfileModule: {
+          value: 'slope-longitudinal-profile.js',
+          status: 'verified',
+          confidence: 'high',
+          source: 'project-owner-approved-2026-09-01'
         }
       },
       ...palette
