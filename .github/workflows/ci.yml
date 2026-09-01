@@ -80,7 +80,7 @@ jobs:
           node --test --test-reporter=spec "${tests[@]}"
 
       - name: Run full Chromium rehearsal
-        if: github.event_name == 'workflow_dispatch' && inputs.full_rehearsal
+        if: (github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != ''
         shell: bash
         run: |
           set -euo pipefail
@@ -131,7 +131,7 @@ jobs:
           node browser-ui-controls-smoke.js
 
       - name: Upload browser rehearsal failure screenshot
-        if: failure() && github.event_name == 'workflow_dispatch' && inputs.full_rehearsal
+        if: failure() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '')
         uses: actions/upload-artifact@v4
         with:
           name: browser-smoke-failure
