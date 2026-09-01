@@ -48,6 +48,8 @@
 | ストレート3枚 | 1620 | mm | provisional | 添付寸法図の読取・540mmからの検算 | unknown | unknown | unknown | medium | 正式採用前に実形状と照合する |
 | 90度コーナー外形 | 717 × 717 | mm | provisional | 添付寸法図の読取 | unknown | unknown | unknown | low | 初期対象外。正式採用前に再計測する |
 | 180度コーナー外形 | 1434 × 717 | mm | provisional | 添付寸法図の読取 | unknown | unknown | unknown | low | 初期対象外。正式採用前に再計測する |
+| スロープ側壁 上側曲線付近 | R398 | mm | provisional | スロープ組立図の読取 | 2026-09-01 | review | unknown | medium | 円弧開始・終了点と接線条件は未確定 |
+| スロープ 高い側の開口下面曲線付近 | R803 | mm | provisional | スロープ組立図の読取 | 2026-09-01 | review | unknown | medium | 円弧開始・終了点と接線条件は未確定 |
 
 ## 初期対象パーツ
 
@@ -91,6 +93,8 @@
 | 床まで塞ぐ側壁長（低い側から） | 270mm | verified | プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high |
 | 側壁高さ（走行面から上） | 50mm | verified | タミヤ公式フェンス高さ5cm・スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high |
 | 側壁厚 | 2.5mm | verified | スロープ設計資料・プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high |
+| 側壁上側曲線付近 | R398mm | provisional | スロープ組立図の読取。円弧端点・接線条件は未確定 | 2026-09-01 | review | unknown | medium |
+| 高い側の開口下面曲線付近 | R803mm | provisional | スロープ組立図の読取。円弧端点・接線条件は未確定 | 2026-09-01 | review | unknown | medium |
 | 全幅・全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | 入口ローカル座標 | X=0、Y=0、Z=0 | verified | 物理寸法ではなく座標原点の定義 | unknown | unknown | not-applicable | high |
 | 出口ローカルX・Y | `null` | unknown | 水平形状が未計測 | unknown | unknown | unknown | none |
