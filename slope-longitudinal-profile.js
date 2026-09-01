@@ -113,6 +113,56 @@
     });
   }
 
+  // Two slopes joined at their high ends create a 540 mm longitudinal opening
+  // (270 mm from each half). A lower course crossing at 90 degrees is normally
+  // centred on that high-end seam. This function evaluates only horizontal fit
+  // and the critical station at the lower-course outer edge; it never upgrades
+  // the result to authoritative collision clearance because real underside ribs
+  // and connector protrusions are still unmeasured.
+  function centeredTwoSlopeCrossoverReference(lowerCourseOuterWidthMm, undersideOffsetMm = null, lowerCourseHeightMm = null) {
+    if (typeof lowerCourseOuterWidthMm !== 'number' || !Number.isFinite(lowerCourseOuterWidthMm) || lowerCourseOuterWidthMm <= 0) return null;
+
+    const halfOpeningLengthMm = HORIZONTAL_MM - FLOOR_BLOCKING_SIDEWALL_LENGTH_MM;
+    const totalOpeningLengthMm = halfOpeningLengthMm * 2;
+    const sideMarginMm = (totalOpeningLengthMm - lowerCourseOuterWidthMm) / 2;
+    const horizontalFitStatus = sideMarginMm > 0
+      ? 'fits-with-margin'
+      : (sideMarginMm === 0 ? 'touches-sidewall-boundary' : 'does-not-fit');
+
+    if (sideMarginMm < 0) {
+      return Object.freeze({
+        status: horizontalFitStatus,
+        lowerCourseOuterWidthMm,
+        totalOpeningLengthMm,
+        sideMarginMm,
+        criticalXMm: null,
+        runningSurfaceHeightMm: null,
+        candidateRoofHeightMm: null,
+        candidateVerticalMarginMm: null
+      });
+    }
+
+    const criticalXMm = HORIZONTAL_MM - lowerCourseOuterWidthMm / 2;
+    const runningSurfaceHeightMm = heightAtHorizontalX(criticalXMm);
+    const roof = underpassEnvelopeAtHorizontalX(criticalXMm, undersideOffsetMm);
+    const hasLowerCourseHeight = typeof lowerCourseHeightMm === 'number' && Number.isFinite(lowerCourseHeightMm) && lowerCourseHeightMm >= 0;
+    const candidateRoofHeightMm = roof?.status === 'candidate-clearance' ? roof.clearHeightMm : null;
+    const candidateVerticalMarginMm = candidateRoofHeightMm !== null && hasLowerCourseHeight
+      ? candidateRoofHeightMm - lowerCourseHeightMm
+      : null;
+
+    return Object.freeze({
+      status: horizontalFitStatus,
+      lowerCourseOuterWidthMm,
+      totalOpeningLengthMm,
+      sideMarginMm,
+      criticalXMm,
+      runningSurfaceHeightMm,
+      candidateRoofHeightMm,
+      candidateVerticalMarginMm
+    });
+  }
+
   const FLOOR_BLOCKING_END = Object.freeze({
     xMm: FLOOR_BLOCKING_SIDEWALL_LENGTH_MM,
     runningSurfaceHeightMm: heightAtHorizontalX(FLOOR_BLOCKING_SIDEWALL_LENGTH_MM),
@@ -159,6 +209,7 @@
     segments: SEGMENTS,
     heightAtHorizontalX,
     tangentAngleDegAtHorizontalX,
-    underpassEnvelopeAtHorizontalX
+    underpassEnvelopeAtHorizontalX,
+    centeredTwoSlopeCrossoverReference
   });
 });
