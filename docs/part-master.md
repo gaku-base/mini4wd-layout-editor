@@ -35,7 +35,9 @@
 |---|---:|---|---|---|---|---|---|---|---|
 | ストレート1枚 長さ | 540 | mm | verified | ユーザー指定・添付寸法図、Issue #1 / #6 | unknown | unknown | unknown | high | 公称値。物理公差は未確認 |
 | スロープ1枚 高低差 | 115 | mm | verified | ユーザー指定、Issue #1 / #6 | unknown | unknown | unknown | high | 公称値。物理公差は未確認 |
-| スロープ 床まで塞ぐ側壁長（低い側から） | 270 | mm | verified | プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用。壁高・壁厚・下面曲線・高い側の開口形状は未確定 |
+| スロープ 床まで塞ぐ側壁長（低い側から） | 270 | mm | verified | プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用 |
+| スロープ 側壁高さ（走行面から上） | 50 | mm | verified | タミヤ公式フェンス高さ5cm・スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用 |
+| スロープ 側壁厚 | 2.5 | mm | verified | スロープ設計資料・プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用 |
 
 ## 添付寸法図から読み取れる検算値
 
@@ -87,15 +89,17 @@
 | 水平長 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | 高低差 | 115mm | verified | ユーザー確定の公称値 | unknown | unknown | unknown | high |
 | 床まで塞ぐ側壁長（低い側から） | 270mm | verified | プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high |
+| 側壁高さ（走行面から上） | 50mm | verified | タミヤ公式フェンス高さ5cm・スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high |
+| 側壁厚 | 2.5mm | verified | スロープ設計資料・プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high |
 | 全幅・全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | 入口ローカル座標 | X=0、Y=0、Z=0 | verified | 物理寸法ではなく座標原点の定義 | unknown | unknown | not-applicable | high |
 | 出口ローカルX・Y | `null` | unknown | 水平形状が未計測 | unknown | unknown | unknown | none |
 | 出口ローカルZ | 115mm | verified | 確定済み高低差を座標へ適用 | unknown | unknown | unknown | high |
 | 入口・出口角度 | `null` | unknown | 実パーツの接線方向は未計測 | unknown | unknown | unknown | none |
 | 2D投影外形 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
-| 走行面プロファイル | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
-| 長手方向下面プロファイル | `null` | unknown | 未計測。`sMm`ごとのYZ断面が必要 | unknown | unknown | unknown | none |
-| 側壁プロファイル | `null` | unknown | 低い側から270mmの床まで塞ぐ区間だけverified。壁高・壁厚・断面形状・高い側の開口形状は未計測 | unknown | unknown | unknown | none |
+| 走行面プロファイル | `null` | unknown | 未計測。R398/R803の対応区間を確定後に定義する | unknown | unknown | unknown | none |
+| 長手方向下面プロファイル | `null` | unknown | 未計測。`sMm`ごとのYZ断面とR803等の対応確認が必要 | unknown | unknown | unknown | none |
+| 側壁プロファイル | `null` | unknown | 270mm・高さ50mm・厚2.5mmはverified。R398/R803の曲線境界、270mm終端断面、高い側の開口形状は未確定 | unknown | unknown | unknown | none |
 | 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
 
@@ -201,7 +205,7 @@ activeCollisionProfile: null
 - 3レーン全パーツの正式一覧
 - 3レーン幅、壁高、底面厚
 - スロープの水平長と曲線形状
-- スロープ側壁の壁高・壁厚・断面形状、高い側の開口形状、下面プロファイル
+- スロープのR398/R803対応区間、270mm終端断面、高い側の開口形状、下面プロファイル
 - バンクの全長、中心角、中心線半径、内外半径、横断勾配
 - 初期対象4パーツの測定日、測定者、物理公差
 - 入口・出口コネクタの物理基準点
