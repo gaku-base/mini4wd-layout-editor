@@ -79,6 +79,9 @@
       #exportBtn.ui-legacy-export-source {
         display: none !important;
       }
+      html[data-ui-controls-cleanup-installed="1"] body.simple-ui-enabled .workspace-shell {
+        overflow: hidden;
+      }
       html[data-ui-controls-cleanup-installed="1"] body.simple-ui-enabled .simple-toolbar-more-trigger.ui-display-placement-trigger {
         min-width: 104px;
         width: auto;

@@ -50,6 +50,10 @@ test('legacy course-only PNG is preserved inside presentation output', () => {
   assert.match(SOURCE, /exportButton\.classList\.add\('ui-legacy-export-source'\)/);
 });
 
+test('closed detail drawer cannot expand the page beyond the workspace', () => {
+  assert.match(SOURCE, /body\.simple-ui-enabled \.workspace-shell \{\s*overflow: hidden;/);
+});
+
 test('UI cleanup loading belongs to the editor extension bootstrap, not snap state', () => {
   assert.match(BOOTSTRAP_SOURCE, /ui-controls-cleanup\.js\?v=\$\{CACHE_KEY\}/);
   assert.match(BOOTSTRAP_SOURCE, /m4wdUiControlsCleanup/);
