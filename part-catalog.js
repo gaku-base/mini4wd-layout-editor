@@ -105,6 +105,20 @@
           confidence: 'high',
           appliesTo: ['left', 'right'],
           source: 'project-owner-approved-2026-09-01'
+        },
+        sideWallHeightAboveRunningSurfaceMm: {
+          value: 50,
+          status: 'verified',
+          confidence: 'high',
+          appliesTo: ['left', 'right'],
+          source: 'tamiya-official-and-project-owner-approved-2026-09-01'
+        },
+        sideWallThicknessMm: {
+          value: 2.5,
+          status: 'verified',
+          confidence: 'high',
+          appliesTo: ['left', 'right'],
+          source: 'project-owner-approved-2026-09-01'
         }
       },
       ...palette
