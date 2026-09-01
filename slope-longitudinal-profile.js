@@ -78,7 +78,7 @@
   // Beyond that station the product photos show an opening, but the exact
   // underside offset/thickness is not yet verified. This helper therefore
   // reports the known running-surface envelope and only computes a physical
-  // roof clearance when the caller supplies an explicit underside offset.
+  // roof clearance when the caller supplies an explicit finite numeric offset.
   function underpassEnvelopeAtHorizontalX(xMm, undersideOffsetMm = null) {
     const x = clampHorizontalX(xMm);
     if (x === null) return null;
@@ -94,8 +94,7 @@
       });
     }
 
-    const undersideOffset = Number(undersideOffsetMm);
-    if (!Number.isFinite(undersideOffset) || undersideOffset < 0) {
+    if (typeof undersideOffsetMm !== 'number' || !Number.isFinite(undersideOffsetMm) || undersideOffsetMm < 0) {
       return Object.freeze({
         status: 'indeterminate-underside',
         xMm: x,
@@ -109,8 +108,8 @@
       status: 'candidate-clearance',
       xMm: x,
       runningSurfaceHeightMm,
-      clearHeightMm: Math.max(0, runningSurfaceHeightMm - undersideOffset),
-      undersideOffsetMm: undersideOffset
+      clearHeightMm: Math.max(0, runningSurfaceHeightMm - undersideOffsetMm),
+      undersideOffsetMm
     });
   }
 
