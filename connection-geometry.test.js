@@ -64,6 +64,15 @@ test('slope records approved sidewall dimensions without inventing a full collis
   assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
 });
 
+test('slope keeps R398/R803 drawing radii provisional until their arc endpoints are resolved', () => {
+  const measurements = PARTS.slope.measurements;
+  assert.equal(measurements?.upperSideWallCurveRadiusMm?.value, 398);
+  assert.equal(measurements?.openingUndersideCurveRadiusMm?.value, 803);
+  assert.equal(measurements?.upperSideWallCurveRadiusMm?.status, 'provisional');
+  assert.equal(measurements?.openingUndersideCurveRadiusMm?.status, 'provisional');
+  assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
+});
+
 test('right and left 45-degree corners use 370mm faces and retain a 45-degree travel turn at every snapped rotation', () => {
   for (const type of ['corner-45-right', 'corner-45-left']) {
     const [entry, exit] = GRAPH.connectorsForDefinition(PARTS[type]);
