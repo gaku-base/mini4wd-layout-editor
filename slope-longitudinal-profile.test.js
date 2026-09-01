@@ -40,8 +40,37 @@ test('slope profile closes exactly to 540mm horizontal and 115mm rise with horiz
   close(PROFILE.transitionPoints.straightEnd.zMm, 73.8423460066084, 1e-9, 'straight end z');
 });
 
+test('R398 horizontal projection independently matches the drawing 126mm cross-check', () => {
+  close(PROFILE.transitionPoints.lowerArcEnd.xMm, 126, 0.25, 'drawing 126mm cross-check');
+});
+
+test('270mm floor-blocking endpoint has a derived running-surface height of about 68.44mm', () => {
+  assert.equal(PROFILE.floorBlockingEnd.xMm, 270);
+  close(PROFILE.floorBlockingEnd.runningSurfaceHeightMm, 68.43982892567631, 1e-9, 'surface height at x=270');
+  close(PROFILE.floorBlockingEnd.tangentDeg, PROFILE.tangentAngleDeg, 1e-9, 'tangent at x=270');
+});
+
+test('underpass stays blocked through 270mm and remains indeterminate beyond it until underside offset is supplied', () => {
+  const blocked = PROFILE.underpassEnvelopeAtHorizontalX(270);
+  assert.equal(blocked.status, 'blocked-by-floor-sidewall');
+  assert.equal(blocked.clearHeightMm, 0);
+
+  const unknown = PROFILE.underpassEnvelopeAtHorizontalX(270.001);
+  assert.equal(unknown.status, 'indeterminate-underside');
+  assert.equal(unknown.clearHeightMm, null);
+
+  const withTwoMillimetreReference = PROFILE.underpassEnvelopeAtHorizontalX(270.001, 2);
+  assert.equal(withTwoMillimetreReference.status, 'candidate-clearance');
+  close(
+    withTwoMillimetreReference.clearHeightMm,
+    PROFILE.heightAtHorizontalX(270.001) - 2,
+    1e-9,
+    'explicit underside-offset clearance'
+  );
+});
+
 test('profile remains monotonic through representative horizontal stations', () => {
-  const stations = [0, 50, 125.78478960900252, 200, 286.21812548736425, 400, 540];
+  const stations = [0, 50, 125.78478960900252, 200, 270, 286.21812548736425, 400, 540];
   const heights = stations.map(PROFILE.heightAtHorizontalX);
   for (let index = 1; index < heights.length; index += 1) {
     assert.ok(heights[index] >= heights[index - 1], `height must not decrease at station ${stations[index]}`);
