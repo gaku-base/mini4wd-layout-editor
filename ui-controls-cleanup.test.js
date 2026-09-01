@@ -54,6 +54,12 @@ test('closed detail drawer cannot expand the page beyond the workspace', () => {
   assert.match(SOURCE, /body\.simple-ui-enabled \.workspace-shell \{\s*overflow: hidden;/);
 });
 
+test('phone toolbar keeps new-layout access on a wrapped top action row', () => {
+  assert.match(SOURCE, /@media \(max-width: 720px\)[\s\S]*body\.simple-ui-enabled \.topbar \{\s*flex-wrap: wrap;/);
+  assert.match(SOURCE, /body\.simple-ui-enabled \.top-actions \{\s*width: 100%;\s*justify-content: flex-end;/);
+  assert.match(SOURCE, /body\.simple-ui-enabled #newBtn \{\s*display: inline-flex !important;/);
+});
+
 test('UI cleanup loading belongs to the editor extension bootstrap, not snap state', () => {
   assert.match(BOOTSTRAP_SOURCE, /ui-controls-cleanup\.js\?v=\$\{CACHE_KEY\}/);
   assert.match(BOOTSTRAP_SOURCE, /m4wdUiControlsCleanup/);

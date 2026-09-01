@@ -145,6 +145,18 @@
           padding-inline: 8px;
         }
       }
+      @media (max-width: 720px) {
+        html[data-ui-controls-cleanup-installed="1"] body.simple-ui-enabled .topbar {
+          flex-wrap: wrap;
+        }
+        html[data-ui-controls-cleanup-installed="1"] body.simple-ui-enabled .top-actions {
+          width: 100%;
+          justify-content: flex-end;
+        }
+        html[data-ui-controls-cleanup-installed="1"] body.simple-ui-enabled #newBtn {
+          display: inline-flex !important;
+        }
+      }
     `;
     documentRef.head.appendChild(style);
     return true;
