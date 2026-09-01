@@ -119,6 +119,18 @@
           confidence: 'high',
           appliesTo: ['left', 'right'],
           source: 'project-owner-approved-2026-09-01'
+        },
+        upperSideWallCurveRadiusMm: {
+          value: 398,
+          status: 'provisional',
+          confidence: 'medium',
+          source: 'speakerdeck-slope-assembly-drawing-2026-09-01-review'
+        },
+        openingUndersideCurveRadiusMm: {
+          value: 803,
+          status: 'provisional',
+          confidence: 'medium',
+          source: 'speakerdeck-slope-assembly-drawing-2026-09-01-review'
         }
       },
       ...palette
