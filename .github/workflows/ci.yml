@@ -79,11 +79,19 @@ jobs:
           fi
           node --test --test-reporter=spec "${tests[@]}"
 
-      - name: Run full Chromium rehearsal
-        if: (github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != ''
+      - name: Run Chromium rehearsal
+        if: (github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '' || hashFiles('.github/ui-smoke.trigger') != ''
         shell: bash
+        env:
+          FULL_REHEARSAL: ${{ github.event_name == 'workflow_dispatch' && inputs.full_rehearsal }}
         run: |
           set -euo pipefail
+
+          browser_mode="ui"
+          if [ "$FULL_REHEARSAL" = "true" ] || [ -f .github/full-rehearsal.trigger ]; then
+            browser_mode="full"
+          fi
+          echo "Chromium mode: ${browser_mode}"
 
           smoke_root="${RUNNER_TEMP}/m4wd-browser-smoke"
           mkdir -p "$smoke_root"
@@ -122,16 +130,18 @@ jobs:
           export BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html"
           export BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke"
 
-          node browser-smoke.js
-          node browser-trash-smoke.js
-          node browser-mode-help-smoke.js
-          node browser-marquee-preview-smoke.js
-          node browser-start-resnap-smoke.js
-          node browser-presentation-rehearsal.js
+          if [ "$browser_mode" = "full" ]; then
+            node browser-smoke.js
+            node browser-trash-smoke.js
+            node browser-mode-help-smoke.js
+            node browser-marquee-preview-smoke.js
+            node browser-start-resnap-smoke.js
+            node browser-presentation-rehearsal.js
+          fi
           node browser-ui-controls-smoke.js
 
       - name: Upload browser rehearsal failure screenshot
-        if: failure() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '')
+        if: failure() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '' || hashFiles('.github/ui-smoke.trigger') != '')
         uses: actions/upload-artifact@v4
         with:
           name: browser-smoke-failure
