@@ -144,7 +144,7 @@ test('canvas wheel keeps Ctrl zoom while reserving plain wheel rotation for cour
   const index = fs.readFileSync('index.html', 'utf8');
   const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));
   assert.match(app, /addEventListener\('wheel', onWheel, \{ passive: false \}\)/);
-  assert.match(index, /<script src="wheel-rotation\.js\?v=v1\.1-rc4-20260820-toolbar-trash1"><\/script>\s*<script src="app\.js"><\/script>/);
+  assert.match(index, /<script src="wheel-rotation\.js\?v=v1\.1-rc6-health1"><\/script>\s*<script src="app\.js"><\/script>/);
   assert.match(wheel, /if \(e\.ctrlKey\) \{\s*e\.preventDefault\(\);\s*wheelRotation\.reset\(\);/);
   assert.match(wheel, /if \(e\.shiftKey \|\| e\.metaKey \|\| !hasWheelRotatableTarget\(\)\) \{ wheelRotation\.reset\(\); return; \}/);
   assert.match(wheel, /const direction = wheelRotation\.push\(e\);/);
