@@ -64,12 +64,23 @@ test('slope records approved sidewall dimensions without inventing a full collis
   assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
 });
 
-test('slope keeps R398/R803 drawing radii provisional until their arc endpoints are resolved', () => {
+test('slope catalog records the approved R398 -> straight -> R803 longitudinal model as verified', () => {
   const measurements = PARTS.slope.measurements;
-  assert.equal(measurements?.upperSideWallCurveRadiusMm?.value, 398);
-  assert.equal(measurements?.openingUndersideCurveRadiusMm?.value, 803);
-  assert.equal(measurements?.upperSideWallCurveRadiusMm?.status, 'provisional');
-  assert.equal(measurements?.openingUndersideCurveRadiusMm?.status, 'provisional');
+  assert.equal(measurements?.lowerLongitudinalCurveRadiusMm?.value, 398);
+  assert.equal(measurements?.upperLongitudinalCurveRadiusMm?.value, 803);
+  close(measurements?.middleStraightLengthMm?.value, 169.10056179681956, 'middle straight length');
+  close(measurements?.middleStraightAngleDeg?.value, 18.423741009432902, 'middle straight angle');
+  for (const measurement of [
+    measurements?.lowerLongitudinalCurveRadiusMm,
+    measurements?.middleStraightLengthMm,
+    measurements?.middleStraightAngleDeg,
+    measurements?.upperLongitudinalCurveRadiusMm,
+    measurements?.longitudinalProfileModule
+  ]) {
+    assert.equal(measurement?.status, 'verified');
+    assert.equal(measurement?.confidence, 'high');
+  }
+  assert.equal(measurements?.longitudinalProfileModule?.value, 'slope-longitudinal-profile.js');
   assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
 });
 
