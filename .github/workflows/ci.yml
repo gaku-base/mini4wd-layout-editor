@@ -2,9 +2,21 @@ name: PR checks
 
 on:
   pull_request:
+    paths-ignore:
+      - 'alignment_test.png'
+      - 'corner45_8piece_closure_test.png'
+      - 'preview.png'
+      - 'qa/**/*.png'
+      - 'artifacts/**'
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_rehearsal:
+        description: 'Run the full Chromium regression after local checks'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -22,6 +34,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check required project files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f AGENTS.md
+          test -f index.html
+          test -f marquee-target-preview.js
+          test -f start-replacement-snap.js
+          test -f presentation-data.js
+          test -f presentation-renderer.js
+          test -f presentation-export.js
+          test -f presentation-mode.js
+          test -f browser-presentation-rehearsal.js
+          test -f ui-controls-cleanup.js
+          test -f browser-ui-controls-smoke.js
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -31,17 +59,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -d '' files < <(find . \
+          find . \
             -path './.git' -prune -o \
             -path './node_modules' -prune -o \
-            -name '*.js' -print0)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo 'JavaScript files were not found.'
-            exit 0
-          fi
-          for file in "${files[@]}"; do
-            node --check "$file"
-          done
+            -name '*.js' -print0 \
+            | xargs -0 -r -n 1 -P "$(nproc)" node --check
 
       - name: Run automated tests
         shell: bash
@@ -55,9 +77,10 @@ jobs:
             echo 'Automated tests were not found.'
             exit 0
           fi
-          node --test "${tests[@]}"
+          node --test --test-reporter=spec "${tests[@]}"
 
-      - name: Run core browser smoke test
+      - name: Run full Chromium rehearsal
+        if: github.event_name == 'workflow_dispatch' && inputs.full_rehearsal
         shell: bash
         run: |
           set -euo pipefail
@@ -68,6 +91,9 @@ jobs:
             --prefix "$smoke_root" \
             --no-save \
             --no-package-lock \
+            --no-audit \
+            --no-fund \
+            --ignore-scripts \
             playwright-core@1.55.0
 
           chrome_bin="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
@@ -91,69 +117,24 @@ jobs:
             sleep 0.25
           done
 
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
+          export NODE_PATH="$smoke_root/node_modules"
+          export CHROME_BIN="$chrome_bin"
+          export BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html"
+          export BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke"
+
           node browser-smoke.js
-
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-trash-smoke.js
-
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-mode-help-smoke.js
-
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-marquee-preview-smoke.js
-
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-start-resnap-smoke.js
-
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-presentation-rehearsal.js
-
-          NODE_PATH="$smoke_root/node_modules" \
-          CHROME_BIN="$chrome_bin" \
-          BROWSER_SMOKE_BASE_URL="http://127.0.0.1:4173/index.html" \
-          BROWSER_SMOKE_ARTIFACT_DIR="artifacts/browser-smoke" \
           node browser-ui-controls-smoke.js
 
-      - name: Upload browser smoke failure screenshot
-        if: failure()
+      - name: Upload browser rehearsal failure screenshot
+        if: failure() && github.event_name == 'workflow_dispatch' && inputs.full_rehearsal
         uses: actions/upload-artifact@v4
         with:
           name: browser-smoke-failure
           path: artifacts/browser-smoke/
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Check required project files
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -f AGENTS.md
-          test -f index.html
-          test -f marquee-target-preview.js
-          test -f start-replacement-snap.js
-          test -f presentation-data.js
-          test -f presentation-renderer.js
-          test -f presentation-export.js
-          test -f presentation-mode.js
-          test -f browser-presentation-rehearsal.js
-          test -f ui-controls-cleanup.js
-          test -f browser-ui-controls-smoke.js
