@@ -48,13 +48,19 @@ test('slope keeps the 540mm horizontal connection distance and 115mm height delt
   assert.ok([entry, exit].every(connector => connector.connectionWidthMm === 370));
 });
 
-test('slope records the approved 270mm floor-blocking sidewall length without inventing a full collision profile', () => {
-  const measurement = PARTS.slope.measurements?.floorBlockingSideWallLengthFromLowEndMm;
-  assert.ok(measurement, 'slope sidewall measurement must exist');
-  assert.equal(measurement.value, 270);
-  assert.equal(measurement.status, 'verified');
-  assert.equal(measurement.confidence, 'high');
-  assert.deepEqual(Array.from(measurement.appliesTo), ['left', 'right']);
+test('slope records approved sidewall dimensions without inventing a full collision profile', () => {
+  const measurements = PARTS.slope.measurements;
+  const floorBlocking = measurements?.floorBlockingSideWallLengthFromLowEndMm;
+  const wallHeight = measurements?.sideWallHeightAboveRunningSurfaceMm;
+  const wallThickness = measurements?.sideWallThicknessMm;
+  assert.equal(floorBlocking?.value, 270);
+  assert.equal(wallHeight?.value, 50);
+  assert.equal(wallThickness?.value, 2.5);
+  for (const measurement of [floorBlocking, wallHeight, wallThickness]) {
+    assert.equal(measurement?.status, 'verified');
+    assert.equal(measurement?.confidence, 'high');
+    assert.deepEqual(Array.from(measurement?.appliesTo || []), ['left', 'right']);
+  }
   assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
 });
 
