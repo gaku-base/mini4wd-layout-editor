@@ -13,7 +13,7 @@
   const FLOOR_BLOCKING_SIDEWALL_LENGTH_MM = 270;
 
   // Project-owner approved on 2026-09-01: the longitudinal side-view reference
-  // curve is a tangent-continuous R398 arc -> straight -> R803 arc.  Solving
+  // curve is a tangent-continuous R398 arc -> straight -> R803 arc. Solving
   // the two unknowns (straight length and tangent angle) against the verified
   // 540 mm horizontal projection and 115 mm rise gives the values below.
   const STRAIGHT_LENGTH_MM = 169.10056179681956;
@@ -74,6 +74,52 @@
     return Math.asin((HORIZONTAL_MM - x) / UPPER_ARC_RADIUS_MM) * 180 / Math.PI;
   }
 
+  // The floor-reaching side skirt blocks an underpass through x=270 mm.
+  // Beyond that station the product photos show an opening, but the exact
+  // underside offset/thickness is not yet verified. This helper therefore
+  // reports the known running-surface envelope and only computes a physical
+  // roof clearance when the caller supplies an explicit underside offset.
+  function underpassEnvelopeAtHorizontalX(xMm, undersideOffsetMm = null) {
+    const x = clampHorizontalX(xMm);
+    if (x === null) return null;
+
+    const runningSurfaceHeightMm = heightAtHorizontalX(x);
+    if (x <= FLOOR_BLOCKING_SIDEWALL_LENGTH_MM) {
+      return Object.freeze({
+        status: 'blocked-by-floor-sidewall',
+        xMm: x,
+        runningSurfaceHeightMm,
+        clearHeightMm: 0,
+        undersideOffsetMm: null
+      });
+    }
+
+    const undersideOffset = Number(undersideOffsetMm);
+    if (!Number.isFinite(undersideOffset) || undersideOffset < 0) {
+      return Object.freeze({
+        status: 'indeterminate-underside',
+        xMm: x,
+        runningSurfaceHeightMm,
+        clearHeightMm: null,
+        undersideOffsetMm: null
+      });
+    }
+
+    return Object.freeze({
+      status: 'candidate-clearance',
+      xMm: x,
+      runningSurfaceHeightMm,
+      clearHeightMm: Math.max(0, runningSurfaceHeightMm - undersideOffset),
+      undersideOffsetMm: undersideOffset
+    });
+  }
+
+  const FLOOR_BLOCKING_END = Object.freeze({
+    xMm: FLOOR_BLOCKING_SIDEWALL_LENGTH_MM,
+    runningSurfaceHeightMm: heightAtHorizontalX(FLOOR_BLOCKING_SIDEWALL_LENGTH_MM),
+    tangentDeg: tangentAngleDegAtHorizontalX(FLOOR_BLOCKING_SIDEWALL_LENGTH_MM)
+  });
+
   const SEGMENTS = Object.freeze([
     Object.freeze({
       id: 'lower-r398',
@@ -109,9 +155,11 @@
     tangentAngleDeg: TANGENT_ANGLE_DEG,
     upperArcRadiusMm: UPPER_ARC_RADIUS_MM,
     floorBlockingSideWallLengthMm: FLOOR_BLOCKING_SIDEWALL_LENGTH_MM,
+    floorBlockingEnd: FLOOR_BLOCKING_END,
     transitionPoints: Object.freeze({ lowerArcEnd: LOWER_ARC_END, straightEnd: STRAIGHT_END }),
     segments: SEGMENTS,
     heightAtHorizontalX,
-    tangentAngleDegAtHorizontalX
+    tangentAngleDegAtHorizontalX,
+    underpassEnvelopeAtHorizontalX
   });
 });
