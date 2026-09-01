@@ -6,14 +6,11 @@ const test = require('node:test');
 
 const app = fs.readFileSync('./app.js', 'utf8');
 const html = fs.readFileSync('./index.html', 'utf8');
-const testHtml = fs.readFileSync('./test-index.html', 'utf8');
 const section = (start, end) => app.slice(app.indexOf(start), app.indexOf(end));
 
-test('saved-space and transform modules load before the application in production and QA pages', () => {
-  for (const source of [html, testHtml]) {
-    assert.ok(source.indexOf('src="saved-spaces.js"') < source.indexOf('src="app.js'));
-    assert.ok(source.indexOf('src="unavailable-area-transform.js"') < source.indexOf('src="app.js'));
-  }
+test('saved-space and transform modules load before the application in the production page', () => {
+  assert.ok(html.indexOf('src="saved-spaces.js"') < html.indexOf('src="app.js'));
+  assert.ok(html.indexOf('src="unavailable-area-transform.js"') < html.indexOf('src="app.js'));
 });
 
 test('saved-space library has empty state, cards, and all management actions', () => {

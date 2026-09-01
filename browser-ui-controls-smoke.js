@@ -97,6 +97,38 @@ async function main() {
     assert.equal(bridgeWorked, 1);
     console.log('✓ legacy course-only PNG remains available inside 発表・出力');
 
+    await page.locator('#presentationBackBtn').click();
+    await page.locator('#presentationView').waitFor({state:'hidden',timeout:TIMEOUT});
+    await page.setViewportSize({width:390,height:844});
+    await page.waitForTimeout(100);
+    const phone = await page.evaluate(() => {
+      const visible = selector => {
+        const element = document.querySelector(selector);
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+      };
+      const canvas = document.querySelector('#courseCanvas')?.getBoundingClientRect();
+      return {
+        innerWidth: window.innerWidth,
+        horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+        newButtonVisible: visible('#newBtn'),
+        trashVisible: visible('#dragTrash'),
+        moreVisible: visible('#simpleToolbarMoreBtn'),
+        canvasVisible: visible('#courseCanvas'),
+        canvasWidth: canvas?.width || 0
+      };
+    });
+    assert.equal(phone.innerWidth, 390);
+    assert.equal(phone.horizontalOverflow, false, '390px editor must not create page-level horizontal overflow');
+    assert.equal(phone.newButtonVisible, true, 'new-layout control remains available at phone width');
+    assert.equal(phone.trashVisible, true, 'toolbar trash remains available at phone width');
+    assert.equal(phone.moreVisible, true, 'overflow controls remain available at phone width');
+    assert.equal(phone.canvasVisible, true, 'course canvas remains visible at phone width');
+    assert.ok(phone.canvasWidth >= 300 && phone.canvasWidth <= 390, `phone canvas width is usable: ${phone.canvasWidth}`);
+    console.log('✓ general editor remains usable without page overflow at 390×844');
+
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
     console.log('Browser UI controls cleanup smoke test passed.');

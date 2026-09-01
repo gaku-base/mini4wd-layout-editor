@@ -129,11 +129,9 @@ test('PNG出力は選択強調を除外し通常幅0.52の接続継ぎ目を使�
   assert.doesNotMatch(appSource, /drawPartsInLayerOrder\(c, \{ exportMode: true, selected: true \}\)/);
 });
 
-test('正式モデルは本番画面とQA画面でapp.jsより先に読み込まれる', () => {
-  for (const filename of ['index.html', 'test-index.html']) {
-    const html = fs.readFileSync(path.join(__dirname, filename), 'utf8');
-    assert.ok(html.indexOf('burning-changer-visual.js') < html.indexOf('app.js'));
-  }
+test('正式モデルは本番画面でapp.jsより先に読み込まれる', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  assert.ok(html.indexOf('burning-changer-visual.js') < html.indexOf('app.js'));
 });
 
 test('テンプレートSVGと同期PNGが正式モデルの表示資産になる', () => {

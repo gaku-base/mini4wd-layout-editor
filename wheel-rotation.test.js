@@ -8,6 +8,7 @@ const {
 } = require('./wheel-rotation.js');
 
 const WHEEL_SOURCE = fs.readFileSync(require.resolve('./wheel-rotation.js'), 'utf8');
+const BOOTSTRAP_SOURCE = fs.readFileSync(require.resolve('./editor-extensions-bootstrap.js'), 'utf8');
 
 test('line and page wheel events rotate immediately as physical notches', () => {
   const wheel = createWheelRotationAccumulator();
@@ -53,66 +54,64 @@ test('selected part identity is complete, canonical, and order independent', () 
   );
 });
 
-test('simplified UI selection bridge keeps complete IDs outside the rewritten selection summary', () => {
+test('temporary selection identity compatibility bridge stays small and explicit', () => {
+  assert.match(WHEEL_SOURCE, /function prepareEditorExtensionBridge/);
   assert.match(WHEEL_SOURCE, /const snapshot = originalGetState\(context\);/);
   assert.match(WHEEL_SOURCE, /canonicalize\(snapshot\?\.selectedIds\)/);
   assert.match(WHEEL_SOURCE, /getElementById\('simpleUiSelectionIdentity'\)/);
-  assert.match(WHEEL_SOURCE, /marker\.id = 'simpleUiSelectionIdentity'/);
-  assert.match(WHEEL_SOURCE, /\(root\.document\.body \|\| root\.document\.documentElement\)\.appendChild\(marker\)/);
   assert.match(WHEEL_SOURCE, /marker\.dataset\.selectedIds = identity/);
-  assert.doesNotMatch(WHEEL_SOURCE, /selectionInfo\.appendChild\(marker\)/);
+  assert.match(WHEEL_SOURCE, /editor-extensions-bootstrap\.js\?v=v1\.1-rc6-health1/);
+  assert.doesNotMatch(WHEEL_SOURCE, /function integrateModeHelpIntoToolbar/);
+  assert.doesNotMatch(WHEEL_SOURCE, /const loadPresentationMode/);
+  assert.doesNotMatch(WHEEL_SOURCE, /presentation-mode\.css/);
 });
 
-test('toolbar helpers keep QA API enabled through app boot and disable it after simple-ui loads', () => {
-  assert.match(WHEEL_SOURCE, /function exposeCoursePartTrashBridgeApi/);
+test('extension bootstrap owns the private runtime bridge lifetime', () => {
   assert.match(WHEEL_SOURCE, /root\.__COURSE_ENABLE_DEBUG__ = true/);
-  assert.doesNotMatch(WHEEL_SOURCE, /setTimeout\(\(\) => \{ root\.__COURSE_ENABLE_DEBUG__ = false; \}, 0\)/);
-  assert.match(WHEEL_SOURCE, /DOMContentLoaded', loadStartReplacementSnap, \{ once: true \}/);
-  assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*root\.__COURSE_ENABLE_DEBUG__ = false/);
-  assert.match(WHEEL_SOURCE, /script\.addEventListener\('error',[\s\S]*root\.__COURSE_ENABLE_DEBUG__ = false/);
-  assert.doesNotMatch(WHEEL_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
+  assert.match(BOOTSTRAP_SOURCE, /root\.__COURSE_ENABLE_DEBUG__ = false/);
+  assert.match(BOOTSTRAP_SOURCE, /delete root\.__mini4wdCourseDebug/);
+  assert.doesNotMatch(BOOTSTRAP_SOURCE, /Object\.defineProperty\(root, '__COURSE_ENABLE_DEBUG__'/);
 });
 
-test('Start replacement snap, marquee preview and presentation mode load before simple-ui hides the private bridge', () => {
-  const startSnapIndex = WHEEL_SOURCE.indexOf("script.src = 'start-replacement-snap.js?v=v1.1-rc4-20260821-start-resnap1'");
-  const previewIndex = WHEEL_SOURCE.indexOf("script.src = 'marquee-target-preview.js?v=v1.1-rc4-20260821-marquee-preview1'");
-  const presentationIndex = WHEEL_SOURCE.indexOf("'presentation-mode.js?v=20260821-presentation1'");
-  const simpleUiIndex = WHEEL_SOURCE.indexOf("script.src = 'simple-ui.js?v=v1.1-rc4-20260820-toolbar-trash1'");
+test('Start replacement snap, marquee preview and presentation mode load before simple-ui', () => {
+  const startSnapIndex = BOOTSTRAP_SOURCE.indexOf('start-replacement-snap.js?v=${CACHE_KEY}');
+  const previewIndex = BOOTSTRAP_SOURCE.indexOf('marquee-target-preview.js?v=${CACHE_KEY}');
+  const presentationIndex = BOOTSTRAP_SOURCE.indexOf('presentation-mode.js?v=${CACHE_KEY}');
+  const simpleUiIndex = BOOTSTRAP_SOURCE.indexOf('simple-ui.js?v=${CACHE_KEY}');
   assert.ok(startSnapIndex >= 0, 'Start replacement snap loader must exist');
   assert.ok(previewIndex >= 0, 'marquee preview loader must exist');
   assert.ok(presentationIndex >= 0, 'presentation mode loader must exist');
   assert.ok(simpleUiIndex >= 0, 'simple-ui loader must exist');
-  assert.match(WHEEL_SOURCE, /const loadStartReplacementSnap = \(\) => \{[\s\S]*loadMarqueePreview\(\);/);
-  assert.match(WHEEL_SOURCE, /const loadMarqueePreview = \(\) => \{[\s\S]*loadPresentationMode\(\);/);
-  assert.match(WHEEL_SOURCE, /const loadPresentationMode = \(\) => \{[\s\S]*loadSimpleUi\(\);/);
-  assert.match(WHEEL_SOURCE, /presentation-data\.js\?v=20260821-presentation1/);
-  assert.match(WHEEL_SOURCE, /presentation-renderer\.js\?v=20260821-presentation1/);
-  assert.match(WHEEL_SOURCE, /presentation-export\.js\?v=20260821-presentation1/);
-  assert.match(WHEEL_SOURCE, /script\.addEventListener\('load', continueBoot/);
-  assert.match(WHEEL_SOURCE, /script\.addEventListener\('error', continueBoot/);
+  assert.match(BOOTSTRAP_SOURCE, /function loadStartReplacementSnap\(\)/);
+  assert.match(BOOTSTRAP_SOURCE, /function loadMarqueePreview\(\)/);
+  assert.match(BOOTSTRAP_SOURCE, /function loadPresentationMode\(\)/);
+  assert.match(BOOTSTRAP_SOURCE, /presentation-data\.js\?v=\$\{CACHE_KEY\}/);
+  assert.match(BOOTSTRAP_SOURCE, /presentation-renderer\.js\?v=\$\{CACHE_KEY\}/);
+  assert.match(BOOTSTRAP_SOURCE, /presentation-export\.js\?v=\$\{CACHE_KEY\}/);
+  assert.match(BOOTSTRAP_SOURCE, /script\.addEventListener\('load', continueBoot/);
+  assert.match(BOOTSTRAP_SOURCE, /script\.addEventListener\('error', continueBoot/);
 });
 
 test('simplified UI keeps a single workspace column at 720px and below', () => {
   assert.match(
-    WHEEL_SOURCE,
+    BOOTSTRAP_SOURCE,
     /@media \(max-width: 720px\) \{ body\.simple-ui-enabled \.workspace-shell \{ grid-template-columns: minmax\(0, 1fr\) !important; \} \}/
   );
-  assert.match(WHEEL_SOURCE, /script\.addEventListener\('load',[\s\S]*simpleUiNarrowLayoutOverride/);
+  assert.match(BOOTSTRAP_SOURCE, /simpleUiNarrowLayoutOverride/);
 });
 
 test('mode instruction is integrated into the canvas toolbar instead of floating over the course', () => {
-  assert.match(WHEEL_SOURCE, /function integrateModeHelpIntoToolbar\(\)/);
-  assert.match(WHEEL_SOURCE, /getElementById\('canvasToolbar'\)/);
-  assert.match(WHEEL_SOURCE, /getElementById\('instruction'\)/);
-  assert.match(WHEEL_SOURCE, /toolbar\.insertBefore\(instruction, rightGroup\)/);
-  assert.match(WHEEL_SOURCE, /instruction\.classList\.add\('toolbar-mode-help'\)/);
-  assert.match(WHEEL_SOURCE, /\.canvas-toolbar \.toolbar-mode-help \{[\s\S]*position:\s*static !important;/);
-  assert.match(WHEEL_SOURCE, /background:\s*transparent !important;/);
-  assert.match(WHEEL_SOURCE, /box-shadow:\s*none !important;/);
-  assert.match(WHEEL_SOURCE, /flex-direction:\s*row;/);
-  assert.match(WHEEL_SOURCE, /text-overflow:\s*ellipsis;/);
-  assert.match(WHEEL_SOURCE, /is-sub-edit-active/);
-  assert.match(WHEEL_SOURCE, /integrateModeHelpIntoToolbar\(\);/);
+  assert.match(BOOTSTRAP_SOURCE, /function integrateModeHelpIntoToolbar\(\)/);
+  assert.match(BOOTSTRAP_SOURCE, /getElementById\('canvasToolbar'\)/);
+  assert.match(BOOTSTRAP_SOURCE, /getElementById\('instruction'\)/);
+  assert.match(BOOTSTRAP_SOURCE, /toolbar\.insertBefore\(instruction, rightGroup\)/);
+  assert.match(BOOTSTRAP_SOURCE, /instruction\.classList\.add\('toolbar-mode-help'\)/);
+  assert.match(BOOTSTRAP_SOURCE, /\.canvas-toolbar \.toolbar-mode-help \{[\s\S]*position:\s*static !important;/);
+  assert.match(BOOTSTRAP_SOURCE, /background:\s*transparent !important;/);
+  assert.match(BOOTSTRAP_SOURCE, /box-shadow:\s*none !important;/);
+  assert.match(BOOTSTRAP_SOURCE, /flex-direction:\s*row;/);
+  assert.match(BOOTSTRAP_SOURCE, /text-overflow:\s*ellipsis;/);
+  assert.match(BOOTSTRAP_SOURCE, /is-sub-edit-active/);
 });
 
 test('sub-edit bar suppresses the overlapping instruction card', () => {
@@ -124,11 +123,8 @@ test('sub-edit bar suppresses the overlapping instruction card', () => {
 });
 
 test('hidden sub-edit bar cannot be revived by the base display grid rule', () => {
-  assert.match(
-    WHEEL_SOURCE,
-    /\.sub-edit-mode-bar\[hidden\] \{ display: none !important; \}/
-  );
-  assert.match(WHEEL_SOURCE, /hiddenGuard\.id = 'subEditHiddenGuard'/);
+  assert.match(BOOTSTRAP_SOURCE, /\.sub-edit-mode-bar\[hidden\] \{ display: none !important; \}/);
+  assert.match(BOOTSTRAP_SOURCE, /hiddenGuard\.id = 'subEditHiddenGuard'/);
 });
 
 test('course parts keep 45 degree steps while venue areas use 5 degree wheel and Z/X rotation', () => {

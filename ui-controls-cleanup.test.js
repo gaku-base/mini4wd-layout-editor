@@ -7,6 +7,7 @@ const UI = require('./ui-controls-cleanup.js');
 
 const SOURCE = fs.readFileSync(require.resolve('./ui-controls-cleanup.js'), 'utf8');
 const SNAP_SOURCE = fs.readFileSync(require.resolve('./snap-toggle.js'), 'utf8');
+const BOOTSTRAP_SOURCE = fs.readFileSync(require.resolve('./editor-extensions-bootstrap.js'), 'utf8');
 
 test('top actions use user-facing names and hide JSON terminology', () => {
   assert.deepEqual(UI.TOP_ACTION_LABELS, {
@@ -49,7 +50,19 @@ test('legacy course-only PNG is preserved inside presentation output', () => {
   assert.match(SOURCE, /exportButton\.classList\.add\('ui-legacy-export-source'\)/);
 });
 
-test('cleanup is loaded from the already-required snap toggle entry point with RC6 cache busting', () => {
-  assert.match(SNAP_SOURCE, /ui-controls-cleanup\.js\?v=v1\.1-rc6-20260821-ui3/);
-  assert.match(SNAP_SOURCE, /uiControlsCleanupLoader/);
+test('closed detail drawer cannot expand the page beyond the workspace', () => {
+  assert.match(SOURCE, /body\.simple-ui-enabled \.workspace-shell \{\s*overflow: hidden;/);
+});
+
+test('phone toolbar keeps new-layout access on a wrapped top action row', () => {
+  assert.match(SOURCE, /@media \(max-width: 720px\)[\s\S]*body\.simple-ui-enabled \.topbar \{\s*flex-wrap: wrap;/);
+  assert.match(SOURCE, /body\.simple-ui-enabled \.top-actions \{\s*width: 100%;\s*justify-content: flex-end;/);
+  assert.match(SOURCE, /body\.simple-ui-enabled #newBtn \{\s*display: inline-flex !important;/);
+});
+
+test('UI cleanup loading belongs to the editor extension bootstrap, not snap state', () => {
+  assert.match(BOOTSTRAP_SOURCE, /ui-controls-cleanup\.js\?v=\$\{CACHE_KEY\}/);
+  assert.match(BOOTSTRAP_SOURCE, /m4wdUiControlsCleanup/);
+  assert.doesNotMatch(SNAP_SOURCE, /ui-controls-cleanup\.js/);
+  assert.doesNotMatch(SNAP_SOURCE, /presentation-mode\.css/);
 });
