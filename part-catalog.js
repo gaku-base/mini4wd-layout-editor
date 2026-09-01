@@ -98,6 +98,15 @@
       geometry: { width: 54, height: 36, connectors: [{ id: 'a', label: '低端', x: -27, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '高端', x: 27, y: 0, localZMm: 115, heading: 0, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -27, maxX: 27, minY: -18, maxY: 18 } },
       visual: { file: 'assets/parts/slope.png', canvasWidth: 54, canvasHeight: 36, originX: 27, originY: 18 },
       height: { startMm: 0, endMm: 115, maxMm: 115 },
+      measurements: {
+        floorBlockingSideWallLengthFromLowEndMm: {
+          value: 270,
+          status: 'verified',
+          confidence: 'high',
+          appliesTo: ['left', 'right'],
+          source: 'project-owner-approved-2026-09-01'
+        }
+      },
       ...palette
     },
     bank20: {

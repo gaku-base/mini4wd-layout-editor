@@ -48,6 +48,16 @@ test('slope keeps the 540mm horizontal connection distance and 115mm height delt
   assert.ok([entry, exit].every(connector => connector.connectionWidthMm === 370));
 });
 
+test('slope records the approved 270mm floor-blocking sidewall length without inventing a full collision profile', () => {
+  const measurement = PARTS.slope.measurements?.floorBlockingSideWallLengthFromLowEndMm;
+  assert.ok(measurement, 'slope sidewall measurement must exist');
+  assert.equal(measurement.value, 270);
+  assert.equal(measurement.status, 'verified');
+  assert.equal(measurement.confidence, 'high');
+  assert.deepEqual(Array.from(measurement.appliesTo), ['left', 'right']);
+  assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
+});
+
 test('right and left 45-degree corners use 370mm faces and retain a 45-degree travel turn at every snapped rotation', () => {
   for (const type of ['corner-45-right', 'corner-45-left']) {
     const [entry, exit] = GRAPH.connectorsForDefinition(PARTS[type]);
