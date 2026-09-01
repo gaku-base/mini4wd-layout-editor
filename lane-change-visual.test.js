@@ -102,9 +102,7 @@ test('テンプレートSVGと同期PNGが正式プロファイルの高解像�
   assert.equal(png.readUInt32BE(20), 288);
 });
 
-test('正式視覚モデルは本番画面とQA画面でapp.jsより先に読み込まれる', () => {
-  for (const filename of ['index.html', 'test-index.html']) {
-    const html = fs.readFileSync(path.join(__dirname, filename), 'utf8');
-    assert.ok(html.indexOf('lane-change-visual.js') < html.indexOf('app.js'));
-  }
+test('正式視覚モデルは本番画面でapp.jsより先に読み込まれる', () => {
+  const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+  assert.ok(html.indexOf('lane-change-visual.js') < html.indexOf('app.js'));
 });

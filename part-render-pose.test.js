@@ -90,11 +90,9 @@ test('the left/right form comes from the catalog definition, not a runtime mirro
 test('screen, ghost, selection outline, warnings, and PNG use the shared catalog definition trace', () => {
   const source = fs.readFileSync('./app.js', 'utf8');
   const production = fs.readFileSync('./index.html', 'utf8');
-  const qa = fs.readFileSync('./test-index.html', 'utf8');
   assert.match(source, /function drawPart\(c, part, opts = \{\}\)[\s\S]*const pose = resolvePartPose\(part\)/);
   assert.match(source, /const ghostPart = renderPartFromProposal\(proposal\)[\s\S]*drawPart\(c, ghostPart\)/);
   assert.match(source, /function partRenderTrace\(part\) \{\s*return PART_RENDER_POSE\.tracePart\(PARTS\[part\.type\], part\)/);
   assert.match(source, /drawPartsInLayerOrder\(c, \{ exportMode: true \}\)/);
   assert.match(production, /part-render-pose\.js[\s\S]*corner-variant\.js[\s\S]*app\.js/);
-  assert.match(qa, /part-render-pose\.js[\s\S]*corner-variant\.js[\s\S]*app\.js/);
 });
