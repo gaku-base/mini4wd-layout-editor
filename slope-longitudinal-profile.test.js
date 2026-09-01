@@ -1,0 +1,49 @@
+'use strict';
+
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const PROFILE = require('./slope-longitudinal-profile.js');
+
+const close = (actual, expected, tolerance = 1e-9, message = 'value') => {
+  assert.ok(Math.abs(actual - expected) <= tolerance, `${message}: ${actual} !== ${expected}`);
+};
+
+test('verified slope profile uses R398 -> straight -> R803 and preserves the separate 270mm floor-blocking sidewall length', () => {
+  assert.equal(PROFILE.status, 'verified');
+  assert.equal(PROFILE.lowerArcRadiusMm, 398);
+  assert.equal(PROFILE.upperArcRadiusMm, 803);
+  close(PROFILE.straightLengthMm, 169.10056179681956, 1e-9, 'straight length');
+  close(PROFILE.tangentAngleDeg, 18.423741009432902, 1e-9, 'tangent angle');
+  assert.equal(PROFILE.floorBlockingSideWallLengthMm, 270);
+  assert.equal(PROFILE.segments.map(segment => segment.kind).join(','), 'arc,straight,arc');
+});
+
+test('slope profile is tangent-continuous at both arc-to-straight connections', () => {
+  const lowerEnd = PROFILE.transitionPoints.lowerArcEnd;
+  const straightEnd = PROFILE.transitionPoints.straightEnd;
+
+  close(PROFILE.tangentAngleDegAtHorizontalX(lowerEnd.xMm), PROFILE.tangentAngleDeg, 1e-9, 'lower tangent');
+  close(PROFILE.tangentAngleDegAtHorizontalX(straightEnd.xMm), PROFILE.tangentAngleDeg, 1e-9, 'upper tangent');
+  close(PROFILE.heightAtHorizontalX(lowerEnd.xMm), lowerEnd.zMm, 1e-9, 'lower height continuity');
+  close(PROFILE.heightAtHorizontalX(straightEnd.xMm), straightEnd.zMm, 1e-9, 'upper height continuity');
+});
+
+test('slope profile closes exactly to 540mm horizontal and 115mm rise with horizontal end tangents', () => {
+  close(PROFILE.heightAtHorizontalX(0), 0, 1e-9, 'low-end height');
+  close(PROFILE.heightAtHorizontalX(540), 115, 1e-9, 'high-end height');
+  close(PROFILE.tangentAngleDegAtHorizontalX(0), 0, 1e-9, 'low-end tangent');
+  close(PROFILE.tangentAngleDegAtHorizontalX(540), 0, 1e-9, 'high-end tangent');
+
+  close(PROFILE.transitionPoints.lowerArcEnd.xMm, 125.78478960900252, 1e-9, 'R398 end x');
+  close(PROFILE.transitionPoints.lowerArcEnd.zMm, 20.39943498053534, 1e-9, 'R398 end z');
+  close(PROFILE.transitionPoints.straightEnd.xMm, 286.21812548736425, 1e-9, 'straight end x');
+  close(PROFILE.transitionPoints.straightEnd.zMm, 73.8423460066084, 1e-9, 'straight end z');
+});
+
+test('profile remains monotonic through representative horizontal stations', () => {
+  const stations = [0, 50, 125.78478960900252, 200, 286.21812548736425, 400, 540];
+  const heights = stations.map(PROFILE.heightAtHorizontalX);
+  for (let index = 1; index < heights.length; index += 1) {
+    assert.ok(heights[index] >= heights[index - 1], `height must not decrease at station ${stations[index]}`);
+  }
+});
