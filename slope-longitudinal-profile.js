@@ -1,0 +1,117 @@
+(function (root, factory) {
+  'use strict';
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.M4WD_SLOPE_LONGITUDINAL_PROFILE = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
+
+  const HORIZONTAL_MM = 540;
+  const RISE_MM = 115;
+  const LOWER_ARC_RADIUS_MM = 398;
+  const UPPER_ARC_RADIUS_MM = 803;
+  const FLOOR_BLOCKING_SIDEWALL_LENGTH_MM = 270;
+
+  // Project-owner approved on 2026-09-01: the longitudinal side-view reference
+  // curve is a tangent-continuous R398 arc -> straight -> R803 arc.  Solving
+  // the two unknowns (straight length and tangent angle) against the verified
+  // 540 mm horizontal projection and 115 mm rise gives the values below.
+  const STRAIGHT_LENGTH_MM = 169.10056179681956;
+  const TANGENT_ANGLE_DEG = 18.423741009432902;
+  const TANGENT_ANGLE_RAD = TANGENT_ANGLE_DEG * Math.PI / 180;
+
+  const LOWER_ARC_HORIZONTAL_MM = LOWER_ARC_RADIUS_MM * Math.sin(TANGENT_ANGLE_RAD);
+  const LOWER_ARC_RISE_MM = LOWER_ARC_RADIUS_MM * (1 - Math.cos(TANGENT_ANGLE_RAD));
+  const STRAIGHT_HORIZONTAL_MM = STRAIGHT_LENGTH_MM * Math.cos(TANGENT_ANGLE_RAD);
+  const STRAIGHT_RISE_MM = STRAIGHT_LENGTH_MM * Math.sin(TANGENT_ANGLE_RAD);
+  const UPPER_ARC_HORIZONTAL_MM = UPPER_ARC_RADIUS_MM * Math.sin(TANGENT_ANGLE_RAD);
+  const UPPER_ARC_RISE_MM = UPPER_ARC_RADIUS_MM * (1 - Math.cos(TANGENT_ANGLE_RAD));
+
+  const LOWER_ARC_END = Object.freeze({
+    xMm: LOWER_ARC_HORIZONTAL_MM,
+    zMm: LOWER_ARC_RISE_MM,
+    tangentDeg: TANGENT_ANGLE_DEG
+  });
+
+  const STRAIGHT_END = Object.freeze({
+    xMm: LOWER_ARC_HORIZONTAL_MM + STRAIGHT_HORIZONTAL_MM,
+    zMm: LOWER_ARC_RISE_MM + STRAIGHT_RISE_MM,
+    tangentDeg: TANGENT_ANGLE_DEG
+  });
+
+  function clampHorizontalX(xMm) {
+    const x = Number(xMm);
+    if (!Number.isFinite(x)) return null;
+    return Math.min(HORIZONTAL_MM, Math.max(0, x));
+  }
+
+  function heightAtHorizontalX(xMm) {
+    const x = clampHorizontalX(xMm);
+    if (x === null) return null;
+
+    if (x <= LOWER_ARC_END.xMm) {
+      return LOWER_ARC_RADIUS_MM - Math.sqrt(Math.max(0, LOWER_ARC_RADIUS_MM ** 2 - x ** 2));
+    }
+
+    if (x <= STRAIGHT_END.xMm) {
+      return LOWER_ARC_END.zMm + (x - LOWER_ARC_END.xMm) * Math.tan(TANGENT_ANGLE_RAD);
+    }
+
+    const fromHighEnd = HORIZONTAL_MM - x;
+    return RISE_MM - (UPPER_ARC_RADIUS_MM - Math.sqrt(Math.max(0, UPPER_ARC_RADIUS_MM ** 2 - fromHighEnd ** 2)));
+  }
+
+  function tangentAngleDegAtHorizontalX(xMm) {
+    const x = clampHorizontalX(xMm);
+    if (x === null) return null;
+
+    if (x <= LOWER_ARC_END.xMm) {
+      return Math.asin(x / LOWER_ARC_RADIUS_MM) * 180 / Math.PI;
+    }
+
+    if (x <= STRAIGHT_END.xMm) return TANGENT_ANGLE_DEG;
+
+    return Math.asin((HORIZONTAL_MM - x) / UPPER_ARC_RADIUS_MM) * 180 / Math.PI;
+  }
+
+  const SEGMENTS = Object.freeze([
+    Object.freeze({
+      id: 'lower-r398',
+      kind: 'arc',
+      radiusMm: LOWER_ARC_RADIUS_MM,
+      start: Object.freeze({ xMm: 0, zMm: 0, tangentDeg: 0 }),
+      end: LOWER_ARC_END
+    }),
+    Object.freeze({
+      id: 'middle-straight',
+      kind: 'straight',
+      lengthMm: STRAIGHT_LENGTH_MM,
+      angleDeg: TANGENT_ANGLE_DEG,
+      start: LOWER_ARC_END,
+      end: STRAIGHT_END
+    }),
+    Object.freeze({
+      id: 'upper-r803',
+      kind: 'arc',
+      radiusMm: UPPER_ARC_RADIUS_MM,
+      start: STRAIGHT_END,
+      end: Object.freeze({ xMm: HORIZONTAL_MM, zMm: RISE_MM, tangentDeg: 0 })
+    })
+  ]);
+
+  return Object.freeze({
+    status: 'verified',
+    source: 'project-owner-approved-2026-09-01',
+    horizontalMm: HORIZONTAL_MM,
+    riseMm: RISE_MM,
+    lowerArcRadiusMm: LOWER_ARC_RADIUS_MM,
+    straightLengthMm: STRAIGHT_LENGTH_MM,
+    tangentAngleDeg: TANGENT_ANGLE_DEG,
+    upperArcRadiusMm: UPPER_ARC_RADIUS_MM,
+    floorBlockingSideWallLengthMm: FLOOR_BLOCKING_SIDEWALL_LENGTH_MM,
+    transitionPoints: Object.freeze({ lowerArcEnd: LOWER_ARC_END, straightEnd: STRAIGHT_END }),
+    segments: SEGMENTS,
+    heightAtHorizontalX,
+    tangentAngleDegAtHorizontalX
+  });
+});
