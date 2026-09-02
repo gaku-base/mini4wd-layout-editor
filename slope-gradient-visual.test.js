@@ -40,10 +40,13 @@ const visual = require('./slope-gradient-visual.js');
 {
   const svg = fs.readFileSync(path.join(__dirname, 'assets/parts/slope-gradient.svg'), 'utf8');
   assert.match(svg, /linearGradient id="heightGradient"/);
-  assert.match(svg, /x1="0" y1="0" x2="1" y2="0"/);
-  assert.match(svg, /stop-color="#000000" stop-opacity="0\.30"/);
-  assert.match(svg, /stop-color="#ffffff" stop-opacity="0\.26"/);
-  assert.match(svg, /href="slope\.png"/);
+  assert.match(svg, /gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="54" y2="0"/);
+  assert.match(svg, /stop offset="0" stop-color="#1b7a5c"/);
+  assert.match(svg, /stop offset="1" stop-color="#82ddb9"/);
+  assert.match(svg, /<rect\b[^>]*fill="url\(#heightGradient\)"/);
+  assert.match(svg, /M0 12H54M0 24H54/);
+  assert.doesNotMatch(svg, /<image\b/i, 'gradient asset must be self-contained; nested raster images can disappear when drawn to Canvas');
+  assert.doesNotMatch(svg, /\bhref=/i, 'gradient asset must not depend on an external image href');
   assert.doesNotMatch(svg, /<text\b/i);
 }
 
