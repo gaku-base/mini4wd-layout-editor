@@ -7,6 +7,9 @@
   // from the legacy visual lane width used by raster assets.
   const STRAIGHT_CONNECTION_LENGTH_MM = 540;
   const STRAIGHT_CONNECTION_WIDTH_MM = 370;
+  // Project-owner approved Bank20 projected course length.
+  const BANK20_PROJECTED_LENGTH_MM = 240;
+  const BANK20_PROJECTED_LENGTH_CM = BANK20_PROJECTED_LENGTH_MM / 10;
 
   const palette = {
     base: '#efede9',
@@ -155,10 +158,30 @@
     },
     bank20: {
       key: '7', name: '20度バンク入口／出口', short: '20°', renderKind: 'bank20', bank20: true,
-      w: 28, h: 36,
-      geometry: { width: 28, height: 36, connectors: [{ id: 'a', label: '平面側', x: -14, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, bankTransitionToDeg: 20, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: 'バンク側', x: 14, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 20, bankTransitionToDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -14, maxX: 14, minY: -18, maxY: 18 } },
-      visual: { file: 'assets/parts/bank20.png', canvasWidth: 28, canvasHeight: 36, originX: 14, originY: 18 },
+      w: BANK20_PROJECTED_LENGTH_CM, h: 36,
+      geometry: { width: BANK20_PROJECTED_LENGTH_CM, height: 36, connectors: [{ id: 'a', label: '平面側', x: -12, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, bankTransitionToDeg: 20, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: 'バンク側', x: 12, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 20, bankTransitionToDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -12, maxX: 12, minY: -18, maxY: 18 } },
+      visual: { file: 'assets/parts/bank20.png', canvasWidth: BANK20_PROJECTED_LENGTH_CM, canvasHeight: 36, originX: 12, originY: 18 },
       bank: { angleDeg: 20, dynamicRole: true },
+      measurements: {
+        projectedLengthMm: {
+          value: BANK20_PROJECTED_LENGTH_MM,
+          status: 'verified',
+          confidence: 'high',
+          source: 'project-owner-approved-2026-09-02'
+        },
+        transitionArcChordMm: {
+          value: 225.75,
+          status: 'provisional',
+          confidence: 'medium',
+          source: 'agw-real-measurement-2021-02-22'
+        },
+        preferredRunningSideArcRadiusMm: {
+          value: 650.02,
+          status: 'provisional',
+          confidence: 'medium',
+          source: 'derived-from-official-20deg-and-agw-chord'
+        }
+      },
       ...palette
     },
     lcjump: {
@@ -191,11 +214,12 @@
   const MENU_ORDER = ['straight','corner-45-right','lanechange','wave','start','slope','bank20','lcjump','burning'];
 
   window.M4WD_PART_CATALOG = Object.freeze({
-    version: '1.3.0',
+    version: '1.3.1',
     TRACK_WIDTH_CM,
     STRAIGHT_CM,
     STRAIGHT_CONNECTION_LENGTH_MM,
     STRAIGHT_CONNECTION_WIDTH_MM,
+    BANK20_PROJECTED_LENGTH_MM,
     PARTS,
     MENU_ORDER
   });
