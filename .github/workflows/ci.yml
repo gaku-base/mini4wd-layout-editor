@@ -50,6 +50,7 @@ jobs:
           test -f ui-controls-cleanup.js
           test -f browser-ui-controls-smoke.js
           test -f browser-slope-visibility-smoke.js
+          test -f browser-slope-underpass-smoke.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -141,6 +142,7 @@ jobs:
           fi
           node browser-ui-controls-smoke.js
           node browser-slope-visibility-smoke.js
+          node browser-slope-underpass-smoke.js
 
       - name: Upload browser rehearsal failure screenshot
         if: failure() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '' || hashFiles('.github/ui-smoke.trigger') != '')
