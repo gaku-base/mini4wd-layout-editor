@@ -8,6 +8,25 @@ Tamiya Item No.69571 `JAPAN CUP JUNIOR CIRCUIT BANK-APPROACH 20` について、
 
 詳細な証拠と計算は [`bank20-physical-geometry-2026-09-02.md`](bank20-physical-geometry-2026-09-02.md) を参照する。
 
+## アプリで扱う範囲
+
+このレイアウトエディターでモデル化するのは**コース本体**である。
+
+対象:
+- バンクアプローチ本体の2D外形
+- 接続基準点／接続面
+- 0°→20°のbank/roll遷移
+- 走行面、下面、側壁などコース本体の3D占有形状
+- コース本体同士の接続・干渉判定に必要な形状
+
+対象外:
+- バンク台
+- 長／短パイプ
+- 支持ポール、キャップ、固定具、両面テープ
+- バンク台による床からの支持高さ
+
+これら支持部品は実物セットの構成要素ではあるが、このアプリのパーツ配置・接続・コース本体干渉判定には使用しない。したがって**未解決の必須寸法として扱わず、collision readinessのblockerにしない**。
+
 ## 状態
 
 - `verified`: 公式値またはプロジェクト所有者が正式採用した値
@@ -22,6 +41,11 @@ Tamiya Item No.69571 `JAPAN CUP JUNIOR CIRCUIT BANK-APPROACH 20` について、
 partId: three-lane-bank-approach-20
 itemNo: 69571
 coordinateFrame: part-local-xyz
+scope:
+  courseBody: included
+  bankStand: excluded
+  supportPipes: excluded
+  supportHardware: excluded
 
 bankTransition:
   bankAngleDeg:
@@ -106,23 +130,6 @@ crossSection:
     value: null
     status: unknown
 
-supportSystem:
-  bankStandHeightMm:
-    value: null
-    status: unknown
-
-  longPipeLengthMm:
-    value: null
-    status: unknown
-
-  shortPipeLengthMm:
-    value: null
-    status: unknown
-
-  supportPointZMm:
-    value: null
-    status: unknown
-
 legacyRuntime:
   longitudinalLengthMm:
     value: 280
@@ -140,7 +147,6 @@ collisionProfile:
     - underside geometry
     - inner/outer wall geometry
     - effective clearance geometry
-    - support geometry if included in collision scope
 ```
 
 ## R650モデルのQA計算
@@ -157,13 +163,12 @@ AGW実測の弦長約225.75mm、矢高約9.8mmと整合する。
 
 ## 公開情報の探索結果
 
-Tamiya Japan / English / USA、旧69568、販売店、説明書画像、中古出品、コミュニティ資料を確認したが、以下の正式数値は確認できなかった。
+Tamiya Japan / English / USA、旧69568、販売店、説明書画像、中古出品、コミュニティ資料を確認したが、アプリで必要な次の正式数値は確認できなかった。
 
 - connector-to-connector distance
 - 240mm baseの厳密な端点定義
-- long/short pipe length
-- bank stand height
-- support-point Z
+- roll pivot axis
+- コース本体の下面／側壁3D形状
 
 旧69568の「従来比74%」は**パッケージ縮小率**であり、パーツ寸法には使用しない。
 
@@ -172,6 +177,8 @@ Mini4Science公開SVGの直接URLは特定済み:
 `https://d1eyppkioqhwc7.cloudfront.net/wp-content/uploads/2026/05/20_degree_bank_side_view_1_orange.svg`
 
 現環境ではCloudFront直取得ができず内部座標は未確認。SVG座標を確認できれば、240mm基準線と円弧端点の関係を再評価する。
+
+バンク台・パイプ類については追加の寸法探索を**終了**する。これらは実物組立には必要だが、本アプリではモデル化しない。
 
 ## 正式採用ゲート
 
@@ -187,5 +194,6 @@ Mini4Science公開SVGの直接URLは特定済み:
 - `20°`: productionで使用可能なverified値
 - `240mm / 225.75mm / R650 / R660.5 / R597.5`: research/provisional値として保持
 - `280mm`: legacy runtime値。物理正本にはしない
+- bank stand / support pipes: app scope外
 - collision profile: `not-ready`
 - 未確認値は推測で補完しない
