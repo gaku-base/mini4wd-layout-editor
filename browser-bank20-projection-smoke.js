@@ -81,11 +81,11 @@ async function main() {
     assert.equal(result.angleDeg, 20);
     assert.equal(result.measurementStatus, 'verified');
     assert.ok(result.visiblePixels > 250, `Bank20 preview must remain visible: ${result.visiblePixels}`);
-    assert.match(result.buttonText, /24\s*×\s*36/);
+    assert.match(result.buttonText, /24cm\s*×\s*36cm/);
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
 
-    console.log(`✓ Bank20 preview visible; projected length=${result.projectedLengthMm}mm, connectors=${result.connectorXs.join('/') }cm`);
+    console.log(`✓ Bank20 preview visible; projected length=${result.projectedLengthMm}mm, connectors=${result.connectorXs.join('/')}cm`);
     console.log('Browser Bank20 240mm projection smoke test passed.');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/bank20-projection-failure.png`, fullPage: true }); } catch (_) {}
