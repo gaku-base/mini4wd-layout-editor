@@ -7,6 +7,8 @@ Tamiya Item No.69571 `JAPAN CUP JUNIOR CIRCUIT BANK-APPROACH 20`。
 
 この文書は調査記録であり、現時点では `part-catalog.js` の寸法を変更しない。
 
+構造化した暫定値は [`bank20-provisional-master-2026-09-02.md`](bank20-provisional-master-2026-09-02.md) を参照する。
+
 ## 判定ルール
 
 - `verified`: タミヤ公式、またはプロジェクトオーナーが正式採用した値
@@ -40,8 +42,8 @@ status: `verified`（構成の大枠）
 
 参考:
 - https://www.tamiya.com/japan/products/69571/index.html
-- https://www.1999.co.jp/10197826
-- https://www.suruga-ya.jp/product/detail/603025208
+- https://www.tamiyausa.com/shop/tracks/mini-4wd-bank-approach-20-red/
+- https://www.suruga-ya.jp/product/other/603025208
 
 ## 実物トレース由来の形状
 
@@ -49,6 +51,7 @@ Mini4Science は2026-05-23、実物の20°バンクアプローチの切断片�
 
 source:
 - https://www.mini4science.com/2026/05/20-degree-bank-approach-mapped/
+- https://www.mini4science.com/updates/
 
 報告値:
 
@@ -61,6 +64,12 @@ source:
 | wall radius | 約597.5 mm | provisional |
 
 同ページはトレース画像とSVGも公開している。単なる目視推定ではなく実物断面を基にしているため、非公式資料の中では有力資料として扱う。
+
+公開SVGの直接URL:
+
+`https://d1eyppkioqhwc7.cloudfront.net/wp-content/uploads/2026/05/20_degree_bank_side_view_1_orange.svg`
+
+現調査環境ではCloudFront直取得ができず、SVG内部の座標は未確認。
 
 ### 240mm の解釈は未確定
 
@@ -201,10 +210,13 @@ mirrors:
 
 実写・説明例:
 - Tamiya official: https://www.tamiya.com/japan/products/69571/index.html
-- Tamiya black version: https://www.tamiya.com/japan/products/95591/index.html
+- Tamiya USA red: https://www.tamiyausa.com/shop/tracks/mini-4wd-bank-approach-20-red/
+- Tamiya USA old green 69568: https://www.tamiyausa.com/shop/tracks/jr-circuit-bank-approach-20/
 - Item 69571の中古出品には説明書・部品写真が複数存在する
 
 説明書に見える45mmは両面テープの切断寸法であり、**バンクアプローチ本体長ではない**。
+
+旧69568のTamiya USA説明にある「74%」は従来品に対する**パッケージサイズ縮小**であり、パーツ本体の長さには使用しない。
 
 ## 重要: 約39.2mm をコネクタZ差にしない
 
@@ -255,6 +267,29 @@ Git履歴を遡ると、静的RC1エディタを採用したコミット:
 が得られているため、**280mmは正式な物理寸法としては見直し対象**とする。
 
 ただし、正式なJCJC接続面間距離をまだ直接確認できていないので、このPRではランタイムを変更しない。
+
+## 接続距離・支持系の追加探索結果
+
+Tamiya Japan / English / USA、旧69568、販売店、説明書画像、中古出品、コミュニティ資料を追加検索した。
+
+確認できた事項:
+
+- 69571/95591ともに長パイプx2・短パイプx1を使用する
+- 旧69568もsupport standと長短パイプを使う同系統の構成
+- 公式公認コースの直線1レーン幅は115mm、フェンス高50mm
+
+ただし次の数値は公開資料で確認できなかった:
+
+- connector-to-connector distance
+- bank stand height
+- long pipe length
+- short pipe length
+- support-point Z
+- roll pivot axis
+
+中古出品の実写にも両接続面を同時に定規／ノギスで測った画像は確認できなかった。
+
+したがってこれらはすべて `unknown / null` を維持する。
 
 ## 未確定項目
 
