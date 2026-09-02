@@ -74,6 +74,16 @@
   'use strict';
   if (!root || !root.document) return;
 
+  // app.js captures M4WD_LAYOUT_GRAPH during parser execution. Load the slope
+  // underpass runtime synchronously here so the approved warning filter is
+  // installed before app.js takes that reference. This stays inside the
+  // existing temporary parser bridge and does not change app.js or persistence.
+  if (root.document.readyState === 'loading'
+      && typeof root.document.write === 'function'
+      && !root.M4WD_SLOPE_UNDERPASS_RUNTIME) {
+    root.document.write('<script src="slope-underpass-runtime-preload.js?v=v1.1-rc6-slope-underpass1" data-m4wd-slope-underpass-preload="1"><\/script>');
+  }
+
   if (!Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) {
     root.__COURSE_ENABLE_DEBUG__ = true;
   }
