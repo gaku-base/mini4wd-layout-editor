@@ -8,13 +8,15 @@ const close = (actual, expected, tolerance = 1e-9, message = 'value') => {
   assert.ok(Math.abs(actual - expected) <= tolerance, `${message}: ${actual} !== ${expected}`);
 };
 
-test('verified slope profile uses R398 -> straight -> R803 and preserves the separate 270mm floor-blocking sidewall length', () => {
+test('verified slope profile uses R398 -> straight -> R803 and preserves physical 270mm sidewall plus 2mm safety margin', () => {
   assert.equal(PROFILE.status, 'verified');
   assert.equal(PROFILE.lowerArcRadiusMm, 398);
   assert.equal(PROFILE.upperArcRadiusMm, 803);
   close(PROFILE.straightLengthMm, 169.10056179681956, 1e-9, 'straight length');
   close(PROFILE.tangentAngleDeg, 18.423741009432902, 1e-9, 'tangent angle');
   assert.equal(PROFILE.floorBlockingSideWallLengthMm, 270);
+  assert.equal(PROFILE.underpassSafetyMarginMm, 2);
+  assert.equal(PROFILE.underpassBlockedThroughXMm, 272);
   assert.equal(PROFILE.segments.map(segment => segment.kind).join(','), 'arc,straight,arc');
 });
 
@@ -44,57 +46,62 @@ test('R398 horizontal projection independently matches the drawing 126mm cross-c
   close(PROFILE.transitionPoints.lowerArcEnd.xMm, 126, 0.25, 'drawing 126mm cross-check');
 });
 
-test('270mm floor-blocking endpoint has a derived running-surface height of about 68.44mm', () => {
+test('physical sidewall ends at 270mm while collision blocking extends through 272mm', () => {
   assert.equal(PROFILE.floorBlockingEnd.xMm, 270);
   close(PROFILE.floorBlockingEnd.runningSurfaceHeightMm, 68.43982892569419, 1e-9, 'surface height at x=270');
-  close(PROFILE.floorBlockingEnd.tangentDeg, PROFILE.tangentAngleDeg, 1e-9, 'tangent at x=270');
+  assert.equal(PROFILE.underpassBlockedEnd.xMm, 272);
+  close(PROFILE.underpassBlockedEnd.runningSurfaceHeightMm, 69.10606092459238, 1e-9, 'surface height at x=272');
 });
 
-test('underpass stays blocked through 270mm and remains indeterminate beyond it until a numeric underside offset is supplied', () => {
-  const blocked = PROFILE.underpassEnvelopeAtHorizontalX(270);
-  assert.equal(blocked.status, 'blocked-by-floor-sidewall');
-  assert.equal(blocked.clearHeightMm, 0);
+test('underpass is blocked through x=272 and clear immediately above the approved safety boundary', () => {
+  assert.equal(PROFILE.underpassEnvelopeAtHorizontalX(270).status, 'blocked-by-floor-sidewall');
+  assert.equal(PROFILE.underpassEnvelopeAtHorizontalX(270.001).status, 'blocked-by-safety-margin');
+  assert.equal(PROFILE.underpassEnvelopeAtHorizontalX(272).status, 'blocked-by-safety-margin');
 
-  for (const unknownOffset of [undefined, null, '', '2', Number.NaN, Number.POSITIVE_INFINITY, -1]) {
-    const unknown = PROFILE.underpassEnvelopeAtHorizontalX(270.001, unknownOffset);
-    assert.equal(unknown.status, 'indeterminate-underside');
-    assert.equal(unknown.clearHeightMm, null);
-  }
+  const clear = PROFILE.underpassEnvelopeAtHorizontalX(272.001);
+  assert.equal(clear.status, 'clear-by-approved-rule');
+  assert.equal(clear.clearHeightMm, null);
 
-  const withTwoMillimetreReference = PROFILE.underpassEnvelopeAtHorizontalX(270.001, 2);
-  assert.equal(withTwoMillimetreReference.status, 'candidate-clearance');
-  close(
-    withTwoMillimetreReference.clearHeightMm,
-    PROFILE.heightAtHorizontalX(270.001) - 2,
-    1e-9,
-    'explicit underside-offset clearance'
-  );
+  const diagnostic = PROFILE.underpassEnvelopeAtHorizontalX(272.001, 2);
+  assert.equal(diagnostic.status, 'clear-by-approved-rule');
+  close(diagnostic.clearHeightMm, PROFILE.heightAtHorizontalX(272.001) - 2, 1e-9, 'diagnostic underside clearance');
 });
 
-test('two high-end-connected slopes give a 540mm opening and a centred 370mm lower course leaves 85mm side margin', () => {
+test('arbitrary crossing footprints fail if any projected overlap reaches x<=272 and clear only when wholly above it', () => {
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(280, 500).status, 'clear-by-approved-rule');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(272.001, 500).status, 'clear-by-approved-rule');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(272, 500).status, 'blocked-by-underpass-zone');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(265, 500).status, 'blocked-by-underpass-zone');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(500, 280).status, 'clear-by-approved-rule');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(-100, -1).status, 'no-overlap');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(541, 600).status, 'no-overlap');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange('280', 500), null);
+});
+
+test('centred 90-degree crossover remains a QA example and reflects the 2mm margin on both slopes', () => {
   const reference = PROFILE.centeredTwoSlopeCrossoverReference(370);
   assert.equal(reference.status, 'fits-with-margin');
-  assert.equal(reference.totalOpeningLengthMm, 540);
-  assert.equal(reference.sideMarginMm, 85);
+  assert.equal(reference.totalOpeningLengthMm, 536);
+  assert.equal(reference.sideMarginMm, 83);
   assert.equal(reference.criticalXMm, 355);
   close(reference.runningSurfaceHeightMm, 93.39874583979213, 1e-9, 'critical running-surface height');
   assert.equal(reference.candidateRoofHeightMm, null);
   assert.equal(reference.candidateVerticalMarginMm, null);
 });
 
-test('centred crossover only reports candidate vertical margin when underside offset and lower-course height are explicit', () => {
+test('centred crossover diagnostic clearance is optional and does not define passability', () => {
   const reference = PROFILE.centeredTwoSlopeCrossoverReference(370, 2, 57);
   assert.equal(reference.status, 'fits-with-margin');
   close(reference.candidateRoofHeightMm, 91.39874583979213, 1e-9, 'candidate roof height');
   close(reference.candidateVerticalMarginMm, 34.39874583979213, 1e-9, 'candidate vertical margin');
 
   assert.equal(PROFILE.centeredTwoSlopeCrossoverReference('370'), null);
-  assert.equal(PROFILE.centeredTwoSlopeCrossoverReference(541).status, 'does-not-fit');
-  assert.equal(PROFILE.centeredTwoSlopeCrossoverReference(540).status, 'touches-sidewall-boundary');
+  assert.equal(PROFILE.centeredTwoSlopeCrossoverReference(537).status, 'does-not-fit');
+  assert.equal(PROFILE.centeredTwoSlopeCrossoverReference(536).status, 'touches-safety-boundary');
 });
 
 test('profile remains monotonic through representative horizontal stations', () => {
-  const stations = [0, 50, 125.78478960900252, 200, 270, 286.21812548736425, 355, 400, 540];
+  const stations = [0, 50, 125.78478960900252, 200, 270, 272, 286.21812548736425, 355, 400, 540];
   const heights = stations.map(PROFILE.heightAtHorizontalX);
   for (let index = 1; index < heights.length; index += 1) {
     assert.ok(heights[index] >= heights[index - 1], `height must not decrease at station ${stations[index]}`);
