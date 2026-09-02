@@ -34,7 +34,15 @@
 | パーツ／項目 | 値 | 単位 | 状態 | 測定元 | 測定日 | 測定者 | 許容誤差 | 信頼度 | 備考 |
 |---|---:|---|---|---|---|---|---|---|---|
 | ストレート1枚 長さ | 540 | mm | verified | ユーザー指定・添付寸法図、Issue #1 / #6 | unknown | unknown | unknown | high | 公称値。物理公差は未確認 |
+| スロープ 水平投影 | 540 | mm | verified | 既存接続モデル・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high | 低端X=0、高端X=540 |
 | スロープ1枚 高低差 | 115 | mm | verified | ユーザー指定、Issue #1 / #6 | unknown | unknown | unknown | high | 公称値。物理公差は未確認 |
+| スロープ 床まで塞ぐ側壁長（低い側から） | 270 | mm | verified | プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用 |
+| スロープ 側壁高さ（走行面から上） | 50 | mm | verified | タミヤ公式フェンス高さ5cm・スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用 |
+| スロープ 側壁厚 | 2.5 | mm | verified | スロープ設計資料・プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high | 左右側壁に適用 |
+| スロープ 低端側円弧 | R398 | mm | verified | スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high | R398→直線→R803の正式長手形状 |
+| スロープ 中間直線実長 | 169.1005617968 | mm | verified | R398/R803・水平540・高低差115・接線連続条件から導出、所有者承認 | 2026-09-01 | project-owner | unknown | high | 270mm側壁区間とは別寸法 |
+| スロープ 中間直線傾斜角 | 18.4237410094 | degree | verified | 同上 | 2026-09-01 | project-owner | unknown | high | 両円弧との接線角 |
+| スロープ 高端側円弧 | R803 | mm | verified | スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high | 高端で水平へ戻る |
 
 ## 添付寸法図から読み取れる検算値
 
@@ -83,19 +91,27 @@
 
 | 項目 | 値 | 状態 | 測定元・根拠 | 測定日 | 測定者 | 許容誤差 | 信頼度 |
 |---|---:|---|---|---|---|---|---|
-| 水平長 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 水平投影 | 540mm | verified | 既存接続モデル・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high |
 | 高低差 | 115mm | verified | ユーザー確定の公称値 | unknown | unknown | unknown | high |
+| 床まで塞ぐ側壁長（低い側から） | 270mm | verified | プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high |
+| 側壁高さ（走行面から上） | 50mm | verified | タミヤ公式フェンス高さ5cm・スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high |
+| 側壁厚 | 2.5mm | verified | スロープ設計資料・プロジェクト所有者の明示承認 | 2026-09-01 | project-owner | unknown | high |
+| 低端側円弧 | R398mm | verified | スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high |
+| 中間直線実長 | 169.1005617968mm | verified | R398/R803・540×115・接線連続条件から導出 | 2026-09-01 | project-owner | unknown | high |
+| 中間直線傾斜角 | 18.4237410094degree | verified | 同上 | 2026-09-01 | project-owner | unknown | high |
+| 高端側円弧 | R803mm | verified | スロープ設計資料・プロジェクト所有者承認 | 2026-09-01 | project-owner | unknown | high |
+| R398終了／直線開始 | X=125.7847896090mm、Z=20.3994349805mm | verified | 正式長手形状から導出 | 2026-09-01 | project-owner | unknown | high |
+| 直線終了／R803開始 | X=286.2181254874mm、Z=73.8423460066mm | verified | 正式長手形状から導出 | 2026-09-01 | project-owner | unknown | high |
 | 全幅・全高 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
 | 入口ローカル座標 | X=0、Y=0、Z=0 | verified | 物理寸法ではなく座標原点の定義 | unknown | unknown | not-applicable | high |
-| 出口ローカルX・Y | `null` | unknown | 水平形状が未計測 | unknown | unknown | unknown | none |
-| 出口ローカルZ | 115mm | verified | 確定済み高低差を座標へ適用 | unknown | unknown | unknown | high |
-| 入口・出口角度 | `null` | unknown | 実パーツの接線方向は未計測 | unknown | unknown | unknown | none |
-| 2D投影外形 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
-| 走行面プロファイル | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
-| 長手方向下面プロファイル | `null` | unknown | 未計測。`sMm`ごとのYZ断面が必要 | unknown | unknown | unknown | none |
-| 側壁プロファイル | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
+| 出口ローカル座標 | X=540mm、Y=0、Z=115mm | verified | 正式長手形状の端点 | 2026-09-01 | project-owner | unknown | high |
+| 入口・出口接線角 | 0degree | verified | R398→直線→R803形状の端点条件 | 2026-09-01 | project-owner | unknown | high |
+| 2D投影外形 | `null` | unknown | 横断方向外形の正式寸法が未完 | unknown | unknown | unknown | none |
+| 走行面長手プロファイル | `slope-longitudinal-profile.js` | verified | R398→169.1005617968mm直線→R803、18.4237410094degree | 2026-09-01 | project-owner | unknown | high |
+| 長手方向下面プロファイル | `null` | unknown | 床板厚・下面オフセット・高い側開口下面形状が未確定 | unknown | unknown | unknown | none |
+| 側壁プロファイル | `null` | unknown | 270mm・高さ50mm・厚2.5mmと走行面長手曲線はverified。側壁下端の270mm終端断面と高い側開口下端が未確定 | unknown | unknown | unknown | none |
 | 正常接触除外範囲 | `null` | unknown | 未計測 | unknown | unknown | unknown | none |
-| activeCollisionProfile | `null` | unknown | collision profile未作成 | unknown | unknown | unknown | none |
+| activeCollisionProfile | `null` | unknown | 下面・通過可能空間が未確定のため未作成 | unknown | unknown | unknown | none |
 
 ### バンク
 
@@ -197,8 +213,8 @@ activeCollisionProfile: null
 ## 未決事項
 
 - 3レーン全パーツの正式一覧
-- 3レーン幅、壁高、底面厚
-- スロープの水平長と曲線形状
+- 3レーン幅、一般部の壁高、底面厚
+- スロープの270mm終端断面、高い側の開口下面形状、床板厚・下面オフセット
 - バンクの全長、中心角、中心線半径、内外半径、横断勾配
 - 初期対象4パーツの測定日、測定者、物理公差
 - 入口・出口コネクタの物理基準点

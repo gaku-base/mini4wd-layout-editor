@@ -48,6 +48,42 @@ test('slope keeps the 540mm horizontal connection distance and 115mm height delt
   assert.ok([entry, exit].every(connector => connector.connectionWidthMm === 370));
 });
 
+test('slope records approved sidewall dimensions without inventing a full collision profile', () => {
+  const measurements = PARTS.slope.measurements;
+  const floorBlocking = measurements?.floorBlockingSideWallLengthFromLowEndMm;
+  const wallHeight = measurements?.sideWallHeightAboveRunningSurfaceMm;
+  const wallThickness = measurements?.sideWallThicknessMm;
+  assert.equal(floorBlocking?.value, 270);
+  assert.equal(wallHeight?.value, 50);
+  assert.equal(wallThickness?.value, 2.5);
+  for (const measurement of [floorBlocking, wallHeight, wallThickness]) {
+    assert.equal(measurement?.status, 'verified');
+    assert.equal(measurement?.confidence, 'high');
+    assert.deepEqual(Array.from(measurement?.appliesTo || []), ['left', 'right']);
+  }
+  assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
+});
+
+test('slope catalog records the approved R398 -> straight -> R803 longitudinal model as verified', () => {
+  const measurements = PARTS.slope.measurements;
+  assert.equal(measurements?.lowerLongitudinalCurveRadiusMm?.value, 398);
+  assert.equal(measurements?.upperLongitudinalCurveRadiusMm?.value, 803);
+  close(measurements?.middleStraightLengthMm?.value, 169.10056179681956, 'middle straight length');
+  close(measurements?.middleStraightAngleDeg?.value, 18.423741009432902, 'middle straight angle');
+  for (const measurement of [
+    measurements?.lowerLongitudinalCurveRadiusMm,
+    measurements?.middleStraightLengthMm,
+    measurements?.middleStraightAngleDeg,
+    measurements?.upperLongitudinalCurveRadiusMm,
+    measurements?.longitudinalProfileModule
+  ]) {
+    assert.equal(measurement?.status, 'verified');
+    assert.equal(measurement?.confidence, 'high');
+  }
+  assert.equal(measurements?.longitudinalProfileModule?.value, 'slope-longitudinal-profile.js');
+  assert.equal(PARTS.slope.geometry.sideWallProfile, undefined);
+});
+
 test('right and left 45-degree corners use 370mm faces and retain a 45-degree travel turn at every snapped rotation', () => {
   for (const type of ['corner-45-right', 'corner-45-left']) {
     const [entry, exit] = GRAPH.connectorsForDefinition(PARTS[type]);
