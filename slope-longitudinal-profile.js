@@ -11,6 +11,8 @@
   const LOWER_ARC_RADIUS_MM = 398;
   const UPPER_ARC_RADIUS_MM = 803;
   const FLOOR_BLOCKING_SIDEWALL_LENGTH_MM = 270;
+  const UNDERPASS_SAFETY_MARGIN_MM = 2;
+  const UNDERPASS_BLOCKED_THROUGH_X_MM = FLOOR_BLOCKING_SIDEWALL_LENGTH_MM + UNDERPASS_SAFETY_MARGIN_MM;
 
   // Project-owner approved on 2026-09-01: the longitudinal side-view reference
   // curve is a tangent-continuous R398 arc -> straight -> R803 arc. Solving
@@ -74,11 +76,12 @@
     return Math.asin((HORIZONTAL_MM - x) / UPPER_ARC_RADIUS_MM) * 180 / Math.PI;
   }
 
-  // The floor-reaching side skirt blocks an underpass through x=270 mm.
-  // Beyond that station the product photos show an opening, but the exact
-  // underside offset/thickness is not yet verified. This helper therefore
-  // reports the known running-surface envelope and only computes a physical
-  // roof clearance when the caller supplies an explicit finite numeric offset.
+  // The physical floor-reaching side wall ends at x=270 mm. The project-owner
+  // approved an additional 2 mm interference margin on 2026-09-02, so x<=272
+  // is treated as blocked for layout collision purposes. At x>272 the lower
+  // course may pass under the slope. An explicit underside offset can still be
+  // supplied for diagnostic clearance calculations, but it does not change the
+  // approved pass/fail boundary.
   function underpassEnvelopeAtHorizontalX(xMm, undersideOffsetMm = null) {
     const x = clampHorizontalX(xMm);
     if (x === null) return null;
@@ -94,40 +97,74 @@
       });
     }
 
-    if (typeof undersideOffsetMm !== 'number' || !Number.isFinite(undersideOffsetMm) || undersideOffsetMm < 0) {
+    if (x <= UNDERPASS_BLOCKED_THROUGH_X_MM) {
       return Object.freeze({
-        status: 'indeterminate-underside',
+        status: 'blocked-by-safety-margin',
         xMm: x,
         runningSurfaceHeightMm,
-        clearHeightMm: null,
+        clearHeightMm: 0,
         undersideOffsetMm: null
       });
     }
 
+    const hasExplicitUndersideOffset = typeof undersideOffsetMm === 'number'
+      && Number.isFinite(undersideOffsetMm)
+      && undersideOffsetMm >= 0;
+
     return Object.freeze({
-      status: 'candidate-clearance',
+      status: 'clear-by-approved-rule',
       xMm: x,
       runningSurfaceHeightMm,
-      clearHeightMm: Math.max(0, runningSurfaceHeightMm - undersideOffsetMm),
-      undersideOffsetMm
+      clearHeightMm: hasExplicitUndersideOffset
+        ? Math.max(0, runningSurfaceHeightMm - undersideOffsetMm)
+        : null,
+      undersideOffsetMm: hasExplicitUndersideOffset ? undersideOffsetMm : null
     });
   }
 
-  // Two slopes joined at their high ends create a 540 mm longitudinal opening
-  // (270 mm from each half). A lower course crossing at 90 degrees is normally
-  // centred on that high-end seam. This function evaluates only horizontal fit
-  // and the critical station at the lower-course outer edge; it never upgrades
-  // the result to authoritative collision clearance because real underside ribs
-  // and connector protrusions are still unmeasured.
+  // Arbitrary lower-course positions and crossing angles are handled by first
+  // projecting the lower-course occupied polygon onto the slope-local X axis.
+  // If any overlapping part of that projected range reaches x<=272 mm, it is
+  // blocked. Only a footprint whose entire overlap lies at x>272 mm is clear.
+  function classifyUnderpassLongitudinalRange(minXMm, maxXMm) {
+    if (typeof minXMm !== 'number' || !Number.isFinite(minXMm)
+      || typeof maxXMm !== 'number' || !Number.isFinite(maxXMm)) return null;
+
+    const rawMin = Math.min(minXMm, maxXMm);
+    const rawMax = Math.max(minXMm, maxXMm);
+    if (rawMax < 0 || rawMin > HORIZONTAL_MM) {
+      return Object.freeze({
+        status: 'no-overlap',
+        minXMm: null,
+        maxXMm: null,
+        blockedThroughXMm: UNDERPASS_BLOCKED_THROUGH_X_MM
+      });
+    }
+
+    const overlapMinXMm = Math.max(0, rawMin);
+    const overlapMaxXMm = Math.min(HORIZONTAL_MM, rawMax);
+    const blocked = overlapMinXMm <= UNDERPASS_BLOCKED_THROUGH_X_MM;
+
+    return Object.freeze({
+      status: blocked ? 'blocked-by-underpass-zone' : 'clear-by-approved-rule',
+      minXMm: overlapMinXMm,
+      maxXMm: overlapMaxXMm,
+      blockedThroughXMm: UNDERPASS_BLOCKED_THROUGH_X_MM
+    });
+  }
+
+  // This remains only a QA/reference example for a centred 90-degree crossing.
+  // Actual collision logic must use the projected occupied range above so that
+  // low-side/high-side offsets and diagonal crossings are handled identically.
   function centeredTwoSlopeCrossoverReference(lowerCourseOuterWidthMm, undersideOffsetMm = null, lowerCourseHeightMm = null) {
     if (typeof lowerCourseOuterWidthMm !== 'number' || !Number.isFinite(lowerCourseOuterWidthMm) || lowerCourseOuterWidthMm <= 0) return null;
 
-    const halfOpeningLengthMm = HORIZONTAL_MM - FLOOR_BLOCKING_SIDEWALL_LENGTH_MM;
+    const halfOpeningLengthMm = HORIZONTAL_MM - UNDERPASS_BLOCKED_THROUGH_X_MM;
     const totalOpeningLengthMm = halfOpeningLengthMm * 2;
     const sideMarginMm = (totalOpeningLengthMm - lowerCourseOuterWidthMm) / 2;
     const horizontalFitStatus = sideMarginMm > 0
       ? 'fits-with-margin'
-      : (sideMarginMm === 0 ? 'touches-sidewall-boundary' : 'does-not-fit');
+      : (sideMarginMm === 0 ? 'touches-safety-boundary' : 'does-not-fit');
 
     if (sideMarginMm < 0) {
       return Object.freeze({
@@ -146,7 +183,7 @@
     const runningSurfaceHeightMm = heightAtHorizontalX(criticalXMm);
     const roof = underpassEnvelopeAtHorizontalX(criticalXMm, undersideOffsetMm);
     const hasLowerCourseHeight = typeof lowerCourseHeightMm === 'number' && Number.isFinite(lowerCourseHeightMm) && lowerCourseHeightMm >= 0;
-    const candidateRoofHeightMm = roof?.status === 'candidate-clearance' ? roof.clearHeightMm : null;
+    const candidateRoofHeightMm = roof?.status === 'clear-by-approved-rule' ? roof.clearHeightMm : null;
     const candidateVerticalMarginMm = candidateRoofHeightMm !== null && hasLowerCourseHeight
       ? candidateRoofHeightMm - lowerCourseHeightMm
       : null;
@@ -167,6 +204,12 @@
     xMm: FLOOR_BLOCKING_SIDEWALL_LENGTH_MM,
     runningSurfaceHeightMm: heightAtHorizontalX(FLOOR_BLOCKING_SIDEWALL_LENGTH_MM),
     tangentDeg: tangentAngleDegAtHorizontalX(FLOOR_BLOCKING_SIDEWALL_LENGTH_MM)
+  });
+
+  const UNDERPASS_BLOCKED_END = Object.freeze({
+    xMm: UNDERPASS_BLOCKED_THROUGH_X_MM,
+    runningSurfaceHeightMm: heightAtHorizontalX(UNDERPASS_BLOCKED_THROUGH_X_MM),
+    tangentDeg: tangentAngleDegAtHorizontalX(UNDERPASS_BLOCKED_THROUGH_X_MM)
   });
 
   const SEGMENTS = Object.freeze([
@@ -204,12 +247,16 @@
     tangentAngleDeg: TANGENT_ANGLE_DEG,
     upperArcRadiusMm: UPPER_ARC_RADIUS_MM,
     floorBlockingSideWallLengthMm: FLOOR_BLOCKING_SIDEWALL_LENGTH_MM,
+    underpassSafetyMarginMm: UNDERPASS_SAFETY_MARGIN_MM,
+    underpassBlockedThroughXMm: UNDERPASS_BLOCKED_THROUGH_X_MM,
     floorBlockingEnd: FLOOR_BLOCKING_END,
+    underpassBlockedEnd: UNDERPASS_BLOCKED_END,
     transitionPoints: Object.freeze({ lowerArcEnd: LOWER_ARC_END, straightEnd: STRAIGHT_END }),
     segments: SEGMENTS,
     heightAtHorizontalX,
     tangentAngleDegAtHorizontalX,
     underpassEnvelopeAtHorizontalX,
+    classifyUnderpassLongitudinalRange,
     centeredTwoSlopeCrossoverReference
   });
 });
