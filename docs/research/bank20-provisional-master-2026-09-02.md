@@ -2,9 +2,9 @@
 
 ## 目的
 
-Tamiya Item No.69571 `JAPAN CUP JUNIOR CIRCUIT BANK-APPROACH 20` について、公開一次情報・実物トレース・独立実測から得られた値を、現行ランタイム寸法とは分離して構造化する。
+Tamiya Item No.69571 `JAPAN CUP JUNIOR CIRCUIT BANK-APPROACH 20` について、公式情報・実物トレース・独立実測・プロジェクトオーナー決定を分離して構造化する。
 
-この文書は **research / provisional master** であり、`part-catalog.js`、保存形式、描画、snap、collision runtimeを変更しない。
+2026-09-02のプロジェクトオーナー決定により、**Bank20のアプリ上の投影延長は240mmを正式採用**する。
 
 詳細な証拠と計算は [`bank20-physical-geometry-2026-09-02.md`](bank20-physical-geometry-2026-09-02.md) を参照する。
 
@@ -25,14 +25,14 @@ Tamiya Item No.69571 `JAPAN CUP JUNIOR CIRCUIT BANK-APPROACH 20` について、
 - 支持ポール、キャップ、固定具、両面テープ
 - バンク台による床からの支持高さ
 
-これら支持部品は実物セットの構成要素ではあるが、このアプリのパーツ配置・接続・コース本体干渉判定には使用しない。したがって**未解決の必須寸法として扱わず、collision readinessのblockerにしない**。
+支持部品は実物セットの構成要素だが、このアプリのパーツ配置・接続・コース本体干渉判定には使用しない。したがって未解決の必須寸法にもcollision readinessのblockerにもしない。
 
 ## 状態
 
 - `verified`: 公式値またはプロジェクト所有者が正式採用した値
 - `provisional`: 追跡可能な実物測定／トレースだが、基準点または独立確認が不足
 - `derived`: verified/provisional入力から計算した値
-- `legacy-unverified`: 現行アプリに存在するが物理的根拠を追跡できない値
+- `superseded`: 以前のランタイム値だが、正式決定により置き換えられた値
 - `unknown`: 根拠不足。数値は `null`
 
 ## 構造化レコード
@@ -54,20 +54,35 @@ bankTransition:
     source: tamiya-item-69571
     confidence: high
 
-longitudinalProfileResearch:
-  physicalBaseExtentMm:
+projectionModel:
+  projectedLengthMm:
     value: 240
-    status: provisional
-    source: mini4science-real-cut-section-trace-2026-05-23
-    confidence: medium
-    note: base-length endpoint definition is not yet proven to equal connector planes
+    status: verified
+    source: project-owner-approved-2026-09-02
+    confidence: high
+    corroboration: mini4science-real-cut-section-base-length-about-240mm
+    note: authoritative app/runtime projected course length
 
+  modelConnectorDistanceMm:
+    value: 240
+    status: verified
+    source: project-owner-approved-2026-09-02
+    confidence: high
+    note: runtime places the two model connector references at the ends of the 240mm projection
+
+  physicalConnectorPlaneMeasurementMm:
+    value: null
+    status: unknown
+    confidence: none
+    note: independent physical connector-plane measurement has not been found; this does not block the approved app model
+
+longitudinalProfileResearch:
   transitionArcChordMm:
     value: 225.75
     status: provisional
     source: agw-real-measurement-2021-02-22
     confidence: medium
-    note: measured as straight-line distance between the two ends of the 20-degree arc
+    note: measured as straight-line distance between the two ends of the 20-degree arc; separate from the 240mm projection
 
   preferredRunningSideArcRadiusMm:
     value: 650.02
@@ -89,19 +104,6 @@ longitudinalProfileResearch:
     source: mini4science-real-cut-section-trace-2026-05-23
     confidence: medium
 
-connectors:
-  connectorDistanceMm:
-    value: null
-    status: unknown
-    confidence: none
-    reason: no public source found that directly measures both JCJC connector reference planes
-
-  arcEndToConnectorOffsetsMm:
-    lowEnd: null
-    bankedEnd: null
-    status: unknown
-    reason: 240mm base endpoints and 225.75mm arc endpoints are not yet tied to connector planes
-
 crossSection:
   rollPivotAxis:
     value: null
@@ -112,7 +114,6 @@ crossSection:
     value: null
     status: unknown
     confidence: none
-    note: Tamiya verifies 115mm lane width for straight course, but bank sections may locally vary; do not infer full Bank20 width here
 
   runningSurface3d:
     value: null
@@ -130,23 +131,23 @@ crossSection:
     value: null
     status: unknown
 
-legacyRuntime:
+supersededRuntime:
   longitudinalLengthMm:
     value: 280
-    status: legacy-unverified
+    status: superseded
     source: static-RC1-part-catalog-introduction-2026-07-23
     confidence: none
-    note: retained only for current runtime compatibility; no measurement/evidence record was found
+    supersededBy: project-owner-approved-240mm-projection-2026-09-02
 
 collisionProfile:
   activeCollisionProfile: null
   readiness: not-ready
   missing:
-    - connector reference geometry
     - 3D running surface
     - underside geometry
     - inner/outer wall geometry
     - effective clearance geometry
+    - roll pivot / cross-section model
 ```
 
 ## R650モデルのQA計算
@@ -159,41 +160,38 @@ collisionProfile:
 
 AGW実測の弦長約225.75mm、矢高約9.8mmと整合する。
 
-一方、`R(1-cos20°) ≈ 39.2mm` 等の値は特定側面円弧の幾何量であり、**Bank20のコネクタZ差として使用しない**。20°はbank/rollであってslope/pitchではない。
+`225.75mm`は曲面の円弧端点間弦長であり、正式採用した**投影延長240mmとは別寸法**として保持する。
+
+また、`R(1-cos20°) ≈ 39.2mm` 等は特定側面円弧の幾何量であり、Bank20のコネクタZ差として使用しない。20°はbank/rollであってslope/pitchではない。
 
 ## 公開情報の探索結果
 
-Tamiya Japan / English / USA、旧69568、販売店、説明書画像、中古出品、コミュニティ資料を確認したが、アプリで必要な次の正式数値は確認できなかった。
+公開資料から独立した物理connector-to-connector実測は確認できていない。一方でMini4Science実物切断片トレースの`base length is 24cm`は、今回の240mm正式モデルと整合する。
 
-- connector-to-connector distance
-- 240mm baseの厳密な端点定義
-- roll pivot axis
-- コース本体の下面／側壁3D形状
-
-旧69568の「従来比74%」は**パッケージ縮小率**であり、パーツ寸法には使用しない。
-
-Mini4Science公開SVGの直接URLは特定済み:
+Mini4Science公開SVGの直接URL:
 
 `https://d1eyppkioqhwc7.cloudfront.net/wp-content/uploads/2026/05/20_degree_bank_side_view_1_orange.svg`
 
-現環境ではCloudFront直取得ができず内部座標は未確認。SVG座標を確認できれば、240mm基準線と円弧端点の関係を再評価する。
+SVG内部座標は現環境では未確認だが、240mmのproduction採用を妨げる条件にはしない。今後取得できればQA資料として照合する。
 
-バンク台・パイプ類については追加の寸法探索を**終了**する。これらは実物組立には必要だが、本アプリではモデル化しない。
+バンク台・パイプ類については追加の寸法探索を終了する。本アプリではモデル化しない。
 
-## 正式採用ゲート
+## 正式採用決定
 
-ランタイムの `280mm` を変更する前に、最低でも次のどちらかを満たす。
+2026-09-02 project-owner decision:
 
-1. 実物を定規／ノギスで測り、両JCJC接続基準面間距離を直接記録する。
-2. 公開トレース／CAD資料で、240mmの両端が正式接続基準面であることを明示的に確認する。
-
-どちらも満たさない場合、`connectorDistanceMm` は `unknown / null` のまま維持する。
+- Bank20 projected length = **240mm**
+- runtime width = **24cm**
+- model connector references = **-120mm / +120mm**（部品中心原点）
+- old 280mm model = **superseded**
+- 225.75mm arc chord / R650 research modelは240mm projectionと混同しない
 
 ## 現時点の判断
 
-- `20°`: productionで使用可能なverified値
-- `240mm / 225.75mm / R650 / R660.5 / R597.5`: research/provisional値として保持
-- `280mm`: legacy runtime値。物理正本にはしない
+- `20°`: verified / production
+- `240mm projected length`: verified / production
+- `225.75mm / R650 / R660.5 / R597.5`: research/provisional
+- `280mm`: superseded
 - bank stand / support pipes: app scope外
-- collision profile: `not-ready`
+- collision profile: `not-ready`（3D断面情報が未確定）
 - 未確認値は推測で補完しない
