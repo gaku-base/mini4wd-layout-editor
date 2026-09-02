@@ -1,1 +1,0 @@
-slope-gradient-self-contained
