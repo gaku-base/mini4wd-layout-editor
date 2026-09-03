@@ -31,6 +31,19 @@ async function main() {
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 20000 });
     await page.evaluate(() => document.querySelector('#setupDialog')?.close());
 
+    await page.waitForTimeout(500);
+    const bootState = await page.evaluate(() => ({
+      debug: Boolean(window.__mini4wdCourseDebug),
+      control: Boolean(window.M4WD_CONNECTOR_TARGET_LOCK),
+      runtime: Boolean(window.M4WD_CONNECTOR_TARGET_LOCK_RUNTIME),
+      graphWrapped: Boolean(window.M4WD_LAYOUT_GRAPH?.__m4wdConnectorTargetLockWrapped),
+      slopeWrapped: Boolean(window.M4WD_LAYOUT_GRAPH?.__m4wdSlopeUnderpassRuntimeWrapped),
+      uiInstalled: Boolean(window.__M4WD_CONNECTOR_TARGET_LOCK_UI_INSTALLED__),
+      readyState: document.readyState,
+      connectorScriptCount: document.querySelectorAll('script[src*="connector-target-lock-runtime.js"]').length
+    }));
+    console.log(`connector boot ${JSON.stringify(bootState)}`);
+
     await page.waitForFunction(() => Boolean(
       window.__mini4wdCourseDebug
       && window.M4WD_CONNECTOR_TARGET_LOCK
