@@ -19,7 +19,7 @@
   function endpointIdentity(value = {}) {
     const partId = String(value.partId ?? value.sourceId ?? '').trim();
     const connectorId = String(value.connectorId ?? '').trim();
-    return partId && connectorId ? `${partId}\u0000${connectorId}` : '';
+    return partId && connectorId ? `${encodeURIComponent(partId)}|${encodeURIComponent(connectorId)}` : '';
   }
 
   function normalizeTarget(value = {}) {
