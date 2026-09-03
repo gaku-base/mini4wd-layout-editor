@@ -197,57 +197,105 @@
 
       <aside class="sidebar right-sidebar">
         <section class="panel">
-          <div class="panel-heading"><h2>選択</h2><span id="statusSelectedBadge" class="hint">0件</span></div>
+          <div class="panel-heading">
+            <h2>作成範囲</h2>
+            <button id="editFieldBtn" class="text-button" type="button">初期設定を編集</button>
+          </div>
+          <dl class="metric-list">
+            <div><dt>横幅</dt><dd id="fieldWidthText">5.00 m</dd></div>
+            <div><dt>奥行</dt><dd id="fieldHeightText">5.00 m</dd></div>
+            <div><dt>グリッド</dt><dd id="gridText">10 cm</dd></div>
+            <div><dt>範囲原点</dt><dd id="fieldOriginText">0.00 / 0.00 m</dd></div>
+            <div><dt>スタート</dt><dd id="startText">未設定</dd></div>
+            <div><dt>次の接続点</dt><dd id="connectionText">未設定</dd></div>
+            <div><dt>20度バンク状態</dt><dd id="bankStateText">通常</dd></div>
+          </dl>
+          <div id="fieldOverflowNotice" class="field-overflow-notice"><strong id="fieldOverflowText">すべて作成範囲内</strong><span>範囲外でも配置・移動できます。オレンジ枠を確認し、必要な時に自動フィットしてください。</span></div>
+        </section>
+
+        <section class="panel selection-panel">
+          <div class="panel-heading"><h2>選択中</h2><button id="clearSelectionBtn" class="text-button" type="button">解除</button></div>
           <div id="selectionInfo" class="selection-info empty-summary">選択なし</div>
-          <button id="convertStartBtn" class="button full-button" type="button" hidden>Startに変更</button>
-          <div class="selection-actions">
-            <button id="deleteSelectionBtn" class="button danger-button" type="button">選択削除</button>
-            <button id="colorSelectionBtn" class="button" type="button">選択色変更</button>
+          <button id="convertStartBtn" class="button full-button" type="button" hidden>スタートに変更</button>
+          <button id="deleteSelectionBtn" class="button danger-button full-button" type="button">選択パーツを削除</button>
+          <button id="colorSelectionBtn" class="button full-button" type="button">選択パーツの色を変更</button>
+        </section>
+
+        <section id="obstacleEditorPanel" class="panel obstacle-panel" hidden>
+          <div class="panel-heading"><h2>コース設置不可エリア</h2><button id="clearObstacleSelectionBtn" class="text-button" type="button">解除</button></div>
+          <p id="obstacleCollisionWarning" class="layout-warning-summary" hidden>コースパーツと重なっています</p>
+          <div class="cad-form">
+            <label>名前<input id="obstacleNameInput" type="text" maxlength="80" /></label>
+            <label>X（m）<input id="obstacleXInput" type="number" step="0.01" /></label>
+            <label>Y（m）<input id="obstacleYInput" type="number" step="0.01" /></label>
+            <label>横幅（m）<input id="obstacleWidthInput" type="number" min="0.01" max="50" step="0.01" /></label>
+            <label>奥行（m）<input id="obstacleDepthInput" type="number" min="0.01" max="50" step="0.01" /></label>
+            <label>角度（°）<input id="obstacleRotationInput" type="number" min="0" max="360" step="1" /></label>
+            <label class="check-label"><input id="obstacleVisibleInput" type="checkbox" /> 表示</label>
+            <label class="check-label"><input id="obstacleLockedInput" type="checkbox" /> ロック</label>
+          </div>
+          <p id="obstacleEditorError" class="form-error" hidden></p>
+          <div class="cad-actions">
+            <button id="rotateObstacleLeftBtn" class="button ghost" type="button">左へ5°</button>
+            <button id="rotateObstacleRightBtn" class="button ghost" type="button">右へ5°</button>
+          </div>
+          <div class="cad-actions">
+            <button id="duplicateObstacleBtn" class="button full-button" type="button">設置不可エリアを複製</button>
+            <button id="deleteObstacleBtn" class="button danger-button full-button" type="button">設置不可エリアを削除</button>
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-heading"><h2>配置設定</h2><span class="hint">高さ / 吸着</span></div>
-          <div class="placement-controls">
-            <label>高さ
-              <select id="placementHeightSelect">
-                <option value="auto">自動</option>
-                <option value="0">0 mm</option>
-                <option value="115">115 mm</option>
-                <option value="230">230 mm</option>
-                <option value="custom">任意</option>
-              </select>
-            </label>
-            <input id="placementHeightCustom" type="number" step="1" value="0" hidden />
-            <button id="snapToggleBtn" class="button" data-action="toggle-snap" type="button">吸着 ON</button>
-            <div id="cornerDirectionControl" class="placement-control" hidden>
-              <button id="cornerDirectionToggleBtn" class="button" type="button">コーナー方向: 右</button>
-            </div>
-            <div id="fastPathNextPart" class="fast-path-next-part" hidden></div>
+        <section class="panel snap-panel">
+          <div class="panel-heading"><h2>配置・吸着</h2><button id="snapToggleBtn" data-action="toggle-snap" class="text-button active" type="button" aria-pressed="true">吸着 ON</button></div>
+          <div id="cornerDirectionControl" hidden>
+            <span class="control-label">コーナー方向</span>
+            <button id="cornerDirectionToggleBtn" class="button full-button" type="button" aria-pressed="false">コーナー方向: 右</button>
           </div>
+          <div id="fastPathNextPart" class="layout-warning-summary" hidden></div>
+          <label class="control-label" for="placementHeightSelect">配置高さ</label>
+          <select id="placementHeightSelect" class="full-control">
+            <option value="auto">自動</option><option value="0">0段（0mm）</option><option value="115">1段（115mm）</option>
+            <option value="230">2段（230mm）</option><option value="345">3段（345mm）</option><option value="460">4段（460mm）</option><option value="custom">任意mm</option>
+          </select>
+          <input id="placementHeightCustom" class="full-control" type="number" step="1" value="0" aria-label="任意の配置高さ（mm）" hidden />
           <div id="snapCandidatePanel" class="snap-candidate-panel" hidden></div>
+          <div id="layoutWarningSummary" class="layout-warning-summary">警告なし</div>
         </section>
 
         <section class="panel">
-          <div class="panel-heading"><h2>概要</h2></div>
+          <div class="panel-heading"><h2>部品集計</h2></div>
           <div id="partsSummary" class="summary-list empty-summary">まだ部品がありません</div>
         </section>
 
-        <section class="panel warning-panel">
-          <div class="panel-heading"><h2>警告</h2><span id="layoutWarningSummary" class="hint">警告なし</span></div>
-          <p id="bankWarnings" class="bank-warnings empty-summary">バンク警告なし</p>
-        </section>
-
-        <section class="panel compact-panel">
-          <div class="panel-heading"><h2>診断</h2></div>
-          <div class="diagnostic-summary">
-            <span>イベント <strong id="diagnosticLogCount">0</strong></span>
-            <span>警告 <strong id="diagnosticWarningCount">0</strong></span>
-            <span>エラー <strong id="diagnosticErrorCount">0</strong></span>
+        <details class="panel diagnostic-panel">
+          <summary>診断ログ</summary>
+          <p class="diagnostic-note">不具合調査用の操作記録です。端末内だけで保持し、書き出すまで送信されません。</p>
+          <dl class="diagnostic-counts">
+            <div><dt>記録件数</dt><dd id="diagnosticLogCount">0</dd></div>
+            <div><dt>エラー</dt><dd id="diagnosticErrorCount">0</dd></div>
+            <div><dt>警告</dt><dd id="diagnosticWarningCount">0</dd></div>
+          </dl>
+          <div class="diagnostic-actions">
+            <button id="exportDiagnosticLogBtn" class="button full-button" type="button">診断ログを書き出す</button>
+            <button id="clearDiagnosticLogBtn" class="button ghost full-button" type="button">ログを消去</button>
           </div>
-          <div class="selection-actions">
-            <button id="exportDiagnosticBtn" class="button" type="button">診断ログ出力</button>
-            <button id="clearDiagnosticBtn" class="button ghost" type="button">診断ログ消去</button>
+        </details>
+
+        <section class="panel keyboard-panel">
+          <div class="panel-heading"><h2>キーボード操作</h2></div>
+          <div class="keyboard-help">
+            <div><kbd>1〜9</kbd><span>配置パーツを選択</span></div>
+            <div><kbd>R</kbd><span>最後のパーツを1個削除</span></div>
+            <div><kbd>Q</kbd><span>移動モードのON / OFF</span></div>
+            <div><kbd>W</kbd><span>削除モードのON / OFF</span></div>
+            <div><kbd>E</kbd><span>カラーモード / 選択色変更</span></div>
+            <div><kbd>Z / X</kbd><span>左45° / 右45°回転</span></div>
+            <div><kbd>Shift+クリック</kbd><span>複数選択を追加・解除</span></div>
+            <div><kbd>範囲ドラッグ</kbd><span>複数パーツを囲んで選択</span></div>
+            <div><kbd>Enter / Delete</kbd><span>選択中を実行・削除</span></div>
+            <div><kbd>Ctrl+Z / Y</kbd><span>アンドゥ / リドゥ（各20工程）</span></div>
+            <div><kbd>[ / ]</kbd><span>吸着候補を切替</span></div>
+            <div><kbd>Ctrl＋ホイール</kbd><span>ポインター位置を中心に拡大・縮小</span></div>
           </div>
         </section>
       </aside>
@@ -315,7 +363,7 @@
   <dialog id="exportRangeDialog" class="export-range-dialog">
     <form method="dialog">
       <h2>作成範囲外のパーツがあります</h2>
-      <p id="exportRangeText">作成範囲外にパーツがあります。</p>
+      <p id="exportRangeText">作成範囲外のパーツがあります。</p>
       <div class="export-range-actions">
         <button id="exportRangeKeepBtn" class="button ghost" type="button">このまま出力</button>
         <button id="exportRangeFitBtn" class="button primary" type="button">自動フィットして出力</button>
@@ -331,7 +379,6 @@
 
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
-  <script src="connector-target-lock-runtime.js?v=v1.1-rc6-health1"></script>
   <script src="part-render-pose.js"></script>
   <script src="placement-proposal.js"></script>
   <script src="corner-variant.js"></script>
