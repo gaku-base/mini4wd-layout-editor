@@ -105,7 +105,7 @@ async function main() {
     await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point').length >= 2, { timeout: TIMEOUT });
     await markers.first().click();
     assert.ok(await page.evaluate(() => window.M4WD_CONNECTOR_TARGET_LOCK.get()), 'marker click must lock');
-    await page.locator(`#connectorTargetLockOverlay .connector-target-point[data-connector-target="${firstIdentity.replace(/"/g, '\\"')}"]`).click();
+    await page.locator('#connectorTargetLockOverlay .connector-target-point.is-locked').click();
     await page.waitForFunction(() => window.M4WD_CONNECTOR_TARGET_LOCK?.get() == null, { timeout: TIMEOUT });
 
     await markers.first().click();
