@@ -60,7 +60,7 @@ test('only unused endpoints are offered for direct connector selection', () => {
   ];
   const connections = [{ partAId: 'p1', connectorAId: 'b', partBId: 'p2', connectorBId: 'a' }];
   const open = LOCK.openEndpoints(endpoints, connections);
-  assert.deepEqual(open.map(LOCK.endpointIdentity), ['p1\u0000a']);
+  assert.deepEqual(open.map(LOCK.endpointIdentity), ['p1|a']);
 });
 
 test('layout-space edge is inside, any point beyond it is outside', () => {
