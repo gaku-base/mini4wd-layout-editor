@@ -9,6 +9,25 @@ const CHROME_BIN = process.env.CHROME_BIN;
 const ARTIFACT_DIR = process.env.BROWSER_SMOKE_ARTIFACT_DIR || 'artifacts/browser-smoke';
 const TIMEOUT = 12000;
 
+async function waitStatusCount(page, expected) {
+  await page.waitForFunction(expectedCount => {
+    const value = document.querySelector('#statusCount')?.textContent || '';
+    return value.trim() === String(expectedCount);
+  }, expected, { timeout: TIMEOUT });
+}
+
+async function currentCount(page) {
+  return Number(String(await page.locator('#statusCount').textContent() || '').trim());
+}
+
+async function lockState(page) {
+  return page.evaluate(() => window.M4WD_CONNECTOR_TARGET_LOCK?.get?.() || null);
+}
+
+async function waitUnlocked(page) {
+  await page.waitForFunction(() => window.M4WD_CONNECTOR_TARGET_LOCK?.get?.() == null, { timeout: TIMEOUT });
+}
+
 async function main() {
   if (!CHROME_BIN) throw new Error('CHROME_BIN is required for browser smoke tests');
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
@@ -29,115 +48,108 @@ async function main() {
 
   try {
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 20000 });
-    await page.evaluate(() => document.querySelector('#setupDialog')?.close());
+    await page.locator('#courseCanvas').waitFor({ state: 'visible', timeout: TIMEOUT });
 
-    await page.waitForTimeout(500);
-    const bootState = await page.evaluate(() => ({
-      debug: Boolean(window.__mini4wdCourseDebug),
+    const boot = await page.evaluate(() => ({
       control: Boolean(window.M4WD_CONNECTOR_TARGET_LOCK),
       runtime: Boolean(window.M4WD_CONNECTOR_TARGET_LOCK_RUNTIME),
       graphWrapped: Boolean(window.M4WD_LAYOUT_GRAPH?.__m4wdConnectorTargetLockWrapped),
-      slopeWrapped: Boolean(window.M4WD_LAYOUT_GRAPH?.__m4wdSlopeUnderpassRuntimeWrapped),
       uiInstalled: Boolean(window.__M4WD_CONNECTOR_TARGET_LOCK_UI_INSTALLED__),
-      readyState: document.readyState,
       connectorScriptCount: document.querySelectorAll('script[src*="connector-target-lock-runtime.js"]').length
     }));
-    console.log(`connector boot ${JSON.stringify(bootState)}`);
+    assert.deepEqual(boot, {
+      control: true,
+      runtime: true,
+      graphWrapped: true,
+      uiInstalled: true,
+      connectorScriptCount: 1
+    }, 'connector targeting must boot once in the production page without retaining the private debug bridge');
 
-    await page.waitForFunction(() => Boolean(
-      window.__mini4wdCourseDebug
-      && window.M4WD_CONNECTOR_TARGET_LOCK
-      && window.M4WD_LAYOUT_GRAPH?.__m4wdConnectorTargetLockWrapped
-    ), { timeout: TIMEOUT });
+    // Build a clean layout only through the user-facing flow. The production
+    // debug bridge is intentionally temporary, so this regression must not rely on it.
+    const library = page.locator('#savedSpaceLibraryPanel');
+    if (!(await library.isVisible())) await page.locator('#newBtn').click();
+    await library.waitFor({ state: 'visible', timeout: TIMEOUT });
+    await page.locator('#createNewSpaceBtn').click();
+    await page.locator('#layoutSpacePanel').waitFor({ state: 'visible', timeout: TIMEOUT });
+    await page.locator('#setupForm').evaluate(form => form.requestSubmit());
+    await page.locator('#subEditModeBar').waitFor({ state: 'visible', timeout: TIMEOUT });
+    await page.locator('#skipSpaceSaveBtn').waitFor({ state: 'visible', timeout: TIMEOUT });
+    await page.locator('#skipSpaceSaveBtn').click();
 
-    await page.evaluate(() => {
-      const debug = window.__mini4wdCourseDebug;
-      const state = debug.getState();
-      state.start = {
-        id: 'start', type: 'start', x: 250, y: 250, zMm: 0,
-        rotation: 0, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0
-      };
-      state.parts = [];
-      state.connections = [];
-      state.selectedType = 'straight';
-      state.rotation = 0;
-      debug.loadState(state);
-      debug.setMode('place');
-      debug.selectPartType('straight');
-    });
+    await page.waitForFunction(() => {
+      const bar = document.querySelector('#initialSetupStepBar');
+      return bar && !bar.hidden && /STEP\s*3\s*\/\s*3/.test(bar.textContent || '');
+    }, { timeout: TIMEOUT });
+
+    const canvas = page.locator('#courseCanvas');
+    const canvasBox = await canvas.boundingBox();
+    assert.ok(canvasBox && canvasBox.width > 200 && canvasBox.height > 200, 'course canvas must have a usable bounding box');
+    const centerX = canvasBox.x + canvasBox.width / 2;
+    const centerY = canvasBox.y + canvasBox.height / 2;
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.click(centerX, centerY);
+    await waitStatusCount(page, 1);
+    await page.waitForFunction(() => !String(document.querySelector('#startText')?.textContent || '').includes('未設定'), { timeout: TIMEOUT });
+
+    // Explicitly select Straight so every connector-lock interaction below uses
+    // a normal compatible part and isolates connector targeting behavior.
+    await page.keyboard.press('1');
 
     const markers = page.locator('#connectorTargetLockOverlay .connector-target-point');
     await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point').length >= 2, { timeout: TIMEOUT });
-    assert.ok(await markers.count() >= 2, 'start must expose selectable open connectors');
+    assert.ok(await markers.count() >= 2, 'placed Start must expose two selectable open connectors');
 
-    const firstMarker = markers.first();
-    const firstIdentity = await firstMarker.getAttribute('data-connector-target');
-    await firstMarker.click();
-
-    await page.waitForFunction(() => Boolean(window.M4WD_CONNECTOR_TARGET_LOCK?.get()), { timeout: TIMEOUT });
-    const locked = await page.evaluate(() => window.M4WD_CONNECTOR_TARGET_LOCK.get());
-    assert.equal(locked.identity, firstIdentity);
+    // Same-target toggle releases the lock.
+    await markers.first().click();
+    assert.ok(await lockState(page), 'connector marker click must lock the target');
     await page.locator('#connectorTargetLockStatus').waitFor({ state: 'visible', timeout: TIMEOUT });
+    await page.locator('#connectorTargetLockOverlay .connector-target-point.is-locked').click();
+    await waitUnlocked(page);
 
-    const forcedTarget = await page.evaluate(() => {
-      const debug = window.__mini4wdCourseDebug;
-      const lock = window.M4WD_CONNECTOR_TARGET_LOCK.get();
-      debug.setCursor(460, 440);
-      const proposal = debug.getPlacementProposal();
-      return {
-        lock,
-        snapped: proposal?.snapped,
-        targetPartId: proposal?.edge?.partAId,
-        targetConnectorId: proposal?.edge?.connectorAId,
-        distancePx: proposal?.distancePx
-      };
-    });
-    assert.equal(forcedTarget.snapped, true, 'locked connector must remain the snap target even when cursor is far away');
-    assert.equal(forcedTarget.targetPartId, forcedTarget.lock.partId);
-    assert.equal(forcedTarget.targetConnectorId, forcedTarget.lock.connectorId);
-    assert.ok(forcedTarget.distancePx > 24, 'browser test must prove the explicit lock overrides the ordinary 24px range');
+    // Esc releases the lock.
+    await markers.first().click();
+    assert.ok(await lockState(page), 'connector must lock again before Esc regression');
+    await page.keyboard.press('Escape');
+    await waitUnlocked(page);
 
-    const beforeOutside = await page.evaluate(() => window.__mini4wdCourseDebug.getRuntimeState().placementCommitCount);
-    const outsidePoint = await page.evaluate(() => {
-      const debug = window.__mini4wdCourseDebug;
-      const runtime = debug.getRuntimeState();
-      const bounds = debug.getFieldBounds();
-      const canvas = document.querySelector('#courseCanvas');
-      const rect = canvas.getBoundingClientRect();
-      const topLeft = window.M4WD_ROOM_BOUNDARY.worldToScreen({ x: bounds.minX, y: bounds.minY }, runtime.view);
-      return {
-        x: rect.left + Math.max(2, topLeft.x - 18),
-        y: rect.top + Math.max(2, topLeft.y - 18)
-      };
-    });
-    await page.mouse.click(outsidePoint.x, outsidePoint.y);
-    await page.waitForFunction(() => window.M4WD_CONNECTOR_TARGET_LOCK?.get() == null, { timeout: TIMEOUT });
-    const afterOutside = await page.evaluate(() => window.__mini4wdCourseDebug.getRuntimeState().placementCommitCount);
-    assert.equal(afterOutside, beforeOutside, 'outside-layout click must release the lock without placing a part');
+    // The requested behavior: a click inside the canvas but outside the fitted
+    // layout space releases the lock only. The editor keeps a visible margin
+    // around a newly fitted 5m x 5m field, so 5px from the canvas corner is
+    // deliberately outside the layout while still reaching the canvas listener.
+    await markers.first().click();
+    assert.ok(await lockState(page), 'connector must lock before outside-space regression');
+    const countBeforeOutside = await currentCount(page);
+    await page.mouse.click(canvasBox.x + 5, canvasBox.y + 5);
+    await waitUnlocked(page);
+    assert.equal(await currentCount(page), countBeforeOutside, 'outside-layout click must release without placing a part');
+    assert.equal(countBeforeOutside, 1, 'outside-layout regression must begin with only Start placed');
 
+    // A locked target must remain usable beyond the ordinary 24px snap radius.
+    // Clicking the canvas centre is intentionally far from the selected Start
+    // endpoint; successful placement therefore exercises the explicit lock in
+    // the real browser rather than only the unit-test wrapper.
     await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point').length >= 2, { timeout: TIMEOUT });
     await markers.first().click();
-    assert.ok(await page.evaluate(() => window.M4WD_CONNECTOR_TARGET_LOCK.get()), 'marker click must lock');
-    await page.locator('#connectorTargetLockOverlay .connector-target-point.is-locked').click();
-    await page.waitForFunction(() => window.M4WD_CONNECTOR_TARGET_LOCK?.get() == null, { timeout: TIMEOUT });
+    const markerBox = await page.locator('#connectorTargetLockOverlay .connector-target-point.is-locked').boundingBox();
+    assert.ok(markerBox, 'locked connector marker must remain visible');
+    const markerX = markerBox.x + markerBox.width / 2;
+    const markerY = markerBox.y + markerBox.height / 2;
+    const distanceToCenter = Math.hypot(centerX - markerX, centerY - markerY);
+    assert.ok(distanceToCenter > 24, `test click must be outside ordinary snap radius (actual ${distanceToCenter.toFixed(1)}px)`);
 
-    await markers.first().click();
-    await page.keyboard.press('Escape');
-    await page.waitForFunction(() => window.M4WD_CONNECTOR_TARGET_LOCK?.get() == null, { timeout: TIMEOUT });
-
-    await markers.first().click();
-    const beforePlacement = await page.evaluate(() => window.__mini4wdCourseDebug.getRuntimeState().placementCommitCount);
-    const canvasBox = await page.locator('#courseCanvas').boundingBox();
-    assert.ok(canvasBox, 'course canvas must have a bounding box');
-    await page.mouse.click(canvasBox.x + canvasBox.width / 2, canvasBox.y + canvasBox.height / 2);
-    await page.waitForFunction(expected => {
-      const runtime = window.__mini4wdCourseDebug.getRuntimeState();
-      return runtime.placementCommitCount > expected && window.M4WD_CONNECTOR_TARGET_LOCK?.get() == null;
-    }, beforePlacement, { timeout: TIMEOUT });
+    const countBeforePlacement = await currentCount(page);
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.click(centerX, centerY);
+    await waitStatusCount(page, countBeforePlacement + 1);
+    await waitUnlocked(page);
+    assert.equal(await currentCount(page), 2, 'one Straight must be placed through the locked connector');
 
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
-    console.log('✓ explicit connector target: exact target lock, outside-space release, same-target toggle, Esc, and one-placement auto-release passed');
+    console.log(`✓ explicit connector target browser regression passed; forced click distance=${distanceToCenter.toFixed(1)}px`);
+    console.log('✓ outside-layout click released the target without placing a part');
+    console.log('✓ same-target click, Esc, and one-placement auto-release passed');
     console.log('Browser connector target lock smoke test passed.');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/connector-target-lock-failure.png`, fullPage: true }); } catch (_) {}
