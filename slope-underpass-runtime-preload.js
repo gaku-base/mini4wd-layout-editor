@@ -10,6 +10,10 @@
     documentRef.write(`<script src="slope-gradient-visual.js?v=${CACHE_KEY}" data-m4wd-slope-gradient-visual="1"><\/script>`);
   }
 
+  if (!root.M4WD_CONNECTOR_TARGET_LOCK_RUNTIME) {
+    documentRef.write('<script src="connector-target-lock-runtime.js?v=v1.1-rc6-connector-target1" data-m4wd-connector-target-lock="1"><\/script>');
+  }
+
   if (root.M4WD_SLOPE_UNDERPASS_RUNTIME) return;
 
   const resources = [
