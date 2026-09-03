@@ -52,6 +52,7 @@ jobs:
           test -f browser-slope-visibility-smoke.js
           test -f browser-slope-underpass-smoke.js
           test -f browser-bank20-projection-smoke.js
+          test -f browser-connector-target-lock-smoke.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -145,6 +146,7 @@ jobs:
           node browser-slope-visibility-smoke.js
           node browser-slope-underpass-smoke.js
           node browser-bank20-projection-smoke.js
+          node browser-connector-target-lock-smoke.js
 
       - name: Upload browser rehearsal failure screenshot
         if: failure() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '' || hashFiles('.github/ui-smoke.trigger') != '')

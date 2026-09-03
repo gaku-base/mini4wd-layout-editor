@@ -74,6 +74,16 @@
   'use strict';
   if (!root || !root.document) return;
 
+  // layout-graph.js is already loaded when this bridge runs, while app.js has
+  // not captured the graph reference yet. Install explicit connector targeting
+  // synchronously here so normal snapping remains unchanged unless a target is
+  // explicitly locked by the user.
+  if (root.document.readyState === 'loading'
+      && typeof root.document.write === 'function'
+      && !root.M4WD_CONNECTOR_TARGET_LOCK_RUNTIME) {
+    root.document.write('<script src="connector-target-lock-runtime.js?v=v1.1-rc6-connector-target1" data-m4wd-connector-target-lock="1"><\/script>');
+  }
+
   // app.js captures M4WD_LAYOUT_GRAPH during parser execution. Load the slope
   // underpass runtime synchronously here so the approved warning filter is
   // installed before app.js takes that reference. This stays inside the
