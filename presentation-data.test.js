@@ -6,12 +6,17 @@ const DATA = require('./presentation-data.js');
 
 const catalog = {
   PARTS: {
-    start: { name: 'スタート', geometry: { connectors: [{ x:-27,y:0,localZMm:0 }, { x:27,y:0,localZMm:0 }] } },
-    straight: { name: 'ストレート', geometry: { connectors: [{ x:-27,y:0,localZMm:0 }, { x:27,y:0,localZMm:0 }] } },
-    'corner-45-right': { name: '右', corner45:true, geometry:{ centerlineRadius:54, angleDeg:45 } },
-    'corner-45-left': { name: '左', corner45:true, geometry:{ centerlineRadius:54, angleDeg:45 } },
-    slope: { name:'スロープ', geometry:{ connectors:[{x:-27,y:0,localZMm:0},{x:27,y:0,localZMm:115}] } },
-    unknown: { name:'未定義' }
+    start: { name: 'スタート' },
+    straight: { name: 'ストレート' },
+    'corner-45-right': { name: '右' },
+    'corner-45-left': { name: '左' },
+    lanechange: { name: 'レーンチェンジ' },
+    wave: { name: 'ウェーブ' },
+    slope: { name: 'スロープ' },
+    bank20: { name: '20度バンク' },
+    lcjump: { name: 'LCジャンプ' },
+    burning: { name: 'バーニングLC' },
+    unknown: { name: '未定義' }
   }
 };
 
@@ -37,15 +42,34 @@ test('part counts group left/right 45-degree corners and ignore color difference
   assert.deepEqual(counts.map(item => [item.key, item.count]), [['start',1],['straight',2],['corner45',2]]);
 });
 
-test('track length uses centerline arc and 3D slope length rather than visual bounding width', () => {
-  const corner = DATA.partLengthCm('corner-45-right', catalog.PARTS['corner-45-right']);
-  assert.ok(Math.abs(corner - (54 * Math.PI / 4)) < 1e-9);
-  const slope = DATA.partLengthCm('slope', catalog.PARTS.slope);
-  assert.ok(Math.abs(slope - Math.hypot(54, 11.5)) < 1e-9);
-  const layout = { start:{}, parts:[{type:'straight'},{type:'corner-45-right'},{type:'slope'}] };
+test('Pimentoso-compatible length table uses three-lane total values', () => {
+  assert.equal(DATA.partLengthCm('straight', catalog.PARTS.straight), 162);
+  assert.equal(DATA.partLengthCm('start', catalog.PARTS.start), 162);
+  assert.equal(DATA.partLengthCm('wave', catalog.PARTS.wave), 162);
+  assert.equal(DATA.partLengthCm('slope', catalog.PARTS.slope), 162);
+  assert.equal(DATA.partLengthCm('lcjump', catalog.PARTS.lcjump), 162);
+  assert.equal(DATA.partLengthCm('corner-45-right', catalog.PARTS['corner-45-right']), 127);
+  assert.equal(DATA.partLengthCm('corner-45-left', catalog.PARTS['corner-45-left']), 127);
+  assert.equal(DATA.partLengthCm('lanechange', catalog.PARTS.lanechange), 486);
+  assert.equal(DATA.partLengthCm('bank20', catalog.PARTS.bank20), 66);
+  assert.equal(DATA.partLengthCm('burning', catalog.PARTS.burning), 981);
+});
+
+test('track total sums one run of each of the three lanes per placed part', () => {
+  const layout = {
+    start: {},
+    parts: [
+      { type:'straight' },
+      { type:'corner-45-right' },
+      { type:'slope' },
+      { type:'bank20' }
+    ]
+  };
   const total = DATA.computeTrackLength(layout, catalog);
   assert.equal(total.available, true);
-  assert.equal(total.display, `${total.totalM.toFixed(2)} m`);
+  assert.equal(total.totalCm, 679);
+  assert.equal(total.totalM, 6.79);
+  assert.equal(total.display, '6.79 m');
 });
 
 test('undefined length fails closed instead of treating the part as zero', () => {

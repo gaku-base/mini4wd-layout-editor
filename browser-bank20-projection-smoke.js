@@ -71,22 +71,22 @@ async function main() {
       };
     });
 
-    assert.equal(result.projectedLengthMm, 240);
-    assert.equal(result.widthCm, 24);
-    assert.equal(result.geometryWidthCm, 24);
-    assert.deepEqual(result.connectorXs, [-12, 12]);
-    assert.deepEqual(result.bounds, { minX: -12, maxX: 12, minY: -18, maxY: 18 });
-    assert.equal(result.visualWidthCm, 24);
-    assert.equal(result.visualOriginX, 12);
+    assert.equal(result.projectedLengthMm, 230);
+    assert.equal(result.widthCm, 23);
+    assert.equal(result.geometryWidthCm, 23);
+    assert.deepEqual(result.connectorXs, [-11.5, 11.5]);
+    assert.deepEqual(result.bounds, { minX: -11.5, maxX: 11.5, minY: -18, maxY: 18 });
+    assert.equal(result.visualWidthCm, 23);
+    assert.equal(result.visualOriginX, 11.5);
     assert.equal(result.angleDeg, 20);
     assert.equal(result.measurementStatus, 'verified');
     assert.ok(result.visiblePixels > 250, `Bank20 preview must remain visible: ${result.visiblePixels}`);
-    assert.match(result.buttonText, /24cm\s*×\s*36cm/);
+    assert.match(result.buttonText, /23cm\s*×\s*36cm/);
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
 
-    console.log(`✓ Bank20 preview visible; projected length=${result.projectedLengthMm}mm, connectors=${result.connectorXs.join('/')}cm`);
-    console.log('Browser Bank20 240mm projection smoke test passed.');
+    console.log(`✓ Bank20 preview visible; connector span=${result.projectedLengthMm}mm, connectors=${result.connectorXs.join('/')}cm`);
+    console.log('Browser Bank20 230mm connector-span smoke test passed.');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/bank20-projection-failure.png`, fullPage: true }); } catch (_) {}
     throw error;
