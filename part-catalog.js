@@ -7,9 +7,10 @@
   // from the legacy visual lane width used by raster assets.
   const STRAIGHT_CONNECTION_LENGTH_MM = 540;
   const STRAIGHT_CONNECTION_WIDTH_MM = 370;
-  // Project-owner approved Bank20 projected course length.
-  const BANK20_PROJECTED_LENGTH_MM = 240;
+  // Project-owner approved Bank20 connector-to-connector projected span.
+  const BANK20_PROJECTED_LENGTH_MM = 230;
   const BANK20_PROJECTED_LENGTH_CM = BANK20_PROJECTED_LENGTH_MM / 10;
+  const BANK20_HALF_PROJECTED_LENGTH_CM = BANK20_PROJECTED_LENGTH_CM / 2;
 
   const palette = {
     base: '#efede9',
@@ -159,15 +160,15 @@
     bank20: {
       key: '7', name: '20度バンク入口／出口', short: '20°', renderKind: 'bank20', bank20: true,
       w: BANK20_PROJECTED_LENGTH_CM, h: 36,
-      geometry: { width: BANK20_PROJECTED_LENGTH_CM, height: 36, connectors: [{ id: 'a', label: '平面側', x: -12, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, bankTransitionToDeg: 20, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: 'バンク側', x: 12, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 20, bankTransitionToDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -12, maxX: 12, minY: -18, maxY: 18 } },
-      visual: { file: 'assets/parts/bank20.png', canvasWidth: BANK20_PROJECTED_LENGTH_CM, canvasHeight: 36, originX: 12, originY: 18 },
+      geometry: { width: BANK20_PROJECTED_LENGTH_CM, height: 36, connectors: [{ id: 'a', label: '平面側', x: -BANK20_HALF_PROJECTED_LENGTH_CM, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, bankTransitionToDeg: 20, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: 'バンク側', x: BANK20_HALF_PROJECTED_LENGTH_CM, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 20, bankTransitionToDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -BANK20_HALF_PROJECTED_LENGTH_CM, maxX: BANK20_HALF_PROJECTED_LENGTH_CM, minY: -18, maxY: 18 } },
+      visual: { file: 'assets/parts/bank20.png', canvasWidth: BANK20_PROJECTED_LENGTH_CM, canvasHeight: 36, originX: BANK20_HALF_PROJECTED_LENGTH_CM, originY: 18 },
       bank: { angleDeg: 20, dynamicRole: true },
       measurements: {
         projectedLengthMm: {
           value: BANK20_PROJECTED_LENGTH_MM,
           status: 'verified',
           confidence: 'high',
-          source: 'project-owner-approved-2026-09-02'
+          source: 'project-owner-approved-2026-09-04'
         },
         transitionArcChordMm: {
           value: 225.75,
@@ -214,7 +215,7 @@
   const MENU_ORDER = ['straight','corner-45-right','lanechange','wave','start','slope','bank20','lcjump','burning'];
 
   window.M4WD_PART_CATALOG = Object.freeze({
-    version: '1.3.1',
+    version: '1.3.2',
     TRACK_WIDTH_CM,
     STRAIGHT_CM,
     STRAIGHT_CONNECTION_LENGTH_MM,
