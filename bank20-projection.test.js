@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const PRESENTATION_DATA = require('./presentation-data.js');
 
 function loadCatalog() {
   const context = { window: {} };
@@ -44,4 +45,15 @@ test('Bank20 keeps the measured transition arc separate from the 230mm connector
   assert.equal(bank.measurements.transitionArcChordMm.status, 'provisional');
   assert.ok(bank.measurements.transitionArcChordMm.value < bank.measurements.projectedLengthMm.value);
   assert.equal(bank.bank.angleDeg, 20);
+});
+
+test('Bank20 track-length contribution remains 0.66m even though connector span is 23cm', () => {
+  const bank = loadCatalog().PARTS.bank20;
+
+  assert.equal(bank.geometry.width, 23);
+  assert.equal(PRESENTATION_DATA.partLengthCm('bank20', bank), 66);
+  const total = PRESENTATION_DATA.computeTrackLength({ parts: [{ type: 'bank20' }] }, { PARTS: { bank20: bank } });
+  assert.equal(total.available, true);
+  assert.equal(total.totalM, 0.66);
+  assert.equal(total.display, '0.66 m');
 });
