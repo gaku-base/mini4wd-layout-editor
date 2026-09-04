@@ -27,6 +27,24 @@
     burning: 'バーニングLC'
   });
 
+  // Pimentoso Mini4WD Online Track Editor compatible values for a 3-lane track.
+  // Each value is the total distance travelled after running lane 1, lane 2 and
+  // lane 3 once each (three laps in total). These values are intentionally kept
+  // separate from placement/projection geometry so track rendering dimensions do
+  // not change when the presentation total-length calculation changes.
+  const PIMENTOSO_THREE_LANE_LENGTH_CM = Object.freeze({
+    start: 162,
+    straight: 162,
+    'corner-45-right': 127,
+    'corner-45-left': 127,
+    lanechange: 486,
+    wave: 162,
+    slope: 162,
+    bank20: 66,
+    lcjump: 162,
+    burning: 981
+  });
+
   function cleanText(value, maxLength = 120) {
     return String(value ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, maxLength);
   }
@@ -78,63 +96,10 @@
     }).map(item => Object.freeze({ ...item, representative: item.representative ? { ...item.representative } : null }));
   }
 
-  function connectorPoint(connector, metadata) {
-    if (!connector) return null;
-    const x = Number(connector.x ?? connector.localX);
-    const y = Number(connector.y ?? connector.localY);
-    const zMm = Number(connector.localZMm ?? metadata?.localZMm ?? 0);
-    if (![x, y, zMm].every(Number.isFinite)) return null;
-    return { x, y, zCm: zMm / 10 };
-  }
-
-  function definitionConnectors(definition = {}) {
-    const direct = Array.isArray(definition.geometry?.connectors) ? definition.geometry.connectors : [];
-    const metadata = Array.isArray(definition.geometry?.connectorMetadata) ? definition.geometry.connectorMetadata : [];
-    return direct.map((connector, index) => connectorPoint(connector, metadata[index])).filter(Boolean);
-  }
-
-  function integrateWaveLengthCm(definition, samples = 512) {
-    const width = Number(definition?.w ?? definition?.geometry?.width);
-    const amplitude = Number(definition?.geometry?.amplitude ?? definition?.amplitude);
-    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(amplitude)) return null;
-    let length = 0;
-    let previous = { x: -width / 2, y: 0 };
-    for (let i = 1; i <= samples; i += 1) {
-      const t = i / samples;
-      const x = -width / 2 + width * t;
-      const y = -amplitude * (0.5 - 0.5 * Math.cos(Math.PI * 2 * t));
-      length += Math.hypot(x - previous.x, y - previous.y);
-      previous = { x, y };
-    }
-    return length;
-  }
-
   function partLengthCm(type, definition = {}) {
     if (!definition || typeof definition !== 'object') return null;
-    if (definition.corner45) {
-      const radius = Number(definition.geometry?.centerlineRadius ?? definition.radius);
-      const angleDeg = Number(definition.geometry?.angleDeg ?? 45);
-      return Number.isFinite(radius) && radius > 0 && Number.isFinite(angleDeg)
-        ? radius * Math.abs(angleDeg) * Math.PI / 180
-        : null;
-    }
-    if (definition.wave) return integrateWaveLengthCm(definition);
-    if (definition.burning) {
-      const g = definition.geometry || {};
-      const endpointX = Number(g.endpointX);
-      const arcCenterX = Number(g.arcCenterX);
-      const radius = Number(g.centerlineRadius);
-      if (![endpointX, arcCenterX, radius].every(Number.isFinite) || radius <= 0) return null;
-      return Math.abs(arcCenterX - endpointX) * 2 + Math.PI * radius;
-    }
-    const connectors = definitionConnectors(definition);
-    if (connectors.length >= 2) {
-      const a = connectors[0];
-      const b = connectors[1];
-      return Math.hypot(b.x - a.x, b.y - a.y, b.zCm - a.zCm);
-    }
-    const width = Number(definition.w ?? definition.geometry?.width);
-    return Number.isFinite(width) && width > 0 ? width : null;
+    const lengthCm = PIMENTOSO_THREE_LANE_LENGTH_CM[type];
+    return Number.isFinite(lengthCm) ? lengthCm : null;
   }
 
   function computeTrackLength(layout = {}, catalog = {}) {
@@ -202,6 +167,7 @@
     DEFAULT_METADATA,
     GROUP_ORDER,
     GROUP_LABELS,
+    PIMENTOSO_THREE_LANE_LENGTH_CM,
     normalizeMetadata,
     validateMetadata,
     groupKeyForType,
