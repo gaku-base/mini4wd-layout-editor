@@ -20,12 +20,21 @@ test('print page rule is fixed to one A4 page with 10mm margins', () => {
   assert.equal(EXPORT.printPageRule('portrait'), '@page { size: A4 portrait; margin: 10mm; }');
 });
 
-test('course owns at least three quarters of the usable landscape page height', () => {
+test('racing export keeps the course as the largest block while reserving dedicated stats, parts and footer bands', () => {
   const page = EXPORT.pageSize('landscape', 120);
   const rects = EXPORT.layoutRects(page, 'landscape');
-  assert.ok(rects.course.h / rects.usableH >= 0.77);
-  assert.ok(rects.title.h <= Math.ceil(rects.usableH * 0.08));
-  assert.ok(rects.counts.h <= Math.ceil(rects.usableH * 0.09));
+  assert.ok(rects.course.h / rects.usableH >= 0.66);
+  assert.ok(rects.course.h > rects.title.h + rects.stats.h + rects.counts.h);
+  assert.ok(rects.title.h <= Math.ceil(rects.usableH * 0.085));
+  assert.ok(rects.counts.h <= Math.ceil(rects.usableH * 0.135));
+  assert.ok(rects.footer.h > 0);
+  assert.equal(rects.footer.y + rects.footer.h, rects.margin + rects.usableH);
+});
+
+test('export design uses the approved racing palette and flat monochrome part pictograms', () => {
+  assert.equal(EXPORT.EXPORT_THEME.ink, '#081019');
+  assert.equal(EXPORT.EXPORT_THEME.red, '#e52f38');
+  assert.equal(EXPORT.PART_ICON_MODE, 'flat-monochrome');
 });
 
 test('course-first fit ignores unused setup-field whitespace but includes every placed part', () => {

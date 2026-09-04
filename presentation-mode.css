@@ -7,9 +7,9 @@
 .presentation-view {
   --pr-bg: #070b10;
   --pr-panel: #0e141c;
-  --pr-panel-2: #141c26;
-  --pr-line: #273342;
-  --pr-line-soft: #202a36;
+  --pr-panel-2: #131d28;
+  --pr-line: #283647;
+  --pr-line-soft: #202b38;
   --pr-text: #f4f7fb;
   --pr-muted: #8e9bac;
   --pr-red: #e52f38;
@@ -18,8 +18,9 @@
   position: fixed;
   inset: 0;
   z-index: 10000;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  grid-template-rows: 58px minmax(0, 1fr);
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -27,12 +28,30 @@
   box-sizing: border-box;
   overflow: hidden;
   background:
-    radial-gradient(circle at 52% 18%, rgba(229,47,56,.065), transparent 34%),
-    linear-gradient(135deg, rgba(255,255,255,.015) 25%, transparent 25%) 0 0/12px 12px,
-    linear-gradient(315deg, rgba(255,255,255,.012) 25%, transparent 25%) 0 0/12px 12px,
+    radial-gradient(circle at 62% 22%, rgba(229,47,56,.07), transparent 35%),
+    linear-gradient(135deg, rgba(255,255,255,.014) 25%, transparent 25%) 0 0/12px 12px,
+    linear-gradient(315deg, rgba(255,255,255,.010) 25%, transparent 25%) 0 0/12px 12px,
     var(--pr-bg);
   color: var(--pr-text);
   font-family: var(--pr-font);
+}
+
+.presentation-view::before {
+  content: "レイアウト出力";
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #0d151f, #091019);
+  border-bottom: 1px solid #2a3849;
+  color: #fff;
+  font-size: 24px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-shadow: 0 1px 0 #000;
+  box-shadow: 0 8px 26px rgba(0,0,0,.30);
 }
 
 body.presentation-mode-open {
@@ -43,20 +62,32 @@ body.presentation-mode-open {
 body.presentation-mode-open > #app { display: none !important; }
 
 .presentation-toolbar {
-  flex: 0 0 auto;
+  grid-column: 1;
+  grid-row: 2;
   display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 9px;
-  width: 100%;
-  max-width: 100%;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   min-width: 0;
+  min-height: 0;
   box-sizing: border-box;
-  padding: 10px 14px 11px;
-  background: rgba(11,15,20,.97);
-  border-bottom: 1px solid var(--pr-line);
-  box-shadow: 0 8px 28px rgba(0,0,0,.32);
-  overflow-x: auto;
+  padding: 14px 14px 16px;
+  background: linear-gradient(180deg, rgba(14,21,30,.98), rgba(8,13,19,.98));
+  border-right: 1px solid var(--pr-line);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.presentation-toolbar::before {
+  content: "出力設定";
+  display: block;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  border-left: 4px solid var(--pr-red);
+  padding-left: 9px;
+  margin-bottom: 1px;
 }
 
 .presentation-toolbar button,
@@ -65,13 +96,13 @@ body.presentation-mode-open > #app { display: none !important; }
 .presentation-back,
 .presentation-primary,
 .presentation-choice {
-  min-height: 38px;
+  min-height: 40px;
   border: 1px solid var(--pr-line);
   border-radius: 8px;
-  background: linear-gradient(180deg, #18212c, #111821);
+  background: linear-gradient(180deg, #192431, #111922);
   color: var(--pr-text);
   padding: 0 13px;
-  font-weight: 780;
+  font-weight: 800;
   letter-spacing: .02em;
   cursor: pointer;
   white-space: nowrap;
@@ -79,23 +110,27 @@ body.presentation-mode-open > #app { display: none !important; }
 }
 .presentation-back:hover,
 .presentation-choice:hover {
-  border-color: #48586c;
-  background: #1a2531;
+  border-color: #52657b;
+  background: #1b2835;
   transform: translateY(-1px);
 }
 
 .presentation-back {
-  color: #dce5ef;
-  border-color: #344152;
+  order: -1;
+  width: 100%;
+  color: #e5edf6;
+  border-color: #3b4a5d;
+  text-align: left;
 }
 
 .presentation-primary {
+  width: 100%;
   background: linear-gradient(180deg, #f02f3d, #b70e1c);
   border-color: #ff4050;
   color: #fff;
-  box-shadow: 0 0 0 1px rgba(255,45,61,.15), 0 8px 22px rgba(185,12,27,.22);
+  box-shadow: 0 0 0 1px rgba(255,45,61,.14), 0 8px 22px rgba(185,12,27,.22);
   font-style: italic;
-  font-weight: 850;
+  font-weight: 900;
 }
 .presentation-primary:hover {
   background: linear-gradient(180deg, #ff3b4b, #cb1020);
@@ -105,7 +140,7 @@ body.presentation-mode-open > #app { display: none !important; }
 
 .presentation-choice.is-active {
   color: #fff;
-  background: linear-gradient(180deg, #d6202e, #a60e1a);
+  background: linear-gradient(180deg, #dd2533, #a70f1a);
   border-color: var(--pr-red-bright);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.06), 0 0 12px rgba(229,47,56,.14);
 }
@@ -113,24 +148,31 @@ body.presentation-mode-open > #app { display: none !important; }
 .presentation-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 142px;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--pr-line-soft);
+  border-radius: 9px;
+  background: rgba(17,25,35,.72);
 }
 .presentation-field span,
 .presentation-control-label {
-  color: var(--pr-muted);
+  color: #aab6c4;
   font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .07em;
+  font-weight: 850;
+  letter-spacing: .08em;
   text-transform: uppercase;
 }
 .presentation-field input {
-  width: 160px;
+  width: 100%;
+  min-width: 0;
   height: 38px;
   box-sizing: border-box;
   border: 1px solid var(--pr-line);
-  border-radius: 8px;
-  background: #0b1118;
+  border-radius: 7px;
+  background: #080e15;
   color: var(--pr-text);
   padding: 0 10px;
   outline: none;
@@ -148,31 +190,38 @@ body.presentation-mode-open > #app { display: none !important; }
 
 .presentation-control-group {
   display: grid;
-  grid-template-columns: repeat(3, auto);
-  grid-template-rows: auto 38px;
-  gap: 4px 5px;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  grid-template-rows: auto 40px;
+  gap: 6px;
   min-width: 0;
   align-items: center;
-  padding-left: 8px;
-  border-left: 1px solid var(--pr-line-soft);
+  padding: 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--pr-line-soft);
+  border-radius: 9px;
+  background: rgba(17,25,35,.72);
 }
 .presentation-control-label { grid-column: 1 / -1; }
 .presentation-control-group .presentation-choice {
-  min-height: 38px;
-  padding-inline: 11px;
+  min-width: 0;
+  min-height: 40px;
+  padding-inline: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .presentation-status {
-  align-self: center;
   min-width: 0;
   color: var(--pr-muted);
   font-size: 10px;
-  white-space: nowrap;
+  line-height: 1.4;
+  white-space: normal;
 }
 .presentation-status.is-error { color: #ff6b78; font-weight: 800; }
 
 .presentation-stage {
-  flex: 1 1 auto;
+  grid-column: 2;
+  grid-row: 2;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -181,22 +230,22 @@ body.presentation-mode-open > #app { display: none !important; }
   display: grid;
   place-items: center;
   overflow: auto;
-  padding: 14px 18px 18px;
+  padding: 16px 18px 20px;
   background:
     linear-gradient(115deg, transparent 0 48%, rgba(255,255,255,.012) 48% 52%, transparent 52% 100%) 0 0/18px 18px,
-    radial-gradient(circle at center, #111821 0%, #090e14 70%);
+    radial-gradient(circle at center, #121b25 0%, #090e14 70%);
 }
 
 .presentation-canvas {
   display: block;
-  max-width: min(100%, 1500px);
-  max-height: calc(100vh - 104px);
+  max-width: min(100%, 1540px);
+  max-height: 100%;
   width: auto;
   height: auto;
   background: transparent;
-  border: 1px solid #313d4b;
+  border: 1px solid #465569;
   border-radius: 7px;
-  box-shadow: 0 18px 58px rgba(0,0,0,.52), 0 0 0 1px rgba(229,47,56,.06);
+  box-shadow: 0 22px 70px rgba(0,0,0,.58), 0 0 0 1px rgba(229,47,56,.08);
 }
 
 .simple-course-only-export {
@@ -205,47 +254,54 @@ body.presentation-mode-open > #app { display: none !important; }
 }
 .presentation-print-sheet { display: none; }
 
-@media (max-width: 1200px) {
-  .presentation-toolbar { align-items: center; padding: 8px 10px; }
-  .presentation-field { min-width: 126px; }
-  .presentation-field input { width: 140px; }
-  .presentation-status { display: none; }
+@media (max-width: 1100px) {
+  .presentation-view {
+    grid-template-columns: minmax(230px, 280px) minmax(0,1fr);
+  }
+  .presentation-toolbar { padding: 10px; }
   .presentation-stage { padding: 10px; }
-  .presentation-canvas { max-height: calc(100vh - 134px); }
 }
 
 @media (max-width: 720px) {
+  .presentation-view {
+    grid-template-columns: minmax(0,1fr);
+    grid-template-rows: 46px minmax(0,42vh) minmax(0,1fr);
+  }
+  .presentation-view::before {
+    grid-column: 1;
+    grid-row: 1;
+    font-size: 18px;
+  }
   .presentation-toolbar {
+    grid-column: 1;
+    grid-row: 2;
     display: grid;
     grid-template-columns: repeat(2, minmax(0,1fr));
     align-items: end;
+    gap: 7px;
+    padding: 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--pr-line);
     overflow-x: hidden;
-    max-height: 44vh;
     overflow-y: auto;
   }
+  .presentation-toolbar::before { grid-column: 1 / -1; margin-bottom: 0; }
   .presentation-toolbar > * { min-width: 0; }
   .presentation-back { grid-column: 1 / -1; }
-  .presentation-field,
-  .presentation-field input { width: 100%; min-width: 0; }
+  .presentation-field { padding: 7px; }
   .presentation-control-group {
     grid-column: 1 / -1;
     width: 100%;
-    min-width: 0;
-    padding-left: 0;
-    padding-top: 7px;
-    border-left: 0;
-    border-top: 1px solid var(--pr-line-soft);
-    grid-template-columns: repeat(3, minmax(0,1fr));
-  }
-  .presentation-control-group .presentation-choice {
-    width: 100%;
-    min-width: 0;
-    padding-inline: 5px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    padding: 7px;
   }
   .presentation-primary,
   .simple-course-only-export { width: 100%; min-width: 0; }
-  .presentation-stage { padding: 7px; overflow: hidden; }
-  .presentation-canvas { max-height: 54vh; max-width: 100%; }
+  .presentation-status { grid-column: 1 / -1; }
+  .presentation-stage {
+    grid-column: 1;
+    grid-row: 3;
+    padding: 7px;
+    overflow: hidden;
+  }
+  .presentation-canvas { max-width: 100%; max-height: 100%; }
 }
