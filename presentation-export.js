@@ -10,7 +10,12 @@
   const DEFAULT_DPI = 300;
   const RACING_FONT = '"Bahnschrift SemiCondensed", "Arial Narrow", "Roboto Condensed", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif';
   const BODY_FONT = '"Bahnschrift", "Segoe UI", "Yu Gothic UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif';
-  const RACING_RED = '#e52f38';
+  const EXPORT_THEME = Object.freeze({
+    ink:'#081019', ink2:'#101a25', ink3:'#172331', red:'#e52f38', redBright:'#ff3948',
+    paper:'#ffffff', line:'#cfd5dc', soft:'#eef2f6', text:'#111820', muted:'#5f6975'
+  });
+  const RACING_RED = EXPORT_THEME.red;
+  const PART_ICON_MODE = 'flat-monochrome';
 
   function mmToPx(mm, dpi = DEFAULT_DPI) {
     return Math.round(Number(mm) / 25.4 * Number(dpi));
@@ -52,42 +57,53 @@
     return Math.max(minPx, size);
   }
 
-  function drawTitle(context, model, rect) {
+  function fillRacingPanel(context, rect, color = EXPORT_THEME.ink) {
+    context.fillStyle = color;
+    context.fillRect(rect.x, rect.y, rect.w, rect.h);
+  }
+
+  function drawHeader(context, model, rect) {
     const metadata = model.metadata || {};
     const lines = [metadata.eventNameLine1, metadata.eventNameLine2].filter(Boolean);
     context.save();
-    context.fillStyle = '#202428';
-    context.textAlign = 'center';
+    fillRacingPanel(context, rect, EXPORT_THEME.ink);
+
+    const slash = Math.max(10, rect.h * .12);
+    context.fillStyle = EXPORT_THEME.red;
+    context.beginPath();
+    context.moveTo(rect.x, rect.y + rect.h * .72);
+    context.lineTo(rect.x + slash * 1.8, rect.y + rect.h * .72);
+    context.lineTo(rect.x + slash, rect.y + rect.h);
+    context.lineTo(rect.x, rect.y + rect.h);
+    context.closePath();
+    context.fill();
+
+    context.fillStyle = '#ffffff';
+    context.textAlign = 'left';
     context.textBaseline = 'middle';
-
-    // Title intentionally uses about half the visual weight of the first presentation design.
-    const desired = Math.min(rect.h * .34, rect.w * .035);
-    const minimum = Math.max(15, rect.h * .20);
-    const titleSize = fitFont(context, lines, rect.w * .82, desired, minimum);
-    context.font = racingFont(850, titleSize, true);
-    const lineStep = titleSize * 1.00;
-    const titleHeight = Math.max(titleSize, lines.length * lineStep);
-    const layouterHeight = metadata.layouterName ? Math.max(11, titleSize * .34) + titleSize * .22 : 0;
-    const blockHeight = titleHeight + layouterHeight;
-    const top = rect.y + Math.max(2, (rect.h - blockHeight) / 2);
-
+    const desired = Math.min(rect.h * .31, rect.w * .034);
+    const minimum = Math.max(14, rect.h * .18);
+    const titleSize = fitFont(context, lines, rect.w * .70, desired, minimum);
+    context.font = racingFont(880, titleSize, true);
+    const lineStep = titleSize * .92;
+    const totalTitleH = Math.max(titleSize, lines.length * lineStep);
+    const top = rect.y + (rect.h - totalTitleH) / 2;
     lines.forEach((line, index) => {
-      context.fillText(line, rect.x + rect.w / 2, top + titleSize * .52 + index * lineStep);
+      context.fillText(line, rect.x + rect.w * .035, top + titleSize * .52 + index * lineStep, rect.w * .68);
     });
 
+    context.textAlign = 'right';
+    context.fillStyle = '#b9c2cc';
+    context.font = bodyFont(700, Math.max(9, rect.h * .13));
+    context.fillText('MINI 4WD  TRACK LAYOUT', rect.x + rect.w * .965, rect.y + rect.h * .32, rect.w * .25);
     if (metadata.layouterName) {
-      context.fillStyle = '#626971';
-      context.font = bodyFont(650, Math.max(11, titleSize * .34));
-      context.fillText(`レイアウター：${metadata.layouterName}`, rect.x + rect.w / 2, top + titleHeight + titleSize * .30);
+      context.fillStyle = '#ffffff';
+      context.font = bodyFont(720, Math.max(9, rect.h * .14));
+      context.fillText(`レイアウター：${metadata.layouterName}`, rect.x + rect.w * .965, rect.y + rect.h * .61, rect.w * .28);
     }
 
-    context.strokeStyle = RACING_RED;
-    context.globalAlpha = .78;
-    context.lineWidth = Math.max(1, rect.h * .006);
-    context.beginPath();
-    context.moveTo(rect.x + rect.w * .38, rect.y + rect.h - Math.max(2, rect.h * .04));
-    context.lineTo(rect.x + rect.w * .62, rect.y + rect.h - Math.max(2, rect.h * .04));
-    context.stroke();
+    context.fillStyle = EXPORT_THEME.red;
+    context.fillRect(rect.x + rect.w * .02, rect.y + rect.h - Math.max(2, rect.h * .035), rect.w * .96, Math.max(2, rect.h * .035));
     context.restore();
   }
 
@@ -98,13 +114,76 @@
     return canvas;
   }
 
+  function flattenMonochromeIcon(canvas) {
+    const context = canvas?.getContext?.('2d');
+    if (!context) return false;
+    const image = context.getImageData(0, 0, canvas.width, canvas.height);
+    const data = image.data;
+    for (let index = 0; index < data.length; index += 4) {
+      if (data[index + 3] === 0) continue;
+      const luminance = data[index] * .2126 + data[index + 1] * .7152 + data[index + 2] * .0722;
+      const tone = luminance > 210 ? 250 : luminance > 145 ? 145 : 24;
+      data[index] = tone;
+      data[index + 1] = tone;
+      data[index + 2] = tone;
+    }
+    context.putImageData(image, 0, 0);
+    return true;
+  }
+
+  function drawCourseFrame(context, rect) {
+    context.save();
+    context.strokeStyle = '#9fa9b4';
+    context.lineWidth = Math.max(1, Math.min(rect.w, rect.h) * .0015);
+    context.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    const corner = Math.max(8, Math.min(rect.w, rect.h) * .018);
+    context.strokeStyle = EXPORT_THEME.red;
+    context.lineWidth = Math.max(2, Math.min(rect.w, rect.h) * .003);
+    context.beginPath();
+    context.moveTo(rect.x, rect.y + corner);
+    context.lineTo(rect.x, rect.y);
+    context.lineTo(rect.x + corner, rect.y);
+    context.moveTo(rect.x + rect.w - corner, rect.y + rect.h);
+    context.lineTo(rect.x + rect.w, rect.y + rect.h);
+    context.lineTo(rect.x + rect.w, rect.y + rect.h - corner);
+    context.stroke();
+    context.restore();
+  }
+
   function drawLength(context, model, rect) {
     context.save();
-    context.textAlign = 'center';
+    fillRacingPanel(context, rect, EXPORT_THEME.ink);
+    const wedgeW = rect.w * .19;
+    context.fillStyle = EXPORT_THEME.ink2;
+    context.beginPath();
+    context.moveTo(rect.x, rect.y);
+    context.lineTo(rect.x + wedgeW, rect.y);
+    context.lineTo(rect.x + wedgeW - rect.h * .35, rect.y + rect.h);
+    context.lineTo(rect.x, rect.y + rect.h);
+    context.closePath();
+    context.fill();
+    context.strokeStyle = EXPORT_THEME.red;
+    context.lineWidth = Math.max(2, rect.h * .025);
+    context.beginPath();
+    context.moveTo(rect.x, rect.y + rect.h - context.lineWidth / 2);
+    context.lineTo(rect.x + wedgeW - rect.h * .35, rect.y + rect.h - context.lineWidth / 2);
+    context.stroke();
+
     context.textBaseline = 'middle';
-    context.fillStyle = '#202428';
-    context.font = racingFont(850, Math.max(17, rect.h * .36), true);
-    context.fillText(`全延長  ${model.length?.display || '算出不可'}`, rect.x + rect.w / 2, rect.y + rect.h / 2);
+    context.fillStyle = '#ffffff';
+    context.textAlign = 'left';
+    context.font = racingFont(850, Math.max(14, rect.h * .28), true);
+    context.fillText('総延長', rect.x + rect.w * .028, rect.y + rect.h / 2, wedgeW * .72);
+
+    context.textAlign = 'center';
+    context.font = racingFont(900, Math.max(22, rect.h * .57), true);
+    context.fillText(model.length?.display || '算出不可', rect.x + rect.w * .56, rect.y + rect.h * .49, rect.w * .43);
+
+    context.textAlign = 'right';
+    context.fillStyle = '#d2d9e0';
+    context.font = bodyFont(650, Math.max(8, rect.h * .15));
+    context.fillText('※ 3レーンを各1回走った', rect.x + rect.w * .972, rect.y + rect.h * .39, rect.w * .25);
+    context.fillText('3周分の合計です', rect.x + rect.w * .972, rect.y + rect.h * .63, rect.w * .25);
     context.restore();
   }
 
@@ -118,40 +197,80 @@
     const renderer = options.renderer;
     const items = model.counts || [];
     if (!items.length) return;
-    const maxColumns = options.orientation === 'landscape' ? 6 : 3;
+    const maxColumns = options.orientation === 'landscape' ? 9 : 4;
     const columns = Math.min(maxColumns, Math.max(1, items.length));
     const rows = splitRows(items, columns);
-    const rowHeight = rect.h / rows.length;
-    const gap = Math.max(5, rect.w * .004);
+    const headingH = Math.max(18, rect.h * .18);
+    const contentRect = { x:rect.x, y:rect.y + headingH, w:rect.w, h:Math.max(1, rect.h - headingH) };
+    const rowHeight = contentRect.h / rows.length;
+    const gap = Math.max(3, rect.w * .003);
     context.save();
 
+    context.fillStyle = EXPORT_THEME.paper;
+    context.fillRect(rect.x, rect.y, rect.w, rect.h);
+    context.fillStyle = EXPORT_THEME.red;
+    context.beginPath();
+    context.moveTo(rect.x, rect.y + headingH * .20);
+    context.lineTo(rect.x + headingH * .28, rect.y + headingH * .20);
+    context.lineTo(rect.x + headingH * .12, rect.y + headingH * .82);
+    context.lineTo(rect.x, rect.y + headingH * .82);
+    context.closePath();
+    context.fill();
+    context.fillStyle = EXPORT_THEME.text;
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.font = racingFont(850, Math.max(11, headingH * .48), true);
+    context.fillText('使用パーツ一覧', rect.x + headingH * .42, rect.y + headingH * .52, rect.w * .5);
+
     rows.forEach((row, rowIndex) => {
-      const cellWidth = (rect.w - gap * (columns - 1)) / columns;
+      const cellWidth = (contentRect.w - gap * (columns - 1)) / columns;
       row.forEach((item, columnIndex) => {
-        const x = rect.x + columnIndex * (cellWidth + gap);
-        const y = rect.y + rowIndex * rowHeight;
-        // Parts summary is intentionally compact so the course remains the hero.
-        const iconSize = Math.min(rowHeight * .48, cellWidth * .18);
+        const x = contentRect.x + columnIndex * (cellWidth + gap);
+        const y = contentRect.y + rowIndex * rowHeight;
+        context.fillStyle = '#ffffff';
+        context.fillRect(x, y, cellWidth, rowHeight - gap);
+        context.strokeStyle = '#d5dbe2';
+        context.lineWidth = Math.max(1, rowHeight * .006);
+        context.strokeRect(x + .5, y + .5, Math.max(1, cellWidth - 1), Math.max(1, rowHeight - gap - 1));
+
+        const iconSize = Math.min(rowHeight * .46, cellWidth * .56);
         const icon = createCanvas(documentValue, iconSize, iconSize);
         const representativeType = item.key === 'corner45' ? 'corner-45-right' : item.type;
         renderer.drawPartIcon(icon, representativeType, { ...(item.representative || {}), colorKey:'default' }, options.rendererOptions);
-        context.drawImage(icon, x + 2, y + (rowHeight - iconSize) / 2, iconSize, iconSize);
+        flattenMonochromeIcon(icon);
+        context.drawImage(icon, x + (cellWidth - iconSize) / 2, y + rowHeight * .035, iconSize, iconSize);
 
-        const textX = x + iconSize + Math.max(5, cellWidth * .025);
-        const labelWidth = Math.max(1, cellWidth - iconSize - 8);
-        context.fillStyle = '#4b5157';
-        context.textAlign = 'left';
+        context.fillStyle = EXPORT_THEME.text;
+        context.textAlign = 'center';
         context.textBaseline = 'middle';
-        let labelSize = Math.min(rowHeight * .16, cellWidth * .055);
-        const minLabel = Math.max(8, rowHeight * .10);
+        const labelY = y + rowHeight * .64;
+        let labelSize = Math.min(rowHeight * .125, cellWidth * .10);
+        const minLabel = Math.max(7, rowHeight * .075);
         context.font = bodyFont(700, labelSize);
-        while (labelSize > minLabel && context.measureText(`${item.label} ×${item.count}`).width > labelWidth) {
+        while (labelSize > minLabel && context.measureText(item.label).width > cellWidth * .90) {
           labelSize -= .5;
           context.font = bodyFont(700, labelSize);
         }
-        context.fillText(`${item.label} ×${item.count}`, textX, y + rowHeight / 2, labelWidth);
+        context.fillText(item.label, x + cellWidth / 2, labelY, cellWidth * .90);
+        context.font = racingFont(850, Math.max(9, rowHeight * .15), true);
+        context.fillText(`× ${item.count}`, x + cellWidth / 2, y + rowHeight * .84, cellWidth * .85);
       });
     });
+    context.restore();
+  }
+
+  function drawFooter(context, rect) {
+    context.save();
+    fillRacingPanel(context, rect, EXPORT_THEME.ink);
+    context.fillStyle = EXPORT_THEME.red;
+    context.fillRect(rect.x, rect.y, rect.w, Math.max(2, rect.h * .10));
+    context.fillStyle = '#c7d0da';
+    context.textBaseline = 'middle';
+    context.font = bodyFont(650, Math.max(7, rect.h * .28));
+    context.textAlign = 'left';
+    context.fillText('Mini 4WD Layout Editor', rect.x + rect.w * .018, rect.y + rect.h * .58, rect.w * .34);
+    context.textAlign = 'right';
+    context.fillText('ENJOY MINI 4WD  /  GOOD LAYOUT  /  GOOD RACING', rect.x + rect.w * .982, rect.y + rect.h * .58, rect.w * .58);
     context.restore();
   }
 
@@ -204,18 +323,20 @@
   }
 
   function layoutRects(page, orientation) {
-    const margin = Math.round(Math.min(page.width,page.height) * .022);
+    const margin = Math.round(Math.min(page.width,page.height) * .018);
     const usableW = page.width - margin * 2;
     const usableH = page.height - margin * 2;
-    const titleH = Math.round(usableH * (orientation === 'landscape' ? .080 : .075));
-    const statsH = Math.round(usableH * .050);
-    const countsH = Math.round(usableH * (orientation === 'landscape' ? .090 : .110));
-    const courseH = usableH - titleH - statsH - countsH;
+    const titleH = Math.round(usableH * (orientation === 'landscape' ? .085 : .075));
+    const statsH = Math.round(usableH * (orientation === 'landscape' ? .078 : .068));
+    const countsH = Math.round(usableH * (orientation === 'landscape' ? .135 : .180));
+    const footerH = Math.round(usableH * .030);
+    const courseH = usableH - titleH - statsH - countsH - footerH;
     const title = { x:margin,y:margin,w:usableW,h:titleH };
     const course = { x:margin,y:margin+titleH,w:usableW,h:courseH };
     const stats = { x:margin,y:course.y+course.h,w:usableW,h:statsH };
     const counts = { x:margin,y:stats.y+stats.h,w:usableW,h:countsH };
-    return Object.freeze({ margin, usableW, usableH, title, course, stats, counts });
+    const footer = { x:margin,y:counts.y+counts.h,w:usableW,h:footerH };
+    return Object.freeze({ margin, usableW, usableH, title, course, stats, counts, footer });
   }
 
   function composePresentation(canvas, model, options = {}) {
@@ -241,7 +362,7 @@
     }
 
     const rects = layoutRects(page, orientation);
-    drawTitle(context, model, rects.title);
+    drawHeader(context, model, rects.title);
 
     const fittedModel = courseFirstModel(model, renderer, options.catalog);
     const courseCanvas = createCanvas(documentValue, rects.course.w, rects.course.h);
@@ -250,25 +371,28 @@
       dependencies: options.dependencies,
       width: rects.course.w,
       height: rects.course.h,
-      paddingPx: Math.max(10, Math.round(rects.course.h * .016)),
+      paddingPx: Math.max(10, Math.round(rects.course.h * .018)),
       background
     };
     const courseDiagnostics = renderer.renderCourse(courseCanvas, fittedModel, rendererOptions);
     context.drawImage(courseCanvas, rects.course.x, rects.course.y);
+    drawCourseFrame(context, rects.course);
     drawLength(context, model, rects.stats);
     drawCounts(context, documentValue, model, rects.counts, {
       renderer,
       orientation,
       rendererOptions:{ catalog:options.catalog, dependencies:options.dependencies }
     });
+    drawFooter(context, rects.footer);
 
     return Object.freeze({
       page:Object.freeze(page),
       background,
       orientation,
       courseDiagnostics,
+      iconMode:PART_ICON_MODE,
       fittedCourseBounds:placedCourseBounds(model, renderer, options.catalog),
-      rects:Object.freeze({ title:rects.title, course:rects.course, stats:rects.stats, counts:rects.counts })
+      rects:Object.freeze({ title:rects.title, course:rects.course, stats:rects.stats, counts:rects.counts, footer:rects.footer })
     });
   }
 
@@ -303,6 +427,8 @@
     DEFAULT_DPI,
     RACING_FONT,
     BODY_FONT,
+    EXPORT_THEME,
+    PART_ICON_MODE,
     mmToPx,
     pageSize,
     resolveOrientation,
