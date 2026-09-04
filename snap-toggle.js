@@ -51,16 +51,10 @@
   function installStartBoundarySnapBridge(root) {
     if (!root || !root.document) return false;
 
-    // app.js currently exposes the mutable placement cursor only through its debug
-    // bridge. Turn that bridge on for startup, capture the reference after app init,
-    // then remove the globals again in normal production use. Browser rehearsals that
-    // explicitly enable the debug bridge keep their debug handle unchanged.
-    const ownsDebugBridge = !root.__COURSE_ENABLE_DEBUG__;
-    if (ownsDebugBridge) {
-      root.__COURSE_START_BOUNDARY_SNAP_OWNS_DEBUG__ = true;
-      root.__COURSE_ENABLE_DEBUG__ = true;
-    }
-
+    // wheel-rotation/editor-extensions-bootstrap already own the short-lived
+    // production editor bridge lifecycle. Capture that same object after app.js
+    // initializes, but never create, publish, disable or delete the bridge here.
+    // The existing extension bootstrap remains the single lifecycle owner.
     const installRuntime = () => {
       const debug = root.__mini4wdCourseDebug;
       const graph = root.M4WD_LAYOUT_GRAPH;
@@ -112,12 +106,6 @@
       ['rotateLeftBtn', 'rotateRightBtn'].forEach(id => {
         root.document.getElementById(id)?.addEventListener('click', snapCurrentStartCursor);
       });
-
-      if (ownsDebugBridge) {
-        delete root.__mini4wdCourseDebug;
-        delete root.__COURSE_ENABLE_DEBUG__;
-        delete root.__COURSE_START_BOUNDARY_SNAP_OWNS_DEBUG__;
-      }
       return true;
     };
 
