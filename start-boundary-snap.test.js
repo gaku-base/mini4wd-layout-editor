@@ -1,5 +1,6 @@
 'use strict';
 
+const fs = require('node:fs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const SNAP_TOGGLE = require('./snap-toggle.js');
@@ -71,4 +72,11 @@ test('画面スケールに応じて24pxをワールド距離へ換算する', (
   });
   assert.equal(result.snappedX, null, '13cm gap = 26pxなので24px半径では吸着しない');
   approx(result.point.x, 40);
+});
+
+test('Start境界吸着は既存extension bootstrapのprivate bridge寿命を所有しない', () => {
+  const source = fs.readFileSync(require.resolve('./snap-toggle.js'), 'utf8');
+  assert.equal(source.includes('__COURSE_ENABLE_DEBUG__'), false);
+  assert.equal(source.includes('delete root.__mini4wdCourseDebug'), false);
+  assert.match(source, /wheel-rotation\/editor-extensions-bootstrap already own/);
 });
