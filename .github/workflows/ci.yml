@@ -40,6 +40,11 @@ jobs:
           set -euo pipefail
           test -f AGENTS.md
           test -f index.html
+          test -f package.json
+          test -f package-lock.json
+          test -f tsconfig.json
+          test -f tsconfig.build.json
+          test -f src/domain/toolchain-probe.ts
           test -f marquee-target-preview.js
           test -f start-replacement-snap.js
           test -f presentation-data.js
@@ -58,6 +63,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install typed-domain tooling
+        shell: bash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Typecheck, lint and build typed domain path
+        shell: bash
+        run: npm run check:typed
 
       - name: JavaScript syntax check
         shell: bash
