@@ -1,10 +1,12 @@
-# Bank20 投影延長240mm 正式採用決定
+# Bank20 投影延長240mm 採用決定（SUPERSEDED）
 
 - Date: 2026-09-02
-- Status: verified / project-owner decision
+- Status: superseded by `2026-09-04-bank20-connector-span-230mm.md`
 - Part: Tamiya 3-lane Bank Approach 20 (Item 69571)
 
-## 決定
+> 2026-09-04のプロジェクトオーナー決定により、アプリ上の接続口間距離は230mmへ更新された。この文書は履歴保存用であり、現行仕様として参照しない。
+
+## 当時の決定
 
 20度バンクアプローチの**アプリ上の投影延長を240mm**として正式採用する。
 
@@ -19,11 +21,11 @@
 
 従来の`280mm / 28cm / ±14cm`モデルはsupersededとする。
 
-## 根拠
+## 当時の根拠
 
-正式値のauthorityは**プロジェクトオーナーの明示決定**である。
+正式値のauthorityは**プロジェクトオーナーの明示決定**であった。
 
-外部QAとして、Mini4Scienceの実物切断片トレースでも`base length is 24cm`が報告されており、240mmモデルと整合する。
+外部QAとして、Mini4Scienceの実物切断片トレースでも`base length is 24cm`が報告されており、240mmモデルと整合すると当時判断した。
 
 ## 別寸法との区別
 
@@ -47,7 +49,7 @@
 
 ## 3D形状について
 
-投影延長240mmの確定は、Bank20全体のcollision profile完成を意味しない。
+この旧決定はBank20全体のcollision profile完成を意味しない。
 
 未確定のため引き続き`unknown / null`:
 
