@@ -46,7 +46,17 @@ async function main() {
   const consoleErrors = [];
   const pageErrors = [];
 
-  await page.addInitScript(() => { window.__COURSE_ENABLE_DEBUG__ = true; });
+  // Keep the QA handle visible only for this browser rehearsal. Production
+  // still lets the existing extension bootstrap own and remove its private bridge.
+  await page.addInitScript(() => {
+    Object.defineProperty(window, '__mini4wdCourseDebug', {
+      configurable: false,
+      enumerable: false,
+      writable: true,
+      value: undefined
+    });
+    window.__COURSE_ENABLE_DEBUG__ = true;
+  });
   await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
   page.on('console', message => {
     if (message.type() === 'error') consoleErrors.push(message.text());
