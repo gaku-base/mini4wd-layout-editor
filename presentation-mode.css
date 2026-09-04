@@ -6,7 +6,7 @@
 .presentation-view[hidden] { display: none !important; }
 .presentation-view {
   --pr-bg: #070b10;
-  --pr-panel: #0d141d;
+  --pr-panel: #0e141c;
   --pr-panel-2: #131d28;
   --pr-line: #283647;
   --pr-line-soft: #202b38;
@@ -262,7 +262,7 @@ body.presentation-mode-open > #app { display: none !important; }
   .presentation-stage { padding: 10px; }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .presentation-view {
     grid-template-columns: minmax(0,1fr);
     grid-template-rows: 46px minmax(0,42vh) minmax(0,1fr);
