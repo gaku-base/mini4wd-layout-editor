@@ -2,7 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const EXPORT = require('./presentation-export.js');
+
+const exportSource = fs.readFileSync(require.resolve('./presentation-export.js'), 'utf8');
 
 test('A4 300dpi dimensions match standard portrait and landscape output', () => {
   assert.deepEqual(EXPORT.pageSize('landscape',300), { width:3508, height:2480, orientation:'landscape', dpi:300 });
@@ -31,10 +34,13 @@ test('racing export keeps the course as the largest block while reserving dedica
   assert.equal(rects.footer.y + rects.footer.h, rects.margin + rects.usableH);
 });
 
-test('export design uses the approved racing palette and flat monochrome part pictograms', () => {
+test('export design keeps racing styling while part pictograms inherit the layout color', () => {
   assert.equal(EXPORT.EXPORT_THEME.ink, '#081019');
   assert.equal(EXPORT.EXPORT_THEME.red, '#e52f38');
-  assert.equal(EXPORT.PART_ICON_MODE, 'flat-monochrome');
+  assert.equal(EXPORT.PART_ICON_MODE, 'layout-color');
+  assert.doesNotMatch(exportSource, /drawPartIcon\([^\n]*colorKey:\s*'default'/);
+  assert.doesNotMatch(exportSource, /flattenMonochromeIcon\(icon\)/);
+  assert.match(exportSource, /drawPartIcon\(icon, representativeType, item\.representative \|\| \{ type:representativeType \}/);
 });
 
 test('course-first fit ignores unused setup-field whitespace but includes every placed part', () => {
