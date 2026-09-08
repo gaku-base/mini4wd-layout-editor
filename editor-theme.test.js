@@ -5,10 +5,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const theme = fs.readFileSync(require.resolve('./editor-theme.css'), 'utf8');
-const presentationCss = fs.readFileSync(require.resolve('./presentation-mode.css'), 'utf8');
+const bootstrap = fs.readFileSync(require.resolve('./editor-extensions-bootstrap.js'), 'utf8');
 
-test('editor loads the shared orange-black theme through the always-loaded presentation stylesheet', () => {
-  assert.match(presentationCss, /^@import url\("\.\/editor-theme\.css\?v=20260908-orange-ui"\);/);
+test('editor loads the shared orange-black theme after simple-ui installs', () => {
+  assert.match(bootstrap, /loadScript\(`simple-ui\.js\?v=\$\{CACHE_KEY\}`/);
+  assert.match(bootstrap, /function finishSimpleUiBoot\(\)[\s\S]*ensureStyleLink\('editorThemeStyles', `editor-theme\.css\?v=\$\{CACHE_KEY\}`\)/);
 });
 
 test('editor theme uses black surfaces with orange as the primary and focus accent', () => {
