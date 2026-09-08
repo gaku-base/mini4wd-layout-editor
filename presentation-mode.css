@@ -1,3 +1,5 @@
+@import url("./editor-theme.css?v=20260908-orange-ui");
+
 .presentation-entry-btn {
   background: linear-gradient(180deg, #ffa126, #f07c00) !important;
   border-color: #ffb24c !important;
