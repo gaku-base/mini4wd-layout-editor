@@ -15,7 +15,7 @@
     paper:'#ffffff', line:'#cfd5dc', soft:'#eef2f6', text:'#111820', muted:'#5f6975'
   });
   const RACING_RED = EXPORT_THEME.red;
-  const PART_ICON_MODE = 'flat-monochrome';
+  const PART_ICON_MODE = 'layout-color';
 
   function mmToPx(mm, dpi = DEFAULT_DPI) {
     return Math.round(Number(mm) / 25.4 * Number(dpi));
@@ -236,8 +236,7 @@
         const iconSize = Math.min(rowHeight * .46, cellWidth * .56);
         const icon = createCanvas(documentValue, iconSize, iconSize);
         const representativeType = item.key === 'corner45' ? 'corner-45-right' : item.type;
-        renderer.drawPartIcon(icon, representativeType, { ...(item.representative || {}), colorKey:'default' }, options.rendererOptions);
-        flattenMonochromeIcon(icon);
+        renderer.drawPartIcon(icon, representativeType, item.representative || { type:representativeType }, options.rendererOptions);
         context.drawImage(icon, x + (cellWidth - iconSize) / 2, y + rowHeight * .035, iconSize, iconSize);
 
         context.fillStyle = EXPORT_THEME.text;
