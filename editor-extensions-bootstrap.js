@@ -178,6 +178,7 @@
 
   function finishSimpleUiBoot() {
     root.__COURSE_ENABLE_DEBUG__ = false;
+    ensureStyleLink('editorThemeStyles', `editor-theme.css?v=${CACHE_KEY}`);
     integrateModeHelpIntoToolbar();
     if (!documentRef.getElementById('simpleUiNarrowLayoutOverride')) {
       const style = documentRef.createElement('style');
