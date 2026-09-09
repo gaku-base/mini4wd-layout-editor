@@ -56,6 +56,8 @@ jobs:
           test -f browser-ui-controls-smoke.js
           test -f browser-slope-visibility-smoke.js
           test -f browser-slope-underpass-smoke.js
+          test -f slope-height-propagation-runtime.js
+          test -f browser-slope-retrofit-smoke.js
           test -f browser-bank20-projection-smoke.js
           test -f browser-connector-target-lock-smoke.js
           test -f browser-start-boundary-snap-smoke.js
@@ -157,6 +159,7 @@ jobs:
             node browser-marquee-preview-smoke.js
             node browser-start-resnap-smoke.js
             node browser-presentation-rehearsal.js
+            node browser-slope-retrofit-smoke.js
           fi
           node browser-ui-controls-smoke.js
           node browser-slope-visibility-smoke.js
