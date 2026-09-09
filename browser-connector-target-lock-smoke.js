@@ -146,26 +146,40 @@ async function main() {
     assert.equal(await currentCount(page), 2, 'one Straight must be placed through the locked connector');
 
     const connectedMarkers = page.locator('#connectorTargetLockOverlay .connector-target-point.is-connected-target');
-    assert.equal(await connectedMarkers.count(), 0, 'yellow connected markers must stay hidden while the pointer is farther than 20px from the seam');
+    assert.equal(await connectedMarkers.count(), 0, 'yellow connected markers must stay absent while the pointer is far from the seam');
 
+    // Moving to the seam enters the 20px candidate envelope. The candidate may
+    // exist in the DOM, but it must stay transparent until the pointer reaches
+    // the actual yellow button hit area.
     await page.mouse.move(markerX, markerY);
+    await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length >= 1, { timeout: TIMEOUT });
+    const hiddenYellowBox = await connectedMarkers.first().boundingBox();
+    assert.ok(hiddenYellowBox, 'a transparent yellow candidate must expose a stable hit box near the connected seam');
+    const beforeHoverOpacity = await connectedMarkers.first().evaluate(element => getComputedStyle(element).opacity);
+    assert.equal(beforeHoverOpacity, '0', 'yellow connected marker must remain invisible before the pointer reaches its own hit area');
+
+    const yellowX = hiddenYellowBox.x + hiddenYellowBox.width / 2;
+    const yellowY = hiddenYellowBox.y + hiddenYellowBox.height / 2;
+    await page.mouse.move(yellowX, yellowY);
     await page.waitForFunction(() => {
       const marker = document.querySelector('#connectorTargetLockOverlay .connector-target-point.is-connected-target');
       if (!marker) return false;
       const style = getComputedStyle(marker);
       return style.opacity === '1' && style.cursor === 'pointer';
     }, { timeout: TIMEOUT });
-    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must become visible only when the pointer reaches its selectable hit area');
     const yellowHoverStyle = await connectedMarkers.first().evaluate(element => {
       const style = getComputedStyle(element);
       return { width: style.width, height: style.height, opacity: style.opacity, cursor: style.cursor };
     });
     assert.deepEqual(yellowHoverStyle, { width: '15px', height: '15px', opacity: '1', cursor: 'pointer' },
-      'yellow connected marker must stay 15px while the hand cursor indicates it is selectable');
+      'yellow connected marker must appear at the hand-cursor hit area and stay 15px without hover growth');
 
-    await page.mouse.move(markerX + 32, markerY);
-    await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length === 0, { timeout: TIMEOUT });
-    assert.equal(await connectedMarkers.count(), 0, 'yellow connected marker must disappear again after moving clearly outside the 20px reveal radius');
+    await page.mouse.move(yellowX + 32, yellowY);
+    await page.waitForFunction(() => [...document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target')]
+      .every(marker => getComputedStyle(marker).opacity === '0'), { timeout: TIMEOUT });
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target')]
+      .some(marker => getComputedStyle(marker).opacity === '1')), false,
+    'yellow connected marker must become invisible again after leaving its selectable hit area');
 
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
