@@ -139,10 +139,12 @@
   }
 
   function pointWithinRadius(point = {}, pointer = {}, radiusPx = CONNECTED_REVEAL_RADIUS_PX) {
-    const pointX = Number(point.x);
-    const pointY = Number(point.y);
-    const pointerX = Number(pointer.x);
-    const pointerY = Number(pointer.y);
+    const safePoint = point && typeof point === 'object' ? point : {};
+    const safePointer = pointer && typeof pointer === 'object' ? pointer : {};
+    const pointX = Number(safePoint.x);
+    const pointY = Number(safePoint.y);
+    const pointerX = Number(safePointer.x);
+    const pointerY = Number(safePointer.y);
     const radius = Math.max(0, Number(radiusPx) || 0);
     if (![pointX, pointY, pointerX, pointerY].every(Number.isFinite)) return false;
     return Math.hypot(pointX - pointerX, pointY - pointerY) <= radius;
