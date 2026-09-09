@@ -1,0 +1,60 @@
+name: Temporary half interference warning line
+
+on:
+  push:
+    branches:
+      - fix/interference-warning-line-half-width
+    paths:
+      - .github/workflows/temp-half-warning-line.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/interference-warning-line-half-width
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply exact warning-line patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          app = Path('app.js')
+          text = app.read_text(encoding='utf-8')
+          old = "      c.lineWidth = 3 / Math.max(state.view.scale, .15);"
+          new = "      c.lineWidth = 1.5 / Math.max(state.view.scale, .15);"
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one warning lineWidth assignment, got {text.count(old)}')
+          app.write_text(text.replace(old, new), encoding='utf-8')
+
+          test_file = Path('height-warning.test.js')
+          tests = test_file.read_text(encoding='utf-8')
+          anchor = "test('15. warning drawing stays out of PNG export rendering', () => assert.match(source, /if \\(!options\\.exportMode\\) drawLayoutWarnings\\(c\\)/));"
+          added = "test('14b. interference warning outline is half the previous 3px screen width', () => assert.match(outlineSource, /c\\.lineWidth = 1\\.5 \\/ Math\\.max\\(state\\.view\\.scale, \\.15\\)/));\n"
+          if tests.count(anchor) != 1:
+              raise SystemExit(f'expected one height-warning test anchor, got {tests.count(anchor)}')
+          if '14b. interference warning outline is half the previous 3px screen width' not in tests:
+              tests = tests.replace(anchor, added + anchor)
+          test_file.write_text(tests, encoding='utf-8')
+          PY
+      - name: Run focused regression
+        run: node --test height-warning.test.js
+      - name: Commit only production change and regression test
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/temp-half-warning-line.yml
+          git config user.name 'gaku-base'
+          git config user.email 'mail.skgc@gmail.com'
+          git add app.js height-warning.test.js .github/workflows/temp-half-warning-line.yml
+          git diff --cached --check
+          git commit -m '[warning-line-done] fix: 干渉警告の赤線を半分の太さにする'
+          git push origin HEAD:fix/interference-warning-line-half-width
