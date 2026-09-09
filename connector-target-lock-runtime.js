@@ -213,12 +213,13 @@
         border-color: #ffd45c;
         background: rgba(111, 79, 8, .92);
         box-shadow: 0 0 0 2px rgba(20, 15, 4, .54), 0 0 10px rgba(255, 212, 92, .72);
+        opacity: 0;
       }
       #${OVERLAY_ID} .connector-target-point.is-connected-target:hover {
-        width: 19px;
-        height: 19px;
-        border-color: #ffe79c;
-        box-shadow: 0 0 0 3px rgba(20, 15, 4, .58), 0 0 14px rgba(255, 221, 112, .95);
+        opacity: 1;
+      }
+      #${OVERLAY_ID} .connector-target-point.is-connected-target.is-locked {
+        opacity: 1;
       }
       #${OVERLAY_ID} .connector-target-point.is-locked {
         width: 18px;

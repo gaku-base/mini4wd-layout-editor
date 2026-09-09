@@ -70,4 +70,8 @@ test('browser UI wires pointer proximity to a yellow connected-target control', 
   assert.match(source, /border-color: #ffd45c/);
   assert.match(source, /接続済み位置から別レイアウトを開始/);
   assert.match(source, /CONNECTED_MARKER_OFFSET_PX/);
+  assert.match(source, /\.connector-target-point\.is-connected-target \{[\s\S]*?opacity: 0;/);
+  assert.match(source, /\.connector-target-point\.is-connected-target:hover \{\s*opacity: 1;\s*\}/);
+  const yellowHoverBlock = source.match(/\.connector-target-point\.is-connected-target:hover \{([\s\S]*?)\}/)?.[1] || '';
+  assert.doesNotMatch(yellowHoverBlock, /width:|height:/);
 });

@@ -149,8 +149,19 @@ async function main() {
     assert.equal(await connectedMarkers.count(), 0, 'yellow connected markers must stay hidden while the pointer is farther than 20px from the seam');
 
     await page.mouse.move(markerX, markerY);
-    await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length >= 1, { timeout: TIMEOUT });
-    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must appear when the pointer is directly beside the connected seam');
+    await page.waitForFunction(() => {
+      const marker = document.querySelector('#connectorTargetLockOverlay .connector-target-point.is-connected-target');
+      if (!marker) return false;
+      const style = getComputedStyle(marker);
+      return style.opacity === '1' && style.cursor === 'pointer';
+    }, { timeout: TIMEOUT });
+    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must become visible only when the pointer reaches its selectable hit area');
+    const yellowHoverStyle = await connectedMarkers.first().evaluate(element => {
+      const style = getComputedStyle(element);
+      return { width: style.width, height: style.height, opacity: style.opacity, cursor: style.cursor };
+    });
+    assert.deepEqual(yellowHoverStyle, { width: '15px', height: '15px', opacity: '1', cursor: 'pointer' },
+      'yellow connected marker must stay 15px while the hand cursor indicates it is selectable');
 
     await page.mouse.move(markerX + 32, markerY);
     await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length === 0, { timeout: TIMEOUT });
@@ -159,7 +170,7 @@ async function main() {
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
     console.log(`✓ explicit connector target browser regression passed; forced click distance=${distanceToCenter.toFixed(1)}px`);
-    console.log('✓ connected yellow marker stays hidden far away, appears near the seam, and hides again beyond 20px');
+    console.log('✓ connected yellow marker appears exactly at its selectable hand-cursor hit area without growing on hover');
     console.log('✓ outside-layout click released the target without placing a part');
     console.log('✓ same-target click, Esc, and one-placement auto-release passed');
     console.log('Browser connector target lock smoke test passed.');
