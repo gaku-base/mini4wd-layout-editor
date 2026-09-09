@@ -3734,7 +3734,7 @@
     c.rotate(part.rotation * Math.PI / 180);
     if (tracePartShapePath(c, part.type)) {
       c.strokeStyle = '#d52f4d';
-      c.lineWidth = 3 / Math.max(state.view.scale, .15);
+      c.lineWidth = 1.5 / Math.max(state.view.scale, .15);
       c.lineJoin = 'round';
       c.stroke();
     }
