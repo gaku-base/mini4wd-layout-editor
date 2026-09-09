@@ -26,6 +26,14 @@ async function main() {
   page.on('pageerror', error => pageErrors.push(error.stack || error.message));
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('dialog', async dialog => dialog.accept());
+  await page.addInitScript(() => {
+    Object.defineProperty(window, '__mini4wdCourseDebug', {
+      configurable: false,
+      enumerable: false,
+      writable: true,
+      value: undefined
+    });
+  });
   await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
 
   try {
