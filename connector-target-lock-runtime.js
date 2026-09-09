@@ -15,7 +15,7 @@
   const OVERLAY_ID = 'connectorTargetLockOverlay';
   const STATUS_ID = 'connectorTargetLockStatus';
   const STYLE_ID = 'connectorTargetLockStyles';
-  const CONNECTED_REVEAL_RADIUS_PX = 54;
+  const CONNECTED_REVEAL_RADIUS_PX = 20;
   const CONNECTED_MARKER_OFFSET_PX = 9;
 
   function endpointIdentity(value = {}) {
