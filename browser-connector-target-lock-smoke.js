@@ -145,9 +145,21 @@ async function main() {
     await waitUnlocked(page);
     assert.equal(await currentCount(page), 2, 'one Straight must be placed through the locked connector');
 
+    const connectedMarkers = page.locator('#connectorTargetLockOverlay .connector-target-point.is-connected-target');
+    assert.equal(await connectedMarkers.count(), 0, 'yellow connected markers must stay hidden while the pointer is farther than 20px from the seam');
+
+    await page.mouse.move(markerX, markerY);
+    await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length >= 1, { timeout: TIMEOUT });
+    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must appear when the pointer is directly beside the connected seam');
+
+    await page.mouse.move(markerX + 32, markerY);
+    await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length === 0, { timeout: TIMEOUT });
+    assert.equal(await connectedMarkers.count(), 0, 'yellow connected marker must disappear again after moving clearly outside the 20px reveal radius');
+
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
     console.log(`✓ explicit connector target browser regression passed; forced click distance=${distanceToCenter.toFixed(1)}px`);
+    console.log('✓ connected yellow marker stays hidden far away, appears near the seam, and hides again beyond 20px');
     console.log('✓ outside-layout click released the target without placing a part');
     console.log('✓ same-target click, Esc, and one-placement auto-release passed');
     console.log('Browser connector target lock smoke test passed.');
