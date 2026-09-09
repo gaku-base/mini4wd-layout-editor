@@ -1,0 +1,158 @@
+name: Temporary adjust connected yellow marker
+
+on:
+  push:
+    branches:
+      - fix/connected-yellow-marker-hit-proximity
+    paths:
+      - .github/workflows/temp-adjust-connected-marker.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/connected-yellow-marker-hit-proximity
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply exact connected-marker interaction patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          runtime = Path('connector-target-lock-runtime.js')
+          text = runtime.read_text(encoding='utf-8')
+
+          replacements = [
+            ("  const CONNECTED_REVEAL_RADIUS_PX = 20;", "  const CONNECTED_REVEAL_RADIUS_PX = 10;"),
+            ("""  function fieldContainsPoint(bounds = {}, point = {}, epsilon = 1e-9) {""",
+             """  function connectedMarkerScreenPoint(point = {}, endpoint = {}, offsetPx = CONNECTED_MARKER_OFFSET_PX) {
+    const pointX = Number(point?.x);
+    const pointY = Number(point?.y);
+    if (!Number.isFinite(pointX) || !Number.isFinite(pointY)) return null;
+    const heading = Number(endpoint?.heading ?? endpoint?.directionDeg);
+    const radians = (Number.isFinite(heading) ? heading : 0) * Math.PI / 180;
+    const offset = Math.max(0, Number(offsetPx) || 0);
+    return {
+      x: pointX + Math.cos(radians) * offset,
+      y: pointY + Math.sin(radians) * offset
+    };
+  }
+
+  function fieldContainsPoint(bounds = {}, point = {}, epsilon = 1e-9) {"""),
+            ("""        const point = room.worldToScreen({ x: endpoint.x, y: endpoint.y }, runtime.view);
+        return pointWithinRadius(point, pointerScreen, CONNECTED_REVEAL_RADIUS_PX);""",
+             """        const point = room.worldToScreen({ x: endpoint.x, y: endpoint.y }, runtime.view);
+        const markerPoint = connectedMarkerScreenPoint(point, endpoint);
+        return pointWithinRadius(markerPoint, pointerScreen, CONNECTED_REVEAL_RADIUS_PX);"""),
+            ("""        const point = room.worldToScreen({ x: endpoint.x, y: endpoint.y }, runtime.view);
+        let x = canvasRect.left - wrapRect.left + point.x;
+        let y = canvasRect.top - wrapRect.top + point.y;
+        if (connectedTarget) {
+          const radians = (Number(endpoint.heading ?? endpoint.directionDeg) || 0) * Math.PI / 180;
+          x += Math.cos(radians) * CONNECTED_MARKER_OFFSET_PX;
+          y += Math.sin(radians) * CONNECTED_MARKER_OFFSET_PX;
+        }""",
+             """        const point = room.worldToScreen({ x: endpoint.x, y: endpoint.y }, runtime.view);
+        const targetPoint = connectedTarget ? (connectedMarkerScreenPoint(point, endpoint) || point) : point;
+        let x = canvasRect.left - wrapRect.left + targetPoint.x;
+        let y = canvasRect.top - wrapRect.top + targetPoint.y;"""),
+            ("""      #${OVERLAY_ID} .connector-target-point.is-connected-target:hover {
+        width: 19px;
+        height: 19px;
+        border-color: #ffe79c;
+        box-shadow: 0 0 0 3px rgba(20, 15, 4, .58), 0 0 14px rgba(255, 221, 112, .95);
+      }
+""", ""),
+            ("""    pointWithinRadius,
+    fieldContainsPoint,""",
+             """    pointWithinRadius,
+    connectedMarkerScreenPoint,
+    fieldContainsPoint,""")
+          ]
+
+          for old, new in replacements:
+            count = text.count(old)
+            if count != 1:
+              raise SystemExit(f'runtime replacement expected once, got {count}: {old[:80]!r}')
+            text = text.replace(old, new)
+          runtime.write_text(text, encoding='utf-8')
+
+          unit = Path('connector-connected-target-nearby.test.js')
+          tests = unit.read_text(encoding='utf-8')
+          old_test = """test('connected target reveal only appears very near the connector', () => {
+  const radius = LOCK.CONNECTED_REVEAL_RADIUS_PX;
+  assert.equal(radius, 20);
+  assert.ok(radius < 24, 'yellow connected marker reveal must be stricter than the ordinary 24px snap radius');
+  assert.equal(LOCK.pointWithinRadius({ x: 100, y: 100 }, { x: 100 + radius, y: 100 }, radius), true);
+  assert.equal(LOCK.pointWithinRadius({ x: 100, y: 100 }, { x: 100 + radius + 0.01, y: 100 }, radius), false);
+  assert.equal(LOCK.pointWithinRadius({ x: 100, y: 100 }, null, radius), false);
+});"""
+          new_test = """test('connected target reveal matches the yellow marker click vicinity', () => {
+  const radius = LOCK.CONNECTED_REVEAL_RADIUS_PX;
+  assert.equal(radius, 10);
+  assert.ok(radius < 24, 'yellow connected marker reveal must be stricter than the ordinary 24px snap radius');
+  const marker = LOCK.connectedMarkerScreenPoint({ x: 100, y: 100 }, { heading: 0 });
+  assert.deepEqual(marker, { x: 109, y: 100 });
+  assert.equal(LOCK.pointWithinRadius(marker, { x: marker.x + radius, y: marker.y }, radius), true);
+  assert.equal(LOCK.pointWithinRadius(marker, { x: marker.x + radius + 0.01, y: marker.y }, radius), false);
+  assert.equal(LOCK.pointWithinRadius(marker, null, radius), false);
+});"""
+          if tests.count(old_test) != 1:
+            raise SystemExit('unit reveal test block not found exactly once')
+          tests = tests.replace(old_test, new_test)
+          old_tail = """  assert.match(source, /CONNECTED_MARKER_OFFSET_PX/);
+});"""
+          new_tail = """  assert.match(source, /CONNECTED_MARKER_OFFSET_PX/);
+  assert.match(source, /connectedMarkerScreenPoint\(point, endpoint\)/);
+  assert.doesNotMatch(source, /\.connector-target-point\.is-connected-target:hover/);
+});"""
+          if tests.count(old_tail) != 1:
+            raise SystemExit('unit browser wiring tail not found exactly once')
+          tests = tests.replace(old_tail, new_tail)
+          unit.write_text(tests, encoding='utf-8')
+
+          browser = Path('browser-connector-target-lock-smoke.js')
+          smoke = browser.read_text(encoding='utf-8')
+          smoke = smoke.replace('farther than 20px from the seam', 'farther than the 10px click vicinity from the seam')
+          smoke = smoke.replace('outside the 20px reveal radius', 'outside the 10px reveal radius')
+          smoke = smoke.replace('hides again beyond 20px', 'hides again beyond the 10px click vicinity')
+          anchor = """    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must appear when the pointer is directly beside the connected seam');
+
+    await page.mouse.move(markerX + 32, markerY);"""
+          insert = """    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must appear when the pointer is directly beside the connected seam');
+    const yellowHoverStyle = await connectedMarkers.first().evaluate(element => {
+      const style = getComputedStyle(element);
+      return { width: style.width, height: style.height, cursor: style.cursor };
+    });
+    assert.deepEqual(yellowHoverStyle, { width: '15px', height: '15px', cursor: 'pointer' },
+      'yellow connected marker must stay the same size while selectable with the hand cursor');
+
+    await page.mouse.move(markerX + 32, markerY);"""
+          if smoke.count(anchor) != 1:
+            raise SystemExit('browser smoke insertion anchor not found exactly once')
+          smoke = smoke.replace(anchor, insert)
+          browser.write_text(smoke, encoding='utf-8')
+
+          Path('.github/ui-smoke.trigger').write_text('connected-yellow-marker-hit-proximity\n', encoding='utf-8')
+          PY
+      - name: Focused Node regression
+        run: node --test connector-connected-target-nearby.test.js connector-target-lock-runtime.test.js
+      - name: Commit production change, regressions and UI trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/temp-adjust-connected-marker.yml
+          git config user.name 'gaku-base'
+          git config user.email 'mail.skgc@gmail.com'
+          git add connector-target-lock-runtime.js connector-connected-target-nearby.test.js browser-connector-target-lock-smoke.js .github/ui-smoke.trigger .github/workflows/temp-adjust-connected-marker.yml
+          git diff --cached --check
+          git commit -m 'fix: 黄色接続点を選択直前だけ表示'
+          git push origin HEAD:fix/connected-yellow-marker-hit-proximity
