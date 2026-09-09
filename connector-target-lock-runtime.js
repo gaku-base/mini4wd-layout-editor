@@ -15,6 +15,8 @@
   const OVERLAY_ID = 'connectorTargetLockOverlay';
   const STATUS_ID = 'connectorTargetLockStatus';
   const STYLE_ID = 'connectorTargetLockStyles';
+  const CONNECTED_REVEAL_RADIUS_PX = 54;
+  const CONNECTED_MARKER_OFFSET_PX = 9;
 
   function endpointIdentity(value = {}) {
     const partId = String(value.partId ?? value.sourceId ?? '').trim();
@@ -128,6 +130,24 @@
     });
   }
 
+  function usedEndpoints(endpoints = [], connections = []) {
+    const used = usedEndpointIdentities(connections);
+    return (Array.isArray(endpoints) ? endpoints : []).filter(endpoint => {
+      const identity = endpointIdentity(endpoint);
+      return Boolean(identity && used.has(identity));
+    });
+  }
+
+  function pointWithinRadius(point = {}, pointer = {}, radiusPx = CONNECTED_REVEAL_RADIUS_PX) {
+    const pointX = Number(point.x);
+    const pointY = Number(point.y);
+    const pointerX = Number(pointer.x);
+    const pointerY = Number(pointer.y);
+    const radius = Math.max(0, Number(radiusPx) || 0);
+    if (![pointX, pointY, pointerX, pointerY].every(Number.isFinite)) return false;
+    return Math.hypot(pointX - pointerX, pointY - pointerY) <= radius;
+  }
+
   function fieldContainsPoint(bounds = {}, point = {}, epsilon = 1e-9) {
     const x = Number(point.x);
     const y = Number(point.y);
@@ -184,6 +204,19 @@
         height: 18px;
         border-color: #8ce6ff;
         box-shadow: 0 0 0 3px rgba(4, 14, 20, .55), 0 0 12px rgba(100, 220, 255, .85);
+      }
+      #${OVERLAY_ID} .connector-target-point.is-connected-target {
+        width: 15px;
+        height: 15px;
+        border-color: #ffd45c;
+        background: rgba(111, 79, 8, .92);
+        box-shadow: 0 0 0 2px rgba(20, 15, 4, .54), 0 0 10px rgba(255, 212, 92, .72);
+      }
+      #${OVERLAY_ID} .connector-target-point.is-connected-target:hover {
+        width: 19px;
+        height: 19px;
+        border-color: #ffe79c;
+        box-shadow: 0 0 0 3px rgba(20, 15, 4, .58), 0 0 14px rgba(255, 221, 112, .95);
       }
       #${OVERLAY_ID} .connector-target-point.is-locked {
         width: 18px;
@@ -242,6 +275,7 @@
     wrap.appendChild(status);
 
     let lastSignature = '';
+    let pointerScreen = null;
 
     function clearAndRefresh(reason) {
       if (!clearLock(state, reason)) return false;
@@ -280,9 +314,11 @@
         clearLock(state, 'placement-complete');
       }
 
-      const open = runtime?.mode === 'place' ? openEndpoints(endpoints, runtime.connections) : [];
-      if (state.lock && !open.some(endpoint => sameTarget(endpoint, state.lock))) {
-        clearLock(state, 'target-no-longer-open');
+      const selectable = runtime?.mode === 'place' && Array.isArray(endpoints) ? endpoints : [];
+      const open = openEndpoints(selectable, runtime?.connections);
+      const connected = usedEndpoints(selectable, runtime?.connections);
+      if (state.lock && !selectable.some(endpoint => sameTarget(endpoint, state.lock))) {
+        clearLock(state, 'target-no-longer-present');
       }
 
       if (state.lock) {
@@ -293,12 +329,20 @@
         state.blockedMessage = '';
       }
 
+      const connectedVisible = connected.filter(endpoint => {
+        if (sameTarget(endpoint, state.lock)) return true;
+        if (!pointerScreen) return false;
+        const point = room.worldToScreen({ x: endpoint.x, y: endpoint.y }, runtime.view);
+        return pointWithinRadius(point, pointerScreen, CONNECTED_REVEAL_RADIUS_PX);
+      });
+
       const signature = JSON.stringify({
         mode: runtime?.mode,
         view: runtime?.view,
         lock: state.lock?.identity || null,
         blocked: state.blockedMessage,
-        open: open.map(endpoint => [endpointIdentity(endpoint), endpoint.x, endpoint.y, endpoint.zMm])
+        open: open.map(endpoint => [endpointIdentity(endpoint), endpoint.x, endpoint.y, endpoint.zMm]),
+        connected: connectedVisible.map(endpoint => [endpointIdentity(endpoint), endpoint.x, endpoint.y, endpoint.zMm])
       });
       if (!force && signature === lastSignature) return;
       lastSignature = signature;
@@ -307,25 +351,37 @@
       overlay.hidden = runtime?.mode !== 'place';
       status.hidden = !state.lock;
       status.classList.toggle('is-blocked', Boolean(state.blockedMessage));
+      const lockedConnected = connected.some(endpoint => sameTarget(endpoint, state.lock));
       status.textContent = state.lock
-        ? (state.blockedMessage || '接続先指定中　Esc・同じ接続口・レイアウトスペース外クリックで解除')
+        ? (state.blockedMessage || (lockedConnected
+          ? '接続済み位置から別レイアウトを作成中　Esc・同じ接続口・レイアウトスペース外クリックで解除'
+          : '接続先指定中　Esc・同じ接続口・レイアウトスペース外クリックで解除'))
         : '';
 
       if (runtime?.mode !== 'place') return;
       const canvasRect = canvas.getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
-      open.forEach(endpoint => {
+
+      function appendTargetButton(endpoint, connectedTarget = false) {
         const point = room.worldToScreen({ x: endpoint.x, y: endpoint.y }, runtime.view);
-        const x = canvasRect.left - wrapRect.left + point.x;
-        const y = canvasRect.top - wrapRect.top + point.y;
+        let x = canvasRect.left - wrapRect.left + point.x;
+        let y = canvasRect.top - wrapRect.top + point.y;
+        if (connectedTarget) {
+          const radians = (Number(endpoint.heading ?? endpoint.directionDeg) || 0) * Math.PI / 180;
+          x += Math.cos(radians) * CONNECTED_MARKER_OFFSET_PX;
+          y += Math.sin(radians) * CONNECTED_MARKER_OFFSET_PX;
+        }
         if (x < -10 || y < -10 || x > canvasRect.width + 10 || y > canvasRect.height + 10) return;
         const button = documentRef.createElement('button');
         button.type = 'button';
-        button.className = `connector-target-point${sameTarget(endpoint, state.lock) ? ' is-locked' : ''}`;
+        button.className = `connector-target-point${connectedTarget ? ' is-connected-target' : ''}${sameTarget(endpoint, state.lock) ? ' is-locked' : ''}`;
         button.style.left = `${x}px`;
         button.style.top = `${y}px`;
         button.dataset.connectorTarget = endpointIdentity(endpoint);
-        button.title = `接続先を指定：${endpoint.label || endpoint.connectorId}`;
+        if (connectedTarget) button.dataset.connectorUsage = 'connected';
+        button.title = connectedTarget
+          ? `接続済み位置から別レイアウトを開始：${endpoint.label || endpoint.connectorId}`
+          : `接続先を指定：${endpoint.label || endpoint.connectorId}`;
         button.setAttribute('aria-label', button.title);
         button.addEventListener('pointerdown', event => {
           event.preventDefault();
@@ -334,8 +390,22 @@
           renderOverlay(true);
         });
         overlay.appendChild(button);
-      });
+      }
+
+      open.forEach(endpoint => appendTargetButton(endpoint, false));
+      connectedVisible.forEach(endpoint => appendTargetButton(endpoint, true));
     }
+
+    wrap.addEventListener('pointermove', event => {
+      const rect = canvas.getBoundingClientRect();
+      pointerScreen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      renderOverlay(false);
+    });
+
+    wrap.addEventListener('pointerleave', () => {
+      pointerScreen = null;
+      renderOverlay(true);
+    });
 
     canvas.addEventListener('pointerdown', event => {
       if (!state.lock || event.button !== 0) return;
@@ -403,6 +473,8 @@
   return Object.freeze({
     GRAPH_WRAP_MARKER,
     STATE_KEY,
+    CONNECTED_REVEAL_RADIUS_PX,
+    CONNECTED_MARKER_OFFSET_PX,
     endpointIdentity,
     normalizeTarget,
     sameTarget,
@@ -412,6 +484,8 @@
     lockedChoosePlacement,
     usedEndpointIdentities,
     openEndpoints,
+    usedEndpoints,
+    pointWithinRadius,
     fieldContainsPoint,
     install
   });
