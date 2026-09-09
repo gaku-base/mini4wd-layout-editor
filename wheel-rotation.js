@@ -84,14 +84,14 @@
     root.document.write('<script src="connector-target-lock-runtime.js?v=v1.1-rc6-connector-target1" data-m4wd-connector-target-lock="1"><\/script>');
   }
 
-  // app.js captures M4WD_LAYOUT_GRAPH during parser execution. Load the slope
-  // underpass runtime synchronously here so the approved warning filter is
-  // installed before app.js takes that reference. This stays inside the
-  // existing temporary parser bridge and does not change app.js or persistence.
+  // app.js captures M4WD_LAYOUT_GRAPH during parser execution. Load both slope
+  // warning filtering and retrofit height propagation synchronously before the
+  // app takes that reference. The preload itself remains the single owner of
+  // slope runtime ordering.
   if (root.document.readyState === 'loading'
       && typeof root.document.write === 'function'
-      && !root.M4WD_SLOPE_UNDERPASS_RUNTIME) {
-    root.document.write('<script src="slope-underpass-runtime-preload.js?v=v1.1-rc6-slope-underpass1" data-m4wd-slope-underpass-preload="1"><\/script>');
+      && (!root.M4WD_SLOPE_UNDERPASS_RUNTIME || !root.M4WD_SLOPE_HEIGHT_PROPAGATION_RUNTIME)) {
+    root.document.write('<script src="slope-underpass-runtime-preload.js?v=v1.1-rc6-slope-height1" data-m4wd-slope-underpass-preload="1"><\/script>');
   }
 
   if (!Object.prototype.hasOwnProperty.call(root, '__COURSE_ENABLE_DEBUG__')) {
