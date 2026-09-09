@@ -146,20 +146,45 @@ async function main() {
     assert.equal(await currentCount(page), 2, 'one Straight must be placed through the locked connector');
 
     const connectedMarkers = page.locator('#connectorTargetLockOverlay .connector-target-point.is-connected-target');
-    assert.equal(await connectedMarkers.count(), 0, 'yellow connected markers must stay hidden while the pointer is farther than 20px from the seam');
+    assert.equal(await connectedMarkers.count(), 0, 'yellow connected markers must stay absent while the pointer is far from the seam');
 
+    // Moving to the seam enters the 20px candidate envelope. The candidate may
+    // exist in the DOM, but it must stay transparent until the pointer reaches
+    // the actual yellow button hit area.
     await page.mouse.move(markerX, markerY);
     await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length >= 1, { timeout: TIMEOUT });
-    assert.ok(await connectedMarkers.count() >= 1, 'yellow connected marker must appear when the pointer is directly beside the connected seam');
+    const hiddenYellowBox = await connectedMarkers.first().boundingBox();
+    assert.ok(hiddenYellowBox, 'a transparent yellow candidate must expose a stable hit box near the connected seam');
+    const beforeHoverOpacity = await connectedMarkers.first().evaluate(element => getComputedStyle(element).opacity);
+    assert.equal(beforeHoverOpacity, '0', 'yellow connected marker must remain invisible before the pointer reaches its own hit area');
 
-    await page.mouse.move(markerX + 32, markerY);
-    await page.waitForFunction(() => document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target').length === 0, { timeout: TIMEOUT });
-    assert.equal(await connectedMarkers.count(), 0, 'yellow connected marker must disappear again after moving clearly outside the 20px reveal radius');
+    const yellowX = hiddenYellowBox.x + hiddenYellowBox.width / 2;
+    const yellowY = hiddenYellowBox.y + hiddenYellowBox.height / 2;
+    await page.mouse.move(yellowX, yellowY);
+    await page.waitForFunction(() => {
+      const marker = document.querySelector('#connectorTargetLockOverlay .connector-target-point.is-connected-target');
+      if (!marker) return false;
+      const style = getComputedStyle(marker);
+      return style.opacity === '1' && style.cursor === 'pointer';
+    }, { timeout: TIMEOUT });
+    const yellowHoverStyle = await connectedMarkers.first().evaluate(element => {
+      const style = getComputedStyle(element);
+      return { width: style.width, height: style.height, opacity: style.opacity, cursor: style.cursor };
+    });
+    assert.deepEqual(yellowHoverStyle, { width: '15px', height: '15px', opacity: '1', cursor: 'pointer' },
+      'yellow connected marker must appear at the hand-cursor hit area and stay 15px without hover growth');
+
+    await page.mouse.move(yellowX + 32, yellowY);
+    await page.waitForFunction(() => [...document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target')]
+      .every(marker => getComputedStyle(marker).opacity === '0'), { timeout: TIMEOUT });
+    assert.equal(await page.evaluate(() => [...document.querySelectorAll('#connectorTargetLockOverlay .connector-target-point.is-connected-target')]
+      .some(marker => getComputedStyle(marker).opacity === '1')), false,
+    'yellow connected marker must become invisible again after leaving its selectable hit area');
 
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
     console.log(`✓ explicit connector target browser regression passed; forced click distance=${distanceToCenter.toFixed(1)}px`);
-    console.log('✓ connected yellow marker stays hidden far away, appears near the seam, and hides again beyond 20px');
+    console.log('✓ connected yellow marker appears exactly at its selectable hand-cursor hit area without growing on hover');
     console.log('✓ outside-layout click released the target without placing a part');
     console.log('✓ same-target click, Esc, and one-placement auto-release passed');
     console.log('Browser connector target lock smoke test passed.');
