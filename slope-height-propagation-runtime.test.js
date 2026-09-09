@@ -149,13 +149,14 @@ test('スロープ側コンポーネントがStartにつながっていない場
 test('1段下げる補正で下流が0mm未満になる場合はfail-closedで変更しない', () => {
   const start = part('start', 'start', 100, 100, 0, 0);
   const slope = part('slope', 'slope', 154, 100, 180, -115);
-  const candidate = part('candidate', 'straight', 100, 100, 0, 0);
+  const candidate = part('candidate', 'straight', 208, 100, 0, 0);
   const parts = [start, slope, candidate];
   const edges = [edge('start', 'b', 'slope', 'b')];
 
   const result = runtime.reconcileRetrofitSlopeHeights(parts, catalog, edges, graph);
   assert.equal(result.changed, false);
   assert.equal(candidate.zMm, 0);
+  assert.equal(edges.length, 1);
 });
 
 test('validateEdges wrapper runs reconciliation before edge validation', () => {
