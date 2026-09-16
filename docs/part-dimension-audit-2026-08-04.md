@@ -1,5 +1,12 @@
 # Part-dimension audit — 2026-08-04
 
+> **Historical audit.** This document records the catalog state as observed on
+> 2026-08-04. It is not the current placement-dimension authority. In particular,
+> the Bank20 280mm axis listed below was later superseded by the verified 230mm
+> connector span. Use `docs/part-dimension-audit-2026-09-16.md` for the current
+> cross-part placement audit.
+
+
 This is a code audit, not a physical measurement record. Values labelled
 `observed` are read from the current catalog and must not be promoted to
 verified physical dimensions without a measurement record.
