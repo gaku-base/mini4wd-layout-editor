@@ -2,145 +2,131 @@
 
 使用モデル: GPT-5.6 Sol（推論: High）
 
-## Scope
+## 結論
 
-This audit answers one narrow question: **does each course part occupy the correct
-real-world size when placed in the layout space?**
+レイアウトスペース上の配置寸法は、**2026-09-16時点でアプリが使用している寸法を正式なプロジェクト採用値**とする。
 
-The audit separates:
+タミヤ公式の公開寸法は公称／参考値として保持するが、成形・ジョイント・実組立時の差をすべて含む配置寸法とはみなさない。したがって、公式値との差を理由に現在の配置ジオメトリを自動補正しない。
 
-- a published or project-approved physical dimension (`verified`);
-- the current editor's visual / occupancy value when it is not physically proven
-  (`provisional`);
-- a dimension that cannot be established from the available public evidence
-  (`unknown`).
+採用方針:
 
-No unlabeled drawing dimension is promoted to `verified` by measuring pixels from a
-PDF whose note says the figure is approximately 1/25 scale.
+- placement authority: `PART_DIMENSIONS_MM`
+- unit: mm
+- version: `2026-09-16-molded-fit-v1`
+- basis: `project-owner-approved-current-runtime-with-molding-tolerance`
+- official dimensions: `OFFICIAL_DIMENSION_REFERENCES_MM` として分離
+- existing JSON / localStorage format: 変更なし
 
-## Primary sources
+## 現在の採用寸法
+
+| Part | 採用する配置／表示基準 |
+|---|---:|
+| Straight | 540 × 360mm |
+| Start | 540 × 360mm |
+| Corner 45 R/L | center R540mm / inner R360mm / outer R720mm / current connector geometry |
+| Lane Change | 1620 × 360mm |
+| Wave | 540 × 420mm、track 360mm、amplitude 40mm |
+| Slope | horizontal 540mm × depth 360mm、height delta +115mm |
+| Bank20 | connector span 230mm × depth 360mm、0°→20° |
+| LC Jump | 540 × 360mm |
+| Burning Lane Change | display 1800 × 1440mm、current independent vector geometry |
+| Common connection face | 370mm |
+
+これらは「タミヤ公式値と同じだから採用」するのではなく、**現在アプリで実用している寸法を、成形誤差を考慮するプロジェクト寸法として採用する**という決定に基づく。
+
+## タミヤ公式値の扱い
+
+公開資料で確認した値は引き続き記録する。
+
+- JCJC 1レーン幅: 115mm
+- フェンス高さ: 50mm
+- 90°カーブ集成外形: 717mm
+- 180°カーブ集成外形幅: 1434mm
+- Slope公称落差: 110mm（11cm）
+
+これらは `verified` な**公式参考値**だが、配置寸法の正本ではない。コード上では `usage: reference-only` として採用寸法と分離する。
+
+## Corner 717mm / 720mm
+
+タミヤ公式図の90°集成外形717mmに対し、現在アプリのCornerは外R720mmである。
+
+本プロジェクトでは720mmを採用する。
+
+理由:
+
+1. 公式図の717mmは公開上の公称／集成寸法として扱う。
+2. レイアウトでは成形・ジョイント等を含む実用上の寸法差を考慮する。
+3. 現在アプリで使用している720mm系ジオメトリをプロジェクト採用値として承認した。
+4. 717mmは比較用の公式参考値として残し、配置・接続・当たり判定を自動変更しない。
+
+したがって、717mmと720mmの差は「未解決エラー」ではなく、**公式参考値とプロジェクト採用値の差**として管理する。
+
+## Slope 110mm / 115mm
+
+タミヤ公開説明の11cm（110mm）は参考値として残す。
+
+配置・高さ判定では従来どおり115mmを採用する。既存のR398 → straight → R803 longitudinal profileも115mmを前提として維持する。
+
+## 寸法変更可能な構造
+
+`part-catalog.js` の先頭に、全パーツの配置寸法をmm単位でまとめた `PART_DIMENSIONS_MM` を置く。
+
+PARTSの以下は寸法マスターから生成する。
+
+- `w / h`
+- connector positions
+- `geometry.width / height / bounds`
+- Corner radii / connector coordinates
+- Wave length / depth / amplitude / connector offset
+- Slope horizontal span / depth / height delta
+- Bank20 span / depth / angle
+- Burning geometry / display bounds
+- visual canvas size / origin
+
+Canvasの既存XY単位は後方互換のためcmのままだが、変換はカタログ生成時の `mmToCm()` に集約する。
+
+これにより、将来たとえばCornerだけを実測値へ変更する場合は、寸法マスターのCorner項目を変更し、対応テストを更新することで追跡できる。
+
+## 描画追従
+
+寸法マスターを変更したときに表示だけ旧360mmへ残らないよう、描画もパーツ定義を参照する。
+
+- Straight-like lane guides: `def.geometry.height / def.h`
+- Bank lane guides: part-specific height
+- Corner body / lane guides: `outerRadius - innerRadius`
+- LC Jump internal visual proportions: `def.w / def.h` に対する比率
+- Corner joint patch: connectionするpart definitionからtrack widthを取得
+
+現在の採用値では従来描画と同じ数値になるため、見た目は変えない。
+
+## 公式資料
 
 1. Tamiya, Japan Cup Jr. Circuit / Oval Home Circuit layout material:
    https://www.tamiya.com/cms/japan/mini4wd/regulation_rental/circuits_data.pdf
-   - labels Straight 540mm;
-   - labels Lane Change 1620mm;
-   - labels an assembled 90-degree JCJC curve outer footprint 717mm;
-   - labels an assembled 180-degree JCJC curve outer width 1434mm.
 2. Tamiya Mini 4WD official competition rules:
    https://www.tamiya.com/japan/mini4wd/regulation.html
-   - one straight-lane width 115mm;
-   - fence height 50mm.
 3. Tamiya Item 95447, JCJC Slope Section:
    https://www.tamiya.com/japan/products/95447/index.html
-   - public product copy calls the drop 11cm and lists 5cm fence / 11.5cm lane width.
 4. Tamiya Item 69571, JCJC Bank Approach 20:
    https://www.tamiya.com/japan/products/69571/index.html
-   - bank angle 20 degrees.
 5. Tamiya 2015 Station Championship report:
    https://www.tamiya.com/japan/report/mini4wd_report20151121
-   - LC Jump is described as using only the lane-change approach portion.
 6. Tamiya 2016 Spring report:
    https://www.tamiya.com/japan/report/mini4wd_report20160313
-   - confirms a 20-degree type Burning Lane Change, but publishes no footprint.
 
-Project-approved values remain authoritative where the public product copy is only
-nominal/rounded:
+## 将来の校正
 
-- Straight connector span: 540mm.
-- JCJC connector-face outer width: 370mm.
-- Slope height delta: 115mm.
-- Bank20 connector-to-connector projected span: 230mm.
-
-## Result
-
-| Part | Current runtime placement / display reference | Verified evidence | Audit status | Runtime geometry change |
-|---|---:|---|---|---|
-| Start | 540 × 360mm rectangle | Start is project-derived from verified Straight span | span verified; outer depth provisional | none |
-| Straight | 540 × 360mm rectangle | Tamiya labels 540mm span | span verified; outer depth provisional | none |
-| 45° Corner R/L | local model R540, inner R360, outer R720 | Tamiya labels assembled 90° outer 717mm and 180° outer width 1434mm | aggregate footprint verified; local decomposition provisional | **none — unresolved 3mm aggregate mismatch** |
-| Lane Change | 1620 × 360mm runtime rectangle | Tamiya labels 1620mm | span verified; outer depth provisional | none |
-| Wave | 540 × max 420mm runtime bounds | Tamiya confirms JCJC Wave product but gives no dimension-labelled maximum footprint | span provisional; maximum footprint unknown | none |
-| Slope | 540 × 360mm plan, +115mm height | project rule 540 / +115; Tamiya public copy says nominal 11cm drop | project geometry verified; full outer footprint unknown | none |
-| Bank20 | 230 × 360mm plan, 0°→20° bank | project-approved 230mm connector span; Tamiya confirms 20° | connector span / angle verified; support/outer envelope unknown | none |
-| LC Jump | 540 × 360mm current model | Tamiya says it is the lane-change approach portion only; no dimensions published | current span provisional; footprint unknown | none |
-| Burning LC | 1800 × 1440mm current independent display model | Tamiya confirms a 20° Burning LC type; no footprint published | display bounds provisional; physical footprint unknown | none |
-
-## Why the 360mm runtime width was not changed to 345mm or 370mm
-
-Tamiya's regulation states **115mm per lane**, so 3 lane clear widths total 345mm.
-That is not the same quantity as the complete outer plastic footprint including
-fences/walls/joints.
-
-The project also has a separately approved **370mm connector-face outer width**.
-That is a connection-face measurement, not enough by itself to prove that every
-part's complete plan-view footprint is a constant 370mm.
-
-Therefore this audit does not replace the current 360mm legacy visual/occupancy
-width by either 345mm or 370mm without a direct outer-footprint measurement.
-
-## Corner discrepancy
-
-The current 45-degree corner model uses:
-
-- centerline radius 540mm;
-- inner radius 360mm;
-- outer radius 720mm.
-
-Tamiya's official layout material labels the assembled 90-degree outer dimension as
-717mm and the 180-degree outer width as 1434mm (= 717 × 2).
-
-This is a real **3mm aggregate difference** from the current outer-radius model.
-However, the public source does not publish the decomposition needed to determine
-which local quantity should change:
-
-- centerline radius;
-- inner radius;
-- radial track / wall width;
-- connector local positions.
-
-Changing the local geometry from the aggregate 717mm alone would invent one of
-those values and would violate the repository rule against guessed dimensions.
-The discrepancy is therefore recorded explicitly and left for measurement rather
-than silently forced.
-
-## Slope 110mm public copy vs project 115mm
-
-Item 95447 describes the product as an 11cm-drop slope. The repository's binding
-project value is 115mm and is backed by the approved longitudinal profile and
-existing tests. The public 11cm wording is retained as a published nominal
-reference only; it does **not** overwrite the 115mm authoritative project value.
-
-## Code changes in this audit
-
-- Adds additive `dimensionAudit` metadata to every current part family.
-- Exposes Tamiya-published reference constants:
-  - lane width 115mm;
-  - fence height 50mm;
-  - assembled 90° curve outer 717mm;
-  - assembled 180° curve outer width 1434mm.
-- Adds regression tests proving verified direct placement spans already match
-  runtime geometry.
-- Adds regression tests preventing provisional/unknown footprint values from
-  being silently promoted to verified.
-- Does **not** alter placement coordinates, connectors, drawing geometry,
-  collision behavior, persistence, or output.
-
-## Follow-up tracking
+Issue #117で、現物採寸により採用寸法をさらに校正できるよう追跡する。
 
 - Issue #117: https://github.com/gaku-base/mini4wd-layout-editor/issues/117
-- This issue owns the remaining 2D placement-footprint measurements. Issue #12 remains focused on slope / bank 3D collision-profile measurement.
 
-## Remaining measurements
+これは現行アプリを使うためのblockerではない。現在値を正式採用したうえで、必要になったパーツだけ個別に実測更新するためのバックログである。
 
+## 変更時の安全条件
 
-The following require direct physical measurement or another dimension-labelled
-authoritative source before geometry is changed:
-
-1. 45° corner local centerline / inner / outer radii and connector locations
-   consistent with the official 717mm assembled footprint.
-2. Wave maximum plan footprint.
-3. Straight / Start / Lane Change / Slope / Bank / LC Jump complete outer body
-   depth, distinguished from lane clear width and connector-face width.
-4. LC Jump standalone approach length and footprint.
-5. Burning Lane Change physical footprint.
-6. Bank support / body envelope beyond the already verified 230mm connector span.
+1. 寸法変更はまず `PART_DIMENSIONS_MM` に反映する。
+2. 公式参考値を理由に採用値を自動上書きしない。
+3. connector / bounds / render / occupancyの回帰テストを同時更新する。
+4. 保存済みレイアウトの座標を自動移動させない。
+5. 保存形式を変更しない。
+6. 寸法変更により既存レイアウトの見え方・干渉結果が変わる場合は、変更内容を明示して別PRで扱う。
