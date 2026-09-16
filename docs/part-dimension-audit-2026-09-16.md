@@ -125,7 +125,13 @@ reference only; it does **not** overwrite the 115mm authoritative project value.
 - Does **not** alter placement coordinates, connectors, drawing geometry,
   collision behavior, persistence, or output.
 
+## Follow-up tracking
+
+- Issue #117: https://github.com/gaku-base/mini4wd-layout-editor/issues/117
+- This issue owns the remaining 2D placement-footprint measurements. Issue #12 remains focused on slope / bank 3D collision-profile measurement.
+
 ## Remaining measurements
+
 
 The following require direct physical measurement or another dimension-labelled
 authoritative source before geometry is changed:
