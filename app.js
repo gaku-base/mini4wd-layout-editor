@@ -1693,14 +1693,17 @@
     const def = resolvePartDef(part);
     const patchLength = options.length ?? 5.8;
     const overscan = options.overscan ?? 0.9;
-    const laneHalf = TRACK_WIDTH_CM / 2;
+    const trackWidth = def.corner45
+      ? (Number(def.geometry?.outerRadius) - Number(def.geometry?.innerRadius))
+      : (Number(def.geometry?.trackWidth) || Number(def.geometry?.height) || Number(def.h) || TRACK_WIDTH_CM);
+    const laneHalf = trackWidth / 2;
     c.save();
     c.translate(point.x, point.y);
     c.rotate(heading * Math.PI / 180);
 
     // 継ぎ目を少し広めに塗り直して、画像の端同士のわずかなズレを隠す。
     c.fillStyle = def.base;
-    c.fillRect(-patchLength / 2, -laneHalf - overscan, patchLength, TRACK_WIDTH_CM + overscan * 2);
+    c.fillRect(-patchLength / 2, -laneHalf - overscan, patchLength, trackWidth + overscan * 2);
 
     c.lineCap = 'butt';
     c.strokeStyle = def.edge;
@@ -1711,7 +1714,7 @@
 
     c.strokeStyle = def.lane;
     c.lineWidth = .82;
-    for (const y of [-TRACK_WIDTH_CM / 6, TRACK_WIDTH_CM / 6]) {
+    for (const y of [-trackWidth / 6, trackWidth / 6]) {
       c.beginPath(); c.moveTo(-patchLength / 2, y); c.lineTo(patchLength / 2, y); c.stroke();
     }
 
@@ -2663,10 +2666,11 @@
     c.strokeRect(vx, vy, def.w, def.h);
 
     if (!def.lanechange) {
+      const trackWidth = Number(def.geometry?.height) || Number(def.h) || TRACK_WIDTH_CM;
       c.strokeStyle = def.lane;
       c.lineWidth = .8;
       for (let i = 1; i < 3; i++) {
-        const y = vy + (TRACK_WIDTH_CM / 3) * i;
+        const y = vy + (trackWidth / 3) * i;
         c.beginPath(); c.moveTo(vx, y); c.lineTo(vx + def.w, y); c.stroke();
       }
     }
@@ -2793,10 +2797,11 @@
     c.fillStyle = grad;
     c.fillRect(-def.w / 2 + 1, -def.h / 2 + 1, def.w - 2, def.h - 2);
     c.globalAlpha = 1;
+    const trackWidth = Number(def.geometry?.height) || Number(def.h) || TRACK_WIDTH_CM;
     c.strokeStyle = def.lane;
     c.lineWidth = .8;
     for (let i = 1; i < 3; i++) {
-      const y = -TRACK_WIDTH_CM / 2 + TRACK_WIDTH_CM * i / 3;
+      const y = -trackWidth / 2 + trackWidth * i / 3;
       c.beginPath(); c.moveTo(-def.w / 2, y); c.lineTo(def.w / 2, y); c.stroke();
     }
     c.fillStyle = 'rgba(60,60,58,.68)';
@@ -2810,24 +2815,27 @@
 
   function drawJumpGraphic(c, def) {
     c.save();
-    const vx = -(def.visual?.originX ?? 27);
-    const vy = -(def.visual?.originY ?? 18);
+    const vx = -(def.visual?.originX ?? def.w / 2);
+    const vy = -(def.visual?.originY ?? def.h / 2);
+    const deckHeight = def.h * 25 / 36;
+    const lanePitch = def.h / 3;
+    const supportW = def.w * 39 / 54;
+    const supportHeight = def.h - deckHeight;
     // 上側のコース本体（参照形状では下に支持ブロックが張り出す）。
     c.fillStyle = def.base;
-    c.fillRect(vx, vy, def.w, 25);
+    c.fillRect(vx, vy, def.w, deckHeight);
     c.strokeStyle = def.edge;
     c.lineWidth = 1.05;
-    c.strokeRect(vx, vy, def.w, 25);
+    c.strokeRect(vx, vy, def.w, deckHeight);
     c.strokeStyle = def.lane;
     c.lineWidth = .8;
-    c.beginPath(); c.moveTo(vx, vy + 12); c.lineTo(vx + def.w, vy + 12); c.stroke();
-    c.beginPath(); c.moveTo(vx, vy + 24); c.lineTo(vx + def.w, vy + 24); c.stroke();
-    const supportW = 39;
-    const supportY = vy + 25;
+    c.beginPath(); c.moveTo(vx, vy + lanePitch); c.lineTo(vx + def.w, vy + lanePitch); c.stroke();
+    c.beginPath(); c.moveTo(vx, vy + lanePitch * 2); c.lineTo(vx + def.w, vy + lanePitch * 2); c.stroke();
+    const supportY = vy + deckHeight;
     c.fillStyle = 'rgba(172,168,164,.78)';
-    c.fillRect(vx, supportY, supportW, 11);
+    c.fillRect(vx, supportY, supportW, supportHeight);
     c.strokeStyle = def.edge;
-    c.strokeRect(vx, supportY, supportW, 11);
+    c.strokeRect(vx, supportY, supportW, supportHeight);
     c.restore();
   }
 
@@ -2950,8 +2958,9 @@
     c.save();
     if (def.geometry?.pathOrientation === 'left') c.scale(1, -1);
     c.translate(g.center.x, g.center.y);
+    const trackWidth = g.ro - g.ri;
     c.strokeStyle = def.base;
-    c.lineWidth = TRACK_WIDTH_CM;
+    c.lineWidth = trackWidth;
     c.beginPath(); c.arc(0, 0, g.r, g.startAngle, g.endAngle, false); c.stroke();
     c.strokeStyle = def.edge;
     c.lineWidth = 1.05;
@@ -2960,7 +2969,7 @@
     }
     c.strokeStyle = def.lane;
     c.lineWidth = .8;
-    for (const offset of [-TRACK_WIDTH_CM / 6, TRACK_WIDTH_CM / 6]) {
+    for (const offset of [-trackWidth / 6, trackWidth / 6]) {
       c.beginPath(); c.arc(0, 0, g.r + offset, g.startAngle, g.endAngle, false); c.stroke();
     }
     c.restore();
