@@ -74,25 +74,6 @@
   'use strict';
   if (!root || !root.document) return;
 
-  // The base stylesheet still carries the legacy yellow accent while the
-  // orange editor theme is loaded later by editor-extensions-bootstrap.js.
-  // Install only the critical brand colours synchronously during parser
-  // execution so the first painted frame already matches the final theme.
-  if (!root.document.getElementById('criticalEditorBrandFirstPaint')) {
-    const criticalBrandStyle = root.document.createElement('style');
-    criticalBrandStyle.id = 'criticalEditorBrandFirstPaint';
-    criticalBrandStyle.textContent = `
-      .brand-mark {
-        background: linear-gradient(180deg, #ffad35, #f18800);
-        border-color: #ffb64e;
-        color: #0b0d10;
-        text-shadow: 0 1px 0 rgba(255,255,255,.18);
-      }
-      .version { color: #ff9f1a; }
-    `;
-    (root.document.head || root.document.documentElement).appendChild(criticalBrandStyle);
-  }
-
   // layout-graph.js is already loaded when this bridge runs, while app.js has
   // not captured the graph reference yet. Install explicit connector targeting
   // synchronously here so normal snapping remains unchanged unless a target is
