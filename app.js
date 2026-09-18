@@ -5237,19 +5237,90 @@
     persistLocal(); updateUI(); render();
   }
 
-  function cyclePartsColor(ids) {
-    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
-    if (!unique.length) return toast('カラー変更するパーツを選択してください');
-    snapshot();
-    unique.forEach(id => {
-      const p = findLayoutPartById(id);
-      const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (p.colorKey || 'default')));
-      p.colorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
+  function colorBehaviorBlockedText(blocked = []) {
+    const reason = blocked[0]?.reason || '';
+    if (reason === 'below-floor' || reason === 'downstream-below-floor') return '下りにするとコース高さが0mm未満になるため変更できません';
+    if (reason === 'direction-disconnected') return 'Startからの進行方向を判定できないストレートは変換しません';
+    if (reason === 'direction-ambiguous') return 'Startからの進行方向が複数あるためストレートを変換しません';
+    if (reason === 'downstream-rejoins-start') return '下流側がStartへ回り込む接続では高さを安全に変更できないため変換しません';
+    if (reason === 'banked-straight') return '20度バンク状態のストレートはスロープへ自動変換しません';
+    return '安全に進行方向・高さを確定できないためストレートを変換しません';
+  }
+
+  function applyColorRequestsToLayout(requests, { source = 'color-command' } = {}) {
+    const available = new Set(state.parts.map(part => part.id));
+    if (state.start) available.add('start');
+    const normalizedRequests = (Array.isArray(requests) ? requests : [])
+      .map(request => ({ partId: String(request?.partId || ''), colorKey: String(request?.colorKey || '') }))
+      .filter(request => available.has(request.partId) && COLORS.some(color => color.key === request.colorKey));
+    if (!normalizedRequests.length) {
+      toast('カラー変更するパーツを選択してください');
+      return false;
+    }
+
+    const result = STRAIGHT_COLOR_BEHAVIOR.applyColorRequests({
+      start: state.start,
+      parts: state.parts,
+      edges: state.connections,
+      catalog: PARTS,
+      requests: normalizedRequests,
+      mode: state.straightColorBehavior,
+      graphValue: LAYOUT_GRAPH
     });
-    const first = findLayoutPartById(unique[0]);
-    const color = COLORS.find(c => c.key === first?.colorKey)?.name || '標準（グレー）';
-    toast(`${unique.length}個のカラーを「${color}」へ変更しました`);
+
+    if (!result.changed) {
+      if (result.blocked.length) toast(colorBehaviorBlockedText(result.blocked));
+      else toast('指定したカラーと同じため変更はありません');
+      return false;
+    }
+
+    snapshot();
+    state.start = result.start ? { ...result.start, id: 'start', type: 'start' } : null;
+    state.parts = result.parts;
+    state.connections = result.edges;
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
+    clearSnapTargetChoice();
+    recalculateBankStates();
+    recalculateLayoutWarnings();
+    rebuildActiveConnectionFromTail();
+    const tail = state.parts[state.parts.length - 1];
+    if (tail) state.lastPlacementHeightMm = Number(tail.zMm) || 0;
+
+    const upCount = result.changes.filter(change => change.kind === 'slope' && change.direction === 'up').length;
+    const downCount = result.changes.filter(change => change.kind === 'slope' && change.direction === 'down').length;
+    const colorCount = result.changes.filter(change => change.kind === 'color').length;
+    const summaries = [];
+    if (upCount) summaries.push(`上りスロープ ${upCount}個`);
+    if (downCount) summaries.push(`下りスロープ ${downCount}個`);
+    if (colorCount) summaries.push(`カラー変更 ${colorCount}個`);
+    const blockedSuffix = result.blocked.length ? `（${result.blocked.length}個は変換せず）` : '';
+    toast(`${summaries.join(' / ')}を反映しました${blockedSuffix}`);
+    logDiagnostic('course-part-color-command', {
+      source,
+      behavior: state.straightColorBehavior,
+      paintColorKey: state.paintColorKey,
+      changes: result.changes,
+      blocked: result.blocked
+    }, { category: 'course-part', captureState: true });
     persistLocal(); updateUI(); render();
+    return true;
+  }
+
+  function applyExactColor(ids, colorKey) {
+    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(part => part.id === id));
+    return applyColorRequestsToLayout(unique.map(partId => ({ partId, colorKey })), { source: 'exact-color' });
+  }
+
+  function cyclePartsColor(ids) {
+    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(part => part.id === id));
+    if (!unique.length) return toast('カラー変更するパーツを選択してください');
+    const requests = unique.map(partId => {
+      const part = findLayoutPartById(partId);
+      const currentIndex = Math.max(0, COLORS.findIndex(color => color.key === (part?.colorKey || 'default')));
+      return { partId, colorKey: COLORS[(currentIndex + 1) % COLORS.length].key };
+    });
+    return applyColorRequestsToLayout(requests, { source: 'cycle-color' });
   }
 
   function rotateCurrent(delta, inputMethod = 'button') {
