@@ -48,12 +48,15 @@
   if (!INTERFERENCE_OBSTACLES) throw new Error('interference-obstacles.jsが読み込まれていません');
   const DIAGNOSTIC_LOGGER = window.M4WD_DIAGNOSTIC_LOGGER;
   if (!DIAGNOSTIC_LOGGER) throw new Error('diagnostic-logger.jsが読み込まれていません');
+  const STRAIGHT_COLOR_BEHAVIOR = window.M4WD_STRAIGHT_COLOR_BEHAVIOR;
+  if (!STRAIGHT_COLOR_BEHAVIOR) throw new Error('straight-color-behavior.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
   const PART_MENU_ORDER = CATALOG.MENU_ORDER;
   const START_DEF = PARTS.start;
   const HISTORY_LIMIT = 20;
+  const STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY = 'mini4wd-straight-color-behavior-v1';
   // 描画設定を1か所に集約し、将来の「継ぎ目表示」切替に備える。
   const RENDER_FEATURES = Object.freeze({ partSeams: true });
   const partAssetCache = new Map();
@@ -97,6 +100,8 @@
     selectedType: 'start',
     selectedIds: [],
     hoveredPartId: null,
+    paintColorKey: 'red',
+    straightColorBehavior: STRAIGHT_COLOR_BEHAVIOR.DEFAULT_MODE,
     rotation: 0,
     activeConnection: null,
     connections: [],
@@ -305,7 +310,7 @@
       'modeBadge','statusBar','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
-      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
+      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorPanel','colorLegend','straightColorBehaviorSelect','colorBehaviorHint','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
@@ -321,6 +326,7 @@
   function init() {
     cacheElements();
     initializeDiagnosticLogger();
+    restoreStraightColorBehaviorPreference();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
     wheelRotation = WHEEL_ROTATION.createWheelRotationAccumulator(30);
