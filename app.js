@@ -5318,17 +5318,6 @@
     return applyColorRequestsToLayout(unique.map(partId => ({ partId, colorKey })), { source: 'exact-color' });
   }
 
-  function cyclePartsColor(ids) {
-    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(part => part.id === id));
-    if (!unique.length) return toast('カラー変更するパーツを選択してください');
-    const requests = unique.map(partId => {
-      const part = findLayoutPartById(partId);
-      const currentIndex = Math.max(0, COLORS.findIndex(color => color.key === (part?.colorKey || 'default')));
-      return { partId, colorKey: COLORS[(currentIndex + 1) % COLORS.length].key };
-    });
-    return applyColorRequestsToLayout(requests, { source: 'cycle-color' });
-  }
-
   function rotateCurrent(delta, inputMethod = 'button') {
     if (state.wizard.active) return;
     if (state.mode === 'start' && !state.start) {
