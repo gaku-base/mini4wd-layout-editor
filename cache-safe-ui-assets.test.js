@@ -14,6 +14,11 @@ test('critical overlap fix stays static while all mutable UI entry assets share 
     /<style id="criticalUiOverlapFix">[\s\S]*#subEditModeBar:not\(\[hidden\]\) ~ \.instruction-card \{ display: none !important; \}[\s\S]*<\/style>/
   );
   assert.match(index, new RegExp(`styles\\.css\\?v=${HEALTH_CACHE}`));
+  assert.match(index, new RegExp(`<link id="editorThemeStyles" rel="stylesheet" href="editor-theme\\.css\\?v=${HEALTH_CACHE}" \\/>`));
+  assert.ok(
+    index.indexOf('styles.css?v=' + HEALTH_CACHE) < index.indexOf('editor-theme.css?v=' + HEALTH_CACHE),
+    'orange editor theme must be render-blocking and ordered after the legacy base stylesheet before first paint'
+  );
   assert.match(index, new RegExp(`wheel-rotation\\.js\\?v=${HEALTH_CACHE}`));
   assert.doesNotMatch(index, /v1\.1-rc4-20260820-toolbar-trash1/);
 
