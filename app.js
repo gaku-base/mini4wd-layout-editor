@@ -5229,7 +5229,7 @@
     const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
     if (!unique.length) return toast('カラー変更するパーツを選択してください');
 
-    snapshot();
+    let snapshotTaken = false;
     let changedCount = 0;
     let semanticCount = 0;
     const blockedReasons = [];
@@ -5241,6 +5241,7 @@
       const nextColorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
 
       if (id === 'start') {
+        if (!snapshotTaken) { snapshot(); snapshotTaken = true; }
         current.colorKey = nextColorKey;
         changedCount += 1;
         continue;
@@ -5262,6 +5263,7 @@
         continue;
       }
 
+      if (!snapshotTaken) { snapshot(); snapshotTaken = true; }
       state.parts = result.parts;
       state.connections = LAYOUT_GRAPH.dedupeEdges(result.edges);
       changedCount += 1;
@@ -5269,7 +5271,6 @@
     }
 
     if (!changedCount) {
-      state.history.pop();
       const reason = blockedReasons[0];
       toast(colorBehaviorBlockedMessage(reason));
       updateUI(); render();
