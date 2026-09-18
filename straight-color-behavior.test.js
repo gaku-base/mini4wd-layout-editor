@@ -61,7 +61,7 @@ function edge(partAId, connectorAId, partBId, connectorBId, createdOrder = 1) {
   return { partAId, connectorAId, partBId, connectorBId, createdOrder };
 }
 
-function base(start, parts, edges, partId, nextColorKey, mode = behavior.MODE_SLOPE_BY_COLOR) {
+function apply(start, parts, edges, partId, nextColorKey, mode = behavior.MODE_SLOPE_BY_COLOR) {
   return behavior.applyColorChange({ mode, start, parts, edges, partId, nextColorKey, catalog, graph });
 }
 
@@ -71,17 +71,18 @@ test('mode defaults to slope-by-color and color-only is explicit', () => {
   assert.equal(behavior.normalizeMode(behavior.MODE_COLOR_ONLY), behavior.MODE_COLOR_ONLY);
 });
 
-test('color-only mode keeps a red or blue straight as a straight', () => {
+test('color-only mode keeps red and blue straight parts as straight parts', () => {
   const start = part('start', 'start');
   const straight = part('s1', 'straight');
   const edges = [edge('start', 'b', 's1', 'a')];
 
-  const red = base(start, [straight], edges, 's1', 'red', behavior.MODE_COLOR_ONLY);
+  const red = apply(start, [straight], edges, 's1', 'red', behavior.MODE_COLOR_ONLY);
   assert.equal(red.status, 'colored');
   assert.equal(red.parts[0].type, 'straight');
   assert.equal(red.parts[0].colorKey, 'red');
 
-  const blue = base(start, red.parts, red.edges, 's1', 'blue', behavior.MODE_COLOR_ONLY);
+  const blue = apply(start, red.parts, red.edges, 's1', 'blue', behavior.MODE_COLOR_ONLY);
+  assert.equal(blue.status, 'colored');
   assert.equal(blue.parts[0].type, 'straight');
   assert.equal(blue.parts[0].colorKey, 'blue');
 });
@@ -95,18 +96,16 @@ test('red straight becomes an uphill slope in Start travel direction and raises 
     edge('s1', 'b', 's2', 'a', 2)
   ];
 
-  const result = base(start, [straight, downstream], edges, 's1', 'red');
+  const result = apply(start, [straight, downstream], edges, 's1', 'red');
 
   assert.equal(result.status, 'changed');
   const slope = result.parts.find(value => value.id === 's1');
-  const after = result.parts.find(value => value.id === 's2');
   assert.equal(slope.type, 'slope');
   assert.equal(slope.colorKey, 'red');
-  assert.equal(slope.colorSlopeRole, 'up');
   assert.equal(slope.entryConnectorId, 'a', 'Start側が低端aになる');
   assert.equal(slope.rotation, 0);
   assert.equal(slope.zMm, 0);
-  assert.equal(after.zMm, 115);
+  assert.equal(result.parts.find(value => value.id === 's2').zMm, 115);
   assert.deepEqual(result.edges, edges);
 });
 
@@ -119,7 +118,7 @@ test('red conversion reverses geometry and connector IDs when Start reaches the 
     edge('s1', 'a', 's2', 'b', 2)
   ];
 
-  const result = base(start, [straight, downstream], edges, 's1', 'red');
+  const result = apply(start, [straight, downstream], edges, 's1', 'red');
   assert.equal(result.status, 'changed');
   const slope = result.parts.find(value => value.id === 's1');
   assert.equal(slope.type, 'slope');
@@ -141,11 +140,11 @@ test('blue straight becomes downhill when it is already on the 115mm level', () 
     edge('target', 'b', 'downstream', 'a', 3)
   ];
 
-  const result = base(start, [up, target, downstream], edges, 'target', 'blue');
+  const result = apply(start, [up, target, downstream], edges, 'target', 'blue');
   assert.equal(result.status, 'changed');
   const slope = result.parts.find(value => value.id === 'target');
   assert.equal(slope.type, 'slope');
-  assert.equal(slope.colorSlopeRole, 'down');
+  assert.equal(slope.colorKey, 'blue');
   assert.equal(slope.entryConnectorId, 'b', 'Start側が高端bになる');
   assert.equal(slope.rotation, 180);
   assert.equal(slope.zMm, 0);
@@ -159,14 +158,14 @@ test('blue conversion at ground level is fail-closed instead of creating negativ
   const target = part('target', 'straight');
   const edges = [edge('start', 'b', 'target', 'a')];
 
-  const result = base(start, [target], edges, 'target', 'blue');
+  const result = apply(start, [target], edges, 'target', 'blue');
   assert.equal(result.status, 'blocked');
   assert.equal(result.reason, 'below-ground');
   assert.equal(result.parts[0].type, 'straight');
   assert.equal(result.parts[0].colorKey, 'default');
 });
 
-test('a single uphill conversion in a closed loop keeps Start fixed and reports the unresolved loop-height conflict', () => {
+test('a single uphill conversion in a closed loop propagates from Start exit and leaves only the return-height conflict', () => {
   const start = part('start', 'start');
   const target = part('target', 'straight');
   const downstream = part('downstream', 'straight');
@@ -176,16 +175,16 @@ test('a single uphill conversion in a closed loop keeps Start fixed and reports 
     edge('downstream', 'b', 'start', 'a', 3)
   ];
 
-  const result = base(start, [target, downstream], edges, 'target', 'red');
+  const result = apply(start, [target, downstream], edges, 'target', 'red');
   assert.equal(result.status, 'changed');
   assert.equal(result.parts.find(value => value.id === 'downstream').zMm, 115);
-  assert.ok(result.conflicts.length >= 1, 'down slope is still needed before returning to Start height');
+  assert.ok(result.conflicts.length >= 1, '青の下りSlopeを追加するまでStart入口との高さ差を残す');
 });
 
-test('color-derived slope can change from red/up to blue/down and follows the same Start direction', () => {
+test('red slope created by the color rule can be cycled to blue and reorients downhill', () => {
   const start = part('start', 'start');
-  const up = part('upstream-up', 'slope', 0, 0, { entryConnectorId: 'a' });
-  const derived = part('target', 'slope', 0, 115, { colorKey: 'red', colorSlopeRole: 'up', entryConnectorId: 'a' });
+  const upstreamUp = part('upstream-up', 'slope', 0, 0, { entryConnectorId: 'a' });
+  const target = part('target', 'slope', 0, 115, { colorKey: 'red', entryConnectorId: 'a' });
   const downstream = part('downstream', 'straight', 0, 230);
   const edges = [
     edge('start', 'b', 'upstream-up', 'a', 1),
@@ -193,50 +192,43 @@ test('color-derived slope can change from red/up to blue/down and follows the sa
     edge('target', 'b', 'downstream', 'a', 3)
   ];
 
-  const result = base(start, [up, derived, downstream], edges, 'target', 'blue');
+  const result = apply(start, [upstreamUp, target, downstream], edges, 'target', 'blue');
   assert.equal(result.status, 'changed');
-  const target = result.parts.find(value => value.id === 'target');
-  assert.equal(target.type, 'slope');
-  assert.equal(target.colorKey, 'blue');
-  assert.equal(target.colorSlopeRole, 'down');
-  assert.equal(target.entryConnectorId, 'b');
+  const changed = result.parts.find(value => value.id === 'target');
+  assert.equal(changed.type, 'slope');
+  assert.equal(changed.colorKey, 'blue');
+  assert.equal(changed.entryConnectorId, 'b');
   assert.equal(result.parts.find(value => value.id === 'downstream').zMm, 0);
 });
 
-test('in default mode a color-derived slope returns to a straight when cycling beyond red/blue', () => {
+test('a manually placed default-color slope only changes color on its first red selection', () => {
   const start = part('start', 'start');
-  const up = part('up', 'slope', 0, 0, { colorKey: 'red', colorSlopeRole: 'up', entryConnectorId: 'a' });
-  const downstream = part('downstream', 'straight', 0, 115);
-  const edges = [
-    edge('start', 'b', 'up', 'a', 1),
-    edge('up', 'b', 'downstream', 'a', 2)
-  ];
-
-  const result = base(start, [up, downstream], edges, 'up', 'orange');
-  assert.equal(result.status, 'changed');
-  const target = result.parts.find(value => value.id === 'up');
-  assert.equal(target.type, 'straight');
-  assert.equal(target.colorKey, 'orange');
-  assert.equal(target.colorSlopeRole, undefined);
-  assert.equal(result.parts.find(value => value.id === 'downstream').zMm, 0);
-});
-
-test('color-only recoloring never changes an existing color-derived slope and removes automatic semantic ownership', () => {
-  const start = part('start', 'start');
-  const derived = part('target', 'slope', 0, 0, { colorKey: 'red', colorSlopeRole: 'up', entryConnectorId: 'a' });
+  const slope = part('target', 'slope', 0, 0, { entryConnectorId: 'a' });
   const edges = [edge('start', 'b', 'target', 'a')];
 
-  const result = base(start, [derived], edges, 'target', 'blue', behavior.MODE_COLOR_ONLY);
+  const result = apply(start, [slope], edges, 'target', 'red');
   assert.equal(result.status, 'colored');
+  assert.equal(result.semanticChange, false);
   assert.equal(result.parts[0].type, 'slope');
-  assert.equal(result.parts[0].colorKey, 'blue');
-  assert.equal(result.parts[0].colorSlopeRole, undefined);
+  assert.equal(result.parts[0].rotation, 0);
+  assert.equal(result.parts[0].colorKey, 'red');
+});
+
+test('non red or blue colors never change part type', () => {
+  const start = part('start', 'start');
+  const straight = part('target', 'straight');
+  const edges = [edge('start', 'b', 'target', 'a')];
+
+  const result = apply(start, [straight], edges, 'target', 'orange');
+  assert.equal(result.status, 'colored');
+  assert.equal(result.parts[0].type, 'straight');
+  assert.equal(result.parts[0].colorKey, 'orange');
 });
 
 test('semantic conversion is blocked when the target route is not connected to Start', () => {
   const start = part('start', 'start');
   const target = part('target', 'straight');
-  const result = base(start, [target], [], 'target', 'red');
+  const result = apply(start, [target], [], 'target', 'red');
   assert.equal(result.status, 'blocked');
   assert.equal(result.reason, 'not-connected-to-start');
   assert.equal(result.parts[0].type, 'straight');
