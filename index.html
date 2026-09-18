@@ -228,6 +228,14 @@
           <button id="convertStartBtn" class="button full-button" type="button" hidden>スタートに変更</button>
           <button id="deleteSelectionBtn" class="button danger-button full-button" type="button">選択パーツを削除</button>
           <button id="colorSelectionBtn" class="button full-button" type="button">選択パーツの色を変更</button>
+          <div class="straight-color-behavior-control">
+            <label class="control-label" for="straightColorBehaviorSelect">ストレートの赤・青</label>
+            <select id="straightColorBehaviorSelect" class="full-control">
+              <option value="slope-by-color">デフォルト（赤=上り / 青=下り）</option>
+              <option value="color-only">カラーのみ（パーツ変更なし）</option>
+            </select>
+            <p id="straightColorBehaviorHint" class="control-note">Startからの進行方向を基準に、赤は上りSlope、青は下りSlopeへ変更します。</p>
+          </div>
         </section>
 
         <section id="obstacleEditorPanel" class="panel obstacle-panel" hidden>
@@ -389,6 +397,7 @@
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
   <script src="part-render-pose.js"></script>
+  <script src="straight-color-behavior.js"></script>
   <script src="placement-proposal.js"></script>
   <script src="corner-variant.js"></script>
   <script src="fast-path-placement.js"></script>
