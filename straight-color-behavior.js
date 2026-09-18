@@ -20,16 +20,6 @@
     return `${String(partId)}\u0000${String(connectorId)}`;
   }
 
-  function otherEndpoint(edge, partId, connectorId) {
-    if (String(edge.partAId) === String(partId) && String(edge.connectorAId) === String(connectorId)) {
-      return { partId: String(edge.partBId), connectorId: String(edge.connectorBId) };
-    }
-    if (String(edge.partBId) === String(partId) && String(edge.connectorBId) === String(connectorId)) {
-      return { partId: String(edge.partAId), connectorId: String(edge.connectorAId) };
-    }
-    return null;
-  }
-
   function connectorMapForPart(part, catalog, graph) {
     const definition = catalog?.[part?.type];
     if (!definition || !graph?.connectorsForDefinition) return new Map();
@@ -53,7 +43,6 @@
     if (!target) return { status: 'unresolved', reason: 'missing-target' };
 
     const allParts = [{ ...start, id: 'start', type: 'start' }, ...(parts || [])];
-    const byId = new Map(allParts.map(part => [String(part.id), part]));
     const adjacency = new Map();
     const addLink = (left, right) => {
       if (!adjacency.has(left)) adjacency.set(left, new Set());
@@ -157,7 +146,7 @@
     }));
   }
 
-  function transformPartDefinition({ part, nextType, desiredEntryConnectorId, catalog, graph, edges }) {
+  function transformPartDefinition({ part, nextType, desiredEntryConnectorId, start, parts, catalog, graph, edges }) {
     const currentDefinition = catalog?.[part?.type];
     const nextDefinition = catalog?.[nextType];
     if (!currentDefinition || !nextDefinition) return { status: 'blocked', reason: 'missing-definition' };
@@ -168,8 +157,8 @@
 
     const direction = entryConnectorFromStart({
       targetPartId: part.id,
-      start: arguments[0].start,
-      parts: arguments[0].parts,
+      start,
+      parts,
       edges,
       catalog,
       graph
@@ -233,6 +222,8 @@
     const assigned = new Map([['start', Number(start.zMm) || 0]]);
     const queue = ['start'];
     const conflicts = [];
+    const startExit = startExitConnector(start, catalog, graph);
+    const startExitId = startExit ? String(startExit.id) : null;
 
     while (queue.length) {
       const partId = queue.shift();
@@ -240,7 +231,8 @@
       const partZ = assigned.get(partId);
       if (!part) continue;
 
-      for (const link of incident.get(partId) || []) {
+      const links = (incident.get(partId) || []).filter(link => partId !== 'start' || !startExitId || link.connectorId === startExitId);
+      for (const link of links) {
         const other = byId.get(link.otherPartId);
         if (!other) continue;
         const local = connectorById(part, link.connectorId, catalog, graph);
