@@ -58,6 +58,7 @@ jobs:
           test -f browser-slope-underpass-smoke.js
           test -f slope-height-propagation-runtime.js
           test -f browser-slope-retrofit-smoke.js
+          test -f browser-straight-color-behavior-smoke.js
           test -f browser-bank20-projection-smoke.js
           test -f browser-connector-target-lock-smoke.js
           test -f browser-start-boundary-snap-smoke.js
@@ -164,6 +165,7 @@ jobs:
           node browser-ui-controls-smoke.js
           node browser-slope-visibility-smoke.js
           node browser-slope-underpass-smoke.js
+          node browser-straight-color-behavior-smoke.js
           node browser-bank20-projection-smoke.js
           node browser-connector-target-lock-smoke.js
           node browser-start-boundary-snap-smoke.js
