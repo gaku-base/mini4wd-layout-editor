@@ -611,7 +611,13 @@
     els.exportRangeCancelBtn?.addEventListener('click', () => els.exportRangeDialog.close());
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
-    els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.colorSelectionBtn.addEventListener('click', () => applyExactColor(state.selectedIds, state.paintColorKey));
+    els.straightColorBehaviorSelect?.addEventListener('change', () => setStraightColorBehavior(els.straightColorBehaviorSelect.value));
+    els.colorLegend?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('[data-color-key]') : null;
+      if (!button) return;
+      setPaintColor(button.dataset.colorKey, { applySelection: true });
+    });
     els.convertStartBtn?.addEventListener('click', () => convertStraightToStart(state.selectedIds[0]));
     els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerVariant);
     document.addEventListener('click', e => {
@@ -4362,7 +4368,7 @@
         else {
           const ids = isSelected(hit.id) && state.selectedIds.length > 1 ? [...state.selectedIds] : [hit.id];
           setSelection(ids);
-          cyclePartsColor(ids);
+          applyExactColor(ids, state.paintColorKey);
         }
       } else {
         beginMarquee(world, e.shiftKey);
@@ -4667,7 +4673,7 @@
       if (state.pointer.marqueeAdd) setSelection([...new Set([...state.selectedIds, ...ids])]);
       else setSelection(ids);
       if (state.mode === 'delete' && ids.length) deleteParts(state.selectedIds);
-      else if (state.mode === 'color' && ids.length) cyclePartsColor(state.selectedIds);
+      else if (state.mode === 'color' && ids.length) applyExactColor(state.selectedIds, state.paintColorKey);
     }
 
     if (movedIds.length) {
@@ -4937,7 +4943,7 @@
     if (key === 'w') { e.preventDefault(); setMode('delete'); return; }
     if (key === 'e') {
       e.preventDefault();
-      if (state.mode === 'color' && state.selectedIds.length) cyclePartsColor(state.selectedIds);
+      if (state.mode === 'color' && state.selectedIds.length) applyExactColor(state.selectedIds, state.paintColorKey);
       else setMode('color');
       return;
     }
@@ -4980,7 +4986,7 @@
       if (state.mode === 'start') placeStartLane();
       else if (state.mode === 'place') placePartAtCursor();
       else if (state.mode === 'delete' && state.selectedIds.length) deleteParts(state.selectedIds);
-      else if (state.mode === 'color' && state.selectedIds.length) cyclePartsColor(state.selectedIds);
+      else if (state.mode === 'color' && state.selectedIds.length) applyExactColor(state.selectedIds, state.paintColorKey);
       updateUI(); render();
       return;
     }
