@@ -6777,7 +6777,8 @@
     } else if (state.mode === 'delete') {
       els.instruction.innerHTML = '<strong>W：パーツ削除</strong><span>クリックで1個削除・Shift+クリックで複数選択・範囲ドラッグでまとめて削除</span>';
     } else if (state.mode === 'color') {
-      els.instruction.innerHTML = '<strong>E：カラー変更</strong><span>クリックで色を順送り・Shift+クリック／範囲ドラッグで複数変更</span>';
+      const paintName = COLORS.find(color => color.key === state.paintColorKey)?.name || '標準（グレー）';
+      els.instruction.innerHTML = `<strong>E：カラー変更</strong><span>現在：${paintName}　色パレットで選択・クリック／範囲ドラッグで適用</span>`;
     } else if (state.mode === 'boundary') {
       els.instruction.innerHTML = '<strong>設置範囲設定</strong><span>左パネルのmm入力で設置範囲を変更。既存コースは移動しません。</span>';
     } else if (state.mode === 'cutout') {
@@ -6794,6 +6795,13 @@
     els.redoBtn.disabled = !state.future.length;
     els.deleteSelectionBtn.disabled = !state.selectedIds.length;
     els.colorSelectionBtn.disabled = !state.selectedIds.length;
+    const paintColorName = COLORS.find(color => color.key === state.paintColorKey)?.name || '標準（グレー）';
+    els.colorSelectionBtn.textContent = `選択を「${paintColorName}」に変更`;
+    if (els.straightColorBehaviorSelect && els.straightColorBehaviorSelect.value !== state.straightColorBehavior) {
+      els.straightColorBehaviorSelect.value = state.straightColorBehavior;
+    }
+    if (els.colorBehaviorHint) els.colorBehaviorHint.textContent = colorBehaviorHintText();
+    syncColorLegendSelection();
 
     if (selectedObstacle()) {
       const obstacle = selectedObstacle();
