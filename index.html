@@ -107,8 +107,14 @@
           </div>
         </section>
 
-        <section class="panel compact-panel">
-          <div class="panel-heading"><h2>カラー</h2></div>
+        <section id="colorPanel" class="panel color-panel">
+          <div class="panel-heading"><h2>カラー</h2><span class="hint">色を直接選択</span></div>
+          <label class="control-label" for="straightColorBehaviorSelect">ストレートの赤・青</label>
+          <select id="straightColorBehaviorSelect" class="full-control">
+            <option value="slope-by-color" selected>デフォルト（赤=上り／青=下り）</option>
+            <option value="color-only">カラーでのパーツ変更なし</option>
+          </select>
+          <p id="colorBehaviorHint" class="color-behavior-hint">ストレートのみ、赤で上りスロープ・青で下りスロープへ変更します。</p>
           <div id="colorLegend" class="color-legend" aria-label="パーツカラー一覧"></div>
         </section>
       </aside>
@@ -388,6 +394,7 @@
 
   <script src="part-catalog.js"></script>
   <script src="layout-graph.js"></script>
+  <script src="straight-color-behavior.js"></script>
   <script src="part-render-pose.js"></script>
   <script src="placement-proposal.js"></script>
   <script src="corner-variant.js"></script>
