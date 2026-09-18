@@ -299,6 +299,36 @@
     };
   }
 
+  function restoreStraightColorBehaviorPreference() {
+    try {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(
+        window.localStorage?.getItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY)
+      );
+    } catch (_) {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.DEFAULT_MODE;
+    }
+  }
+
+  function persistStraightColorBehaviorPreference() {
+    try {
+      window.localStorage?.setItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY, state.straightColorBehavior);
+    } catch (_) {}
+  }
+
+  function colorBehaviorHintText() {
+    return state.straightColorBehavior === STRAIGHT_COLOR_BEHAVIOR.MODE_COLOR_ONLY
+      ? '赤・青を選んでもパーツ種類は変更せず、ストレートの色だけを変更します。'
+      : 'ストレートのみ、赤で上りスロープ・青で下りスロープへ変更します。';
+  }
+
+  function setStraightColorBehavior(value, { persist = true } = {}) {
+    state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(value);
+    if (persist) persistStraightColorBehaviorPreference();
+    updateUI();
+    render();
+    return state.straightColorBehavior;
+  }
+
   function cacheElements() {
     const ids = [
       'courseCanvas','canvasWrap','canvasLabelEditor','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
@@ -472,8 +502,29 @@
   function buildColorLegend() {
     els.colorLegend.innerHTML = COLORS.map(color => {
       const sample = color.base || '#d9d9d5';
-      return `<span class="color-chip"><i style="background:${sample}"></i>${color.name}</span>`;
+      const active = color.key === state.paintColorKey;
+      return `<button class="color-chip${active ? ' active' : ''}" type="button" data-color-key="${color.key}" aria-pressed="${active}">
+        <i style="background:${sample}"></i><span>${color.name}</span>
+      </button>`;
     }).join('');
+  }
+
+  function syncColorLegendSelection() {
+    els.colorLegend?.querySelectorAll('[data-color-key]').forEach(button => {
+      const active = button.dataset.colorKey === state.paintColorKey;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function setPaintColor(colorKey, { applySelection = true } = {}) {
+    if (!COLORS.some(color => color.key === colorKey)) return false;
+    state.paintColorKey = colorKey;
+    syncColorLegendSelection();
+    if (applySelection && state.selectedIds.length) return applyExactColor(state.selectedIds, colorKey);
+    updateUI();
+    render();
+    return true;
   }
 
   function on(el, eventName, handler, options) {
