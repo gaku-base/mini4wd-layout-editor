@@ -6,6 +6,7 @@ const fs = require('node:fs');
 
 const theme = fs.readFileSync(require.resolve('./editor-theme.css'), 'utf8');
 const bootstrap = fs.readFileSync(require.resolve('./editor-extensions-bootstrap.js'), 'utf8');
+const index = fs.readFileSync(require.resolve('./index.html'), 'utf8');
 
 test('editor loads the shared orange-black theme after simple-ui installs', () => {
   assert.match(bootstrap, /loadScript\(`simple-ui\.js\?v=\$\{CACHE_KEY\}`/);
@@ -18,6 +19,18 @@ test('editor theme uses black surfaces with orange as the primary and focus acce
   assert.match(theme, /--primary:\s*#ff9f1a/);
   assert.match(theme, /--accent:\s*#ff9f1a/);
   assert.match(theme, /\.topbar[\s\S]*background:\s*linear-gradient\(180deg, #0b0e12, #07090c\)/);
+});
+
+test('first paint uses the same orange brand treatment from the document head before deferred theme boot', () => {
+  const headEnd = index.indexOf('</head>');
+  const criticalStyle = index.indexOf('id="criticalEditorBrandFirstPaint"');
+  const bodyStart = index.indexOf('<body>');
+  assert.ok(criticalStyle >= 0 && criticalStyle < headEnd && criticalStyle < bodyStart);
+  assert.match(index, /#criticalEditorBrandFirstPaint|id="criticalEditorBrandFirstPaint"/);
+  assert.match(index, /\.brand-mark\s*\{[\s\S]*background:\s*linear-gradient\(180deg, #ffad35, #f18800\)[\s\S]*color:\s*#0b0d10/);
+  assert.match(index, /\.version\s*\{\s*color:\s*#ff9f1a;\s*\}/);
+  assert.match(theme, /\.brand-mark,[\s\S]*background:\s*linear-gradient\(180deg, #ffad35, #f18800\)/);
+  assert.match(theme, /\.version,[\s\S]*color:\s*var\(--primary\) !important/);
 });
 
 test('active editor controls use orange surfaces with dark readable text', () => {
