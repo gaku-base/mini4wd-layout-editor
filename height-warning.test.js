@@ -44,4 +44,5 @@ test('12. warning outline changes no fill or lane-boundary color', () => {
 });
 test('13. warning outline does not change connector rendering', () => assert.doesNotMatch(outlineSource, /connector|endpoint|connection/));
 test('14. warning outline is a solid red line rather than a flashing or dashed box', () => assert.doesNotMatch(outlineSource, /setLineDash|strokeRect/));
+test('14b. interference warning outline is half the previous 3px screen width', () => assert.match(outlineSource, /c\.lineWidth = 1\.5 \/ Math\.max\(state\.view\.scale, \.15\)/));
 test('15. warning drawing stays out of PNG export rendering', () => assert.match(source, /if \(!options\.exportMode\) drawLayoutWarnings\(c\)/));
