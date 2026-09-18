@@ -5232,6 +5232,7 @@
     let snapshotTaken = false;
     let changedCount = 0;
     let semanticCount = 0;
+    const changedIds = [];
     const blockedReasons = [];
 
     for (const id of unique) {
@@ -5244,6 +5245,7 @@
         if (!snapshotTaken) { snapshot(); snapshotTaken = true; }
         current.colorKey = nextColorKey;
         changedCount += 1;
+        changedIds.push(id);
         continue;
       }
 
@@ -5267,6 +5269,7 @@
       state.parts = result.parts;
       state.connections = LAYOUT_GRAPH.dedupeEdges(result.edges);
       changedCount += 1;
+      changedIds.push(id);
       if (result.semanticChange) semanticCount += 1;
     }
 
@@ -5283,7 +5286,7 @@
     state.ghostProposal = null;
     state.ghostProposalKey = null;
 
-    const first = findLayoutPartById(unique.find(id => findLayoutPartById(id)) || unique[0]);
+    const first = findLayoutPartById(changedIds[0]);
     const color = COLORS.find(c => c.key === first?.colorKey)?.name || '標準（グレー）';
     if (blockedReasons.length) {
       toast(`${changedCount}個を変更、${blockedReasons.length}個はSlope変換できませんでした`);
