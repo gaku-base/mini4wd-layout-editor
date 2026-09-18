@@ -48,12 +48,15 @@
   if (!INTERFERENCE_OBSTACLES) throw new Error('interference-obstacles.jsが読み込まれていません');
   const DIAGNOSTIC_LOGGER = window.M4WD_DIAGNOSTIC_LOGGER;
   if (!DIAGNOSTIC_LOGGER) throw new Error('diagnostic-logger.jsが読み込まれていません');
+  const STRAIGHT_COLOR_BEHAVIOR = window.M4WD_STRAIGHT_COLOR_BEHAVIOR;
+  if (!STRAIGHT_COLOR_BEHAVIOR) throw new Error('straight-color-behavior.jsが読み込まれていません');
   const TRACK_WIDTH_CM = CATALOG.TRACK_WIDTH_CM;
   const STRAIGHT_CM = CATALOG.STRAIGHT_CM;
   const PARTS = CATALOG.PARTS;
   const PART_MENU_ORDER = CATALOG.MENU_ORDER;
   const START_DEF = PARTS.start;
   const HISTORY_LIMIT = 20;
+  const STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY = 'mini4wd-straight-color-behavior-v1';
   // 描画設定を1か所に集約し、将来の「継ぎ目表示」切替に備える。
   const RENDER_FEATURES = Object.freeze({ partSeams: true });
   const partAssetCache = new Map();
@@ -97,6 +100,8 @@
     selectedType: 'start',
     selectedIds: [],
     hoveredPartId: null,
+    paintColorKey: 'red',
+    straightColorBehavior: STRAIGHT_COLOR_BEHAVIOR.DEFAULT_MODE,
     rotation: 0,
     activeConnection: null,
     connections: [],
@@ -193,6 +198,8 @@
     const snapshot = {
       currentMainMode: state.mode,
       currentSubMode: state.subEditMode,
+      paintColorKey: state.paintColorKey,
+      straightColorBehavior: state.straightColorBehavior,
       wizardActive: Boolean(state.wizard.active),
       wizardStep: state.wizard.step || null,
       placementMode: state.mode === 'unavailable-draw' ? 'unavailable-area-draw' : state.obstaclePlacement ? 'unavailable-area' : state.mode === 'start' ? 'start' : state.mode === 'place' ? 'course-part' : null,
@@ -294,6 +301,36 @@
     };
   }
 
+  function restoreStraightColorBehaviorPreference() {
+    try {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(
+        window.localStorage?.getItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY)
+      );
+    } catch (_) {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.DEFAULT_MODE;
+    }
+  }
+
+  function persistStraightColorBehaviorPreference() {
+    try {
+      window.localStorage?.setItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY, state.straightColorBehavior);
+    } catch (_) {}
+  }
+
+  function colorBehaviorHintText() {
+    return state.straightColorBehavior === STRAIGHT_COLOR_BEHAVIOR.MODE_COLOR_ONLY
+      ? '赤・青を選んでもパーツ種類は変更せず、ストレートの色だけを変更します。'
+      : 'ストレートのみ、赤で上りスロープ・青で下りスロープへ変更します。';
+  }
+
+  function setStraightColorBehavior(value, { persist = true } = {}) {
+    state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(value);
+    if (persist) persistStraightColorBehaviorPreference();
+    updateUI();
+    render();
+    return state.straightColorBehavior;
+  }
+
   function cacheElements() {
     const ids = [
       'courseCanvas','canvasWrap','canvasLabelEditor','setupDialog','setupForm','fieldWidthInput','fieldHeightInput','gridInput',
@@ -305,7 +342,7 @@
       'modeBadge','statusBar','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
-      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
+      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorPanel','colorLegend','straightColorBehaviorSelect','colorBehaviorHint','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
@@ -321,6 +358,7 @@
   function init() {
     cacheElements();
     initializeDiagnosticLogger();
+    restoreStraightColorBehaviorPreference();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
     wheelRotation = WHEEL_ROTATION.createWheelRotationAccumulator(30);
@@ -466,8 +504,29 @@
   function buildColorLegend() {
     els.colorLegend.innerHTML = COLORS.map(color => {
       const sample = color.base || '#d9d9d5';
-      return `<span class="color-chip"><i style="background:${sample}"></i>${color.name}</span>`;
+      const active = color.key === state.paintColorKey;
+      return `<button class="color-chip${active ? ' active' : ''}" type="button" data-color-key="${color.key}" aria-pressed="${active}">
+        <i style="background:${sample}"></i><span>${color.name}</span>
+      </button>`;
     }).join('');
+  }
+
+  function syncColorLegendSelection() {
+    els.colorLegend?.querySelectorAll('[data-color-key]').forEach(button => {
+      const active = button.dataset.colorKey === state.paintColorKey;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function setPaintColor(colorKey, { applySelection = true } = {}) {
+    if (!COLORS.some(color => color.key === colorKey)) return false;
+    state.paintColorKey = colorKey;
+    syncColorLegendSelection();
+    if (applySelection && state.selectedIds.length) return applyExactColor(state.selectedIds, colorKey);
+    updateUI();
+    render();
+    return true;
   }
 
   function on(el, eventName, handler, options) {
@@ -554,7 +613,13 @@
     els.exportRangeCancelBtn?.addEventListener('click', () => els.exportRangeDialog.close());
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
-    els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.colorSelectionBtn.addEventListener('click', () => applyExactColor(state.selectedIds, state.paintColorKey));
+    els.straightColorBehaviorSelect?.addEventListener('change', () => setStraightColorBehavior(els.straightColorBehaviorSelect.value));
+    els.colorLegend?.addEventListener('click', event => {
+      const button = event.target instanceof Element ? event.target.closest('[data-color-key]') : null;
+      if (!button) return;
+      setPaintColor(button.dataset.colorKey, { applySelection: true });
+    });
     els.convertStartBtn?.addEventListener('click', () => convertStraightToStart(state.selectedIds[0]));
     els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerVariant);
     document.addEventListener('click', e => {
@@ -4305,7 +4370,7 @@
         else {
           const ids = isSelected(hit.id) && state.selectedIds.length > 1 ? [...state.selectedIds] : [hit.id];
           setSelection(ids);
-          cyclePartsColor(ids);
+          applyExactColor(ids, state.paintColorKey);
         }
       } else {
         beginMarquee(world, e.shiftKey);
@@ -4610,7 +4675,7 @@
       if (state.pointer.marqueeAdd) setSelection([...new Set([...state.selectedIds, ...ids])]);
       else setSelection(ids);
       if (state.mode === 'delete' && ids.length) deleteParts(state.selectedIds);
-      else if (state.mode === 'color' && ids.length) cyclePartsColor(state.selectedIds);
+      else if (state.mode === 'color' && ids.length) applyExactColor(state.selectedIds, state.paintColorKey);
     }
 
     if (movedIds.length) {
@@ -4880,7 +4945,7 @@
     if (key === 'w') { e.preventDefault(); setMode('delete'); return; }
     if (key === 'e') {
       e.preventDefault();
-      if (state.mode === 'color' && state.selectedIds.length) cyclePartsColor(state.selectedIds);
+      if (state.mode === 'color' && state.selectedIds.length) applyExactColor(state.selectedIds, state.paintColorKey);
       else setMode('color');
       return;
     }
@@ -4923,7 +4988,7 @@
       if (state.mode === 'start') placeStartLane();
       else if (state.mode === 'place') placePartAtCursor();
       else if (state.mode === 'delete' && state.selectedIds.length) deleteParts(state.selectedIds);
-      else if (state.mode === 'color' && state.selectedIds.length) cyclePartsColor(state.selectedIds);
+      else if (state.mode === 'color' && state.selectedIds.length) applyExactColor(state.selectedIds, state.paintColorKey);
       updateUI(); render();
       return;
     }
@@ -5180,19 +5245,79 @@
     persistLocal(); updateUI(); render();
   }
 
-  function cyclePartsColor(ids) {
-    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
-    if (!unique.length) return toast('カラー変更するパーツを選択してください');
-    snapshot();
-    unique.forEach(id => {
-      const p = findLayoutPartById(id);
-      const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (p.colorKey || 'default')));
-      p.colorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
+  function colorBehaviorBlockedText(blocked = []) {
+    const reason = blocked[0]?.reason || '';
+    if (reason === 'below-floor' || reason === 'downstream-below-floor') return '下りにするとコース高さが0mm未満になるため変更できません';
+    if (reason === 'direction-disconnected') return 'Startからの進行方向を判定できないストレートは変換しません';
+    if (reason === 'direction-ambiguous') return 'Startからの進行方向が複数あるためストレートを変換しません';
+    if (reason === 'downstream-rejoins-start') return '下流側がStartへ回り込む接続では高さを安全に変更できないため変換しません';
+    if (reason === 'banked-straight') return '20度バンク状態のストレートはスロープへ自動変換しません';
+    return '安全に進行方向・高さを確定できないためストレートを変換しません';
+  }
+
+  function applyColorRequestsToLayout(requests, { source = 'color-command' } = {}) {
+    const available = new Set(state.parts.map(part => part.id));
+    if (state.start) available.add('start');
+    const normalizedRequests = (Array.isArray(requests) ? requests : [])
+      .map(request => ({ partId: String(request?.partId || ''), colorKey: String(request?.colorKey || '') }))
+      .filter(request => available.has(request.partId) && COLORS.some(color => color.key === request.colorKey));
+    if (!normalizedRequests.length) {
+      toast('カラー変更するパーツを選択してください');
+      return false;
+    }
+
+    const result = STRAIGHT_COLOR_BEHAVIOR.applyColorRequests({
+      start: state.start,
+      parts: state.parts,
+      edges: state.connections,
+      catalog: PARTS,
+      requests: normalizedRequests,
+      mode: state.straightColorBehavior,
+      graphValue: LAYOUT_GRAPH
     });
-    const first = findLayoutPartById(unique[0]);
-    const color = COLORS.find(c => c.key === first?.colorKey)?.name || '標準（グレー）';
-    toast(`${unique.length}個のカラーを「${color}」へ変更しました`);
+
+    if (!result.changed) {
+      if (result.blocked.length) toast(colorBehaviorBlockedText(result.blocked));
+      else toast('指定したカラーと同じため変更はありません');
+      return false;
+    }
+
+    snapshot();
+    state.start = result.start ? { ...result.start, id: 'start', type: 'start' } : null;
+    state.parts = result.parts;
+    state.connections = result.edges;
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
+    clearSnapTargetChoice();
+    recalculateBankStates();
+    recalculateLayoutWarnings();
+    rebuildActiveConnectionFromTail();
+    const tail = state.parts[state.parts.length - 1];
+    if (tail) state.lastPlacementHeightMm = Number(tail.zMm) || 0;
+
+    const upCount = result.changes.filter(change => change.kind === 'slope' && change.direction === 'up').length;
+    const downCount = result.changes.filter(change => change.kind === 'slope' && change.direction === 'down').length;
+    const colorCount = result.changes.filter(change => change.kind === 'color').length;
+    const summaries = [];
+    if (upCount) summaries.push(`上りスロープ ${upCount}個`);
+    if (downCount) summaries.push(`下りスロープ ${downCount}個`);
+    if (colorCount) summaries.push(`カラー変更 ${colorCount}個`);
+    const blockedSuffix = result.blocked.length ? `（${result.blocked.length}個は変換せず）` : '';
+    toast(`${summaries.join(' / ')}を反映しました${blockedSuffix}`);
+    logDiagnostic('course-part-color-command', {
+      source,
+      behavior: state.straightColorBehavior,
+      paintColorKey: state.paintColorKey,
+      changes: result.changes,
+      blocked: result.blocked
+    }, { category: 'course-part', captureState: true });
     persistLocal(); updateUI(); render();
+    return true;
+  }
+
+  function applyExactColor(ids, colorKey) {
+    const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(part => part.id === id));
+    return applyColorRequestsToLayout(unique.map(partId => ({ partId, colorKey })), { source: 'exact-color' });
   }
 
   function rotateCurrent(delta, inputMethod = 'button') {
@@ -6643,7 +6768,8 @@
     } else if (state.mode === 'delete') {
       els.instruction.innerHTML = '<strong>W：パーツ削除</strong><span>クリックで1個削除・Shift+クリックで複数選択・範囲ドラッグでまとめて削除</span>';
     } else if (state.mode === 'color') {
-      els.instruction.innerHTML = '<strong>E：カラー変更</strong><span>クリックで色を順送り・Shift+クリック／範囲ドラッグで複数変更</span>';
+      const paintName = COLORS.find(color => color.key === state.paintColorKey)?.name || '標準（グレー）';
+      els.instruction.innerHTML = `<strong>E：カラー変更</strong><span>現在：${paintName}　色パレットで選択・クリック／範囲ドラッグで適用</span>`;
     } else if (state.mode === 'boundary') {
       els.instruction.innerHTML = '<strong>設置範囲設定</strong><span>左パネルのmm入力で設置範囲を変更。既存コースは移動しません。</span>';
     } else if (state.mode === 'cutout') {
@@ -6660,6 +6786,13 @@
     els.redoBtn.disabled = !state.future.length;
     els.deleteSelectionBtn.disabled = !state.selectedIds.length;
     els.colorSelectionBtn.disabled = !state.selectedIds.length;
+    const paintColorName = COLORS.find(color => color.key === state.paintColorKey)?.name || '標準（グレー）';
+    els.colorSelectionBtn.textContent = `選択を「${paintColorName}」に変更`;
+    if (els.straightColorBehaviorSelect && els.straightColorBehaviorSelect.value !== state.straightColorBehavior) {
+      els.straightColorBehaviorSelect.value = state.straightColorBehavior;
+    }
+    if (els.colorBehaviorHint) els.colorBehaviorHint.textContent = colorBehaviorHintText();
+    syncColorLegendSelection();
 
     if (selectedObstacle()) {
       const obstacle = selectedObstacle();
@@ -6820,6 +6953,9 @@
       },
       loadState: data => applySerialized(data, false),
       setMode,
+      setStraightColorBehavior: value => setStraightColorBehavior(value),
+      setPaintColor: value => setPaintColor(value, { applySelection: false }),
+      applyColorToSelection: colorKey => applyExactColor(state.selectedIds, colorKey),
       rewindLastPart,
       deleteParts,
       convertStraightToStart,
