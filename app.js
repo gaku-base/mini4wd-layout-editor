@@ -198,6 +198,8 @@
     const snapshot = {
       currentMainMode: state.mode,
       currentSubMode: state.subEditMode,
+      paintColorKey: state.paintColorKey,
+      straightColorBehavior: state.straightColorBehavior,
       wizardActive: Boolean(state.wizard.active),
       wizardStep: state.wizard.step || null,
       placementMode: state.mode === 'unavailable-draw' ? 'unavailable-area-draw' : state.obstaclePlacement ? 'unavailable-area' : state.mode === 'start' ? 'start' : state.mode === 'place' ? 'course-part' : null,
