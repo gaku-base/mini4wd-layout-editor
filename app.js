@@ -56,7 +56,6 @@
   const PART_MENU_ORDER = CATALOG.MENU_ORDER;
   const START_DEF = PARTS.start;
   const HISTORY_LIMIT = 20;
-  const STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY = 'm4wd-straight-color-behavior';
   // 描画設定を1か所に集約し、将来の「継ぎ目表示」切替に備える。
   const RENDER_FEATURES = Object.freeze({ partSeams: true });
   const partAssetCache = new Map();
@@ -324,7 +323,7 @@
 
   function init() {
     cacheElements();
-    restoreStraightColorBehaviorPreference();
+    syncStraightColorBehaviorControl();
     initializeDiagnosticLogger();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
@@ -484,21 +483,6 @@
     }
   }
 
-  function restoreStraightColorBehaviorPreference() {
-    try {
-      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(window.localStorage.getItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY));
-    } catch (_) {
-      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.MODE_SLOPE_BY_COLOR;
-    }
-    syncStraightColorBehaviorControl();
-  }
-
-  function persistStraightColorBehaviorPreference() {
-    try {
-      window.localStorage.setItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY, state.straightColorBehavior);
-    } catch (_) {}
-  }
-
   function on(el, eventName, handler, options) {
     if (el) el.addEventListener(eventName, handler, options);
   }
@@ -586,7 +570,6 @@
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
     els.straightColorBehaviorSelect?.addEventListener('change', () => {
       state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(els.straightColorBehaviorSelect.value);
-      persistStraightColorBehaviorPreference();
       syncStraightColorBehaviorControl();
       toast(state.straightColorBehavior === STRAIGHT_COLOR_BEHAVIOR.MODE_COLOR_ONLY
         ? '赤・青はストレートの色だけを変更します'
@@ -1522,7 +1505,6 @@
         zMm: Number.isFinite(Number(p.zMm)) ? Number(p.zMm) : 0,
         pitchDeg: Number.isFinite(Number(p.pitchDeg ?? p.pitch)) ? Number(p.pitchDeg ?? p.pitch) : 0,
         bankAngleDeg: Number.isFinite(Number(p.bankAngleDeg ?? p.bankAngle)) ? Number(p.bankAngleDeg ?? p.bankAngle) : 0,
-        ...(['up', 'down'].includes(p.colorSlopeRole) ? { colorSlopeRole: p.colorSlopeRole } : {}),
         zOrder: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1,
         zIndex: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1
       };
