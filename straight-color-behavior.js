@@ -290,58 +290,37 @@
 
     if (normalizedMode === MODE_COLOR_ONLY) {
       currentParts[index] = { ...target, colorKey: nextColor };
-      if (target.colorSlopeRole) delete currentParts[index].colorSlopeRole;
       return { status: 'colored', parts: currentParts, edges: [...(edges || [])], semanticChange: false };
     }
 
     const semanticRole = nextColor === 'red' ? ROLE_UP : nextColor === 'blue' ? ROLE_DOWN : null;
-    const isDerivedSlope = target.type === 'slope' && [ROLE_UP, ROLE_DOWN].includes(target.colorSlopeRole);
-
-    if (!semanticRole && !isDerivedSlope) {
+    if (!semanticRole) {
       currentParts[index] = { ...target, colorKey: nextColor };
       return { status: 'colored', parts: currentParts, edges: [...(edges || [])], semanticChange: false };
     }
 
-    let transformed;
-    if (semanticRole && (target.type === 'straight' || isDerivedSlope)) {
-      const entry = desiredSlopeEntry(catalog, graph, semanticRole);
-      if (!entry) return { status: 'blocked', reason: 'missing-slope-entry', parts: currentParts, edges: [...(edges || [])] };
-      transformed = transformPartDefinition({
-        part: target,
-        nextType: 'slope',
-        desiredEntryConnectorId: entry.id,
-        start,
-        parts: currentParts,
-        edges,
-        catalog,
-        graph
-      });
-      if (transformed.status !== 'changed') return { ...transformed, parts: currentParts, edges: [...(edges || [])] };
-      transformed.part.colorKey = nextColor;
-      transformed.part.colorSlopeRole = semanticRole;
-    } else if (!semanticRole && isDerivedSlope) {
-      const direction = entryConnectorFromStart({ targetPartId: target.id, start, parts: currentParts, edges, catalog, graph });
-      if (direction.status !== 'resolved') return { status: 'blocked', reason: direction.reason, parts: currentParts, edges: [...(edges || [])] };
-      const straightConnectors = graph.connectorsForDefinition(catalog?.straight);
-      const desiredEntry = straightConnectors.find(connector => String(connector.id) === String(direction.connectorId))
-        || straightConnectors[0];
-      transformed = transformPartDefinition({
-        part: target,
-        nextType: 'straight',
-        desiredEntryConnectorId: desiredEntry.id,
-        start,
-        parts: currentParts,
-        edges,
-        catalog,
-        graph
-      });
-      if (transformed.status !== 'changed') return { ...transformed, parts: currentParts, edges: [...(edges || [])] };
-      transformed.part.colorKey = nextColor;
-      delete transformed.part.colorSlopeRole;
-    } else {
+    const canCreateSlope = target.type === 'straight';
+    const canReorientSemanticSlope = target.type === 'slope' && ['red', 'blue'].includes(String(target.colorKey || ''));
+    if (!canCreateSlope && !canReorientSemanticSlope) {
       currentParts[index] = { ...target, colorKey: nextColor };
       return { status: 'colored', parts: currentParts, edges: [...(edges || [])], semanticChange: false };
     }
+
+    const entry = desiredSlopeEntry(catalog, graph, semanticRole);
+    if (!entry) return { status: 'blocked', reason: 'missing-slope-entry', parts: currentParts, edges: [...(edges || [])] };
+
+    const transformed = transformPartDefinition({
+      part: target,
+      nextType: 'slope',
+      desiredEntryConnectorId: entry.id,
+      start,
+      parts: currentParts,
+      edges,
+      catalog,
+      graph
+    });
+    if (transformed.status !== 'changed') return { ...transformed, parts: currentParts, edges: [...(edges || [])] };
+    transformed.part.colorKey = nextColor;
 
     const nextParts = currentParts.map(part => String(part.id) === String(partId) ? transformed.part : part);
     const heightResult = solveHeightsFromStart({
