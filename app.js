@@ -24,6 +24,8 @@
   if (!LAYOUT_GRAPH) throw new Error('layout-graph.jsが読み込まれていません');
   const PART_RENDER_POSE = window.M4WD_PART_RENDER_POSE;
   if (!PART_RENDER_POSE) throw new Error('part-render-pose.jsが読み込まれていません');
+  const STRAIGHT_COLOR_BEHAVIOR = window.M4WD_STRAIGHT_COLOR_BEHAVIOR;
+  if (!STRAIGHT_COLOR_BEHAVIOR) throw new Error('straight-color-behavior.jsが読み込まれていません');
   const PLACEMENT_PROPOSAL = window.M4WD_PLACEMENT_PROPOSAL;
   if (!PLACEMENT_PROPOSAL) throw new Error('placement-proposal.js must be loaded before app.js');
   const CORNER_VARIANT = window.M4WD_CORNER_VARIANT;
@@ -54,6 +56,7 @@
   const PART_MENU_ORDER = CATALOG.MENU_ORDER;
   const START_DEF = PARTS.start;
   const HISTORY_LIMIT = 20;
+  const STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY = 'm4wd-straight-color-behavior';
   // 描画設定を1か所に集約し、将来の「継ぎ目表示」切替に備える。
   const RENDER_FEATURES = Object.freeze({ partSeams: true });
   const partAssetCache = new Map();
@@ -97,6 +100,7 @@
     selectedType: 'start',
     selectedIds: [],
     hoveredPartId: null,
+    straightColorBehavior: STRAIGHT_COLOR_BEHAVIOR.MODE_SLOPE_BY_COLOR,
     rotation: 0,
     activeConnection: null,
     connections: [],
@@ -305,7 +309,7 @@
       'modeBadge','statusBar','statusMode','statusPart','statusRotation','statusCursor','statusCount','statusZoom','statusConnection','statusSelected',
       'fieldWidthText','fieldHeightText','gridText','startText','connectionText','undoBtn','redoBtn','rewindBtn',
       'rotateLeftBtn','rotateRightBtn','gridBtn','fitViewBtn','manualFitBtn','topLeftFitBtn','autoFitFieldBtn','editFieldBtn',
-      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','statusAssets','bankStateText',
+      'selectionInfo','clearSelectionBtn','deleteSelectionBtn','colorSelectionBtn','colorLegend','straightColorBehaviorSelect','straightColorBehaviorHint','statusAssets','bankStateText',
       'fieldOriginText','fieldOverflowText','fieldOverflowNotice','statusOverflow','exportRangeDialog','exportRangeText',
       'exportRangeKeepBtn','exportRangeFitBtn','exportRangeCancelBtn','snapToggleBtn','cornerDirectionControl','cornerDirectionToggleBtn','placementHeightSelect','convertStartBtn','canvasContextMenu',
       'placementHeightCustom','snapCandidatePanel','layoutWarningSummary','statusWarnings','fastPathNextPart','fastPathGuide',
@@ -320,6 +324,7 @@
 
   function init() {
     cacheElements();
+    restoreStraightColorBehaviorPreference();
     initializeDiagnosticLogger();
     ctx = els.courseCanvas.getContext('2d');
     renderScheduler = RENDER_SCHEDULER.createRenderScheduler(callback => requestAnimationFrame(callback));
@@ -470,6 +475,30 @@
     }).join('');
   }
 
+  function syncStraightColorBehaviorControl() {
+    if (els.straightColorBehaviorSelect) els.straightColorBehaviorSelect.value = state.straightColorBehavior;
+    if (els.straightColorBehaviorHint) {
+      els.straightColorBehaviorHint.textContent = state.straightColorBehavior === STRAIGHT_COLOR_BEHAVIOR.MODE_COLOR_ONLY
+        ? '赤・青を選んでもパーツ種別は変更せず、ストレートの色だけを変更します。'
+        : 'Startからの進行方向を基準に、赤は上りSlope、青は下りSlopeへ変更します。';
+    }
+  }
+
+  function restoreStraightColorBehaviorPreference() {
+    try {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(window.localStorage.getItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY));
+    } catch (_) {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.MODE_SLOPE_BY_COLOR;
+    }
+    syncStraightColorBehaviorControl();
+  }
+
+  function persistStraightColorBehaviorPreference() {
+    try {
+      window.localStorage.setItem(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY, state.straightColorBehavior);
+    } catch (_) {}
+  }
+
   function on(el, eventName, handler, options) {
     if (el) el.addEventListener(eventName, handler, options);
   }
@@ -555,6 +584,14 @@
     els.clearSelectionBtn.addEventListener('click', clearSelection);
     els.deleteSelectionBtn.addEventListener('click', () => deleteParts(state.selectedIds));
     els.colorSelectionBtn.addEventListener('click', () => cyclePartsColor(state.selectedIds));
+    els.straightColorBehaviorSelect?.addEventListener('change', () => {
+      state.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR.normalizeMode(els.straightColorBehaviorSelect.value);
+      persistStraightColorBehaviorPreference();
+      syncStraightColorBehaviorControl();
+      toast(state.straightColorBehavior === STRAIGHT_COLOR_BEHAVIOR.MODE_COLOR_ONLY
+        ? '赤・青はストレートの色だけを変更します'
+        : '赤は上りSlope、青は下りSlopeへ変更します');
+    });
     els.convertStartBtn?.addEventListener('click', () => convertStraightToStart(state.selectedIds[0]));
     els.cornerDirectionToggleBtn?.addEventListener('click', toggleCornerVariant);
     document.addEventListener('click', e => {
@@ -1485,6 +1522,7 @@
         zMm: Number.isFinite(Number(p.zMm)) ? Number(p.zMm) : 0,
         pitchDeg: Number.isFinite(Number(p.pitchDeg ?? p.pitch)) ? Number(p.pitchDeg ?? p.pitch) : 0,
         bankAngleDeg: Number.isFinite(Number(p.bankAngleDeg ?? p.bankAngle)) ? Number(p.bankAngleDeg ?? p.bankAngle) : 0,
+        ...(['up', 'down'].includes(p.colorSlopeRole) ? { colorSlopeRole: p.colorSlopeRole } : {}),
         zOrder: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1,
         zIndex: Number.isFinite(Number(p.zOrder ?? p.zIndex)) ? Number(p.zOrder ?? p.zIndex) : index + 1
       };
@@ -5180,18 +5218,79 @@
     persistLocal(); updateUI(); render();
   }
 
+  function colorBehaviorBlockedMessage(reason) {
+    if (reason === 'below-ground') return '下りSlopeに必要な高さがないため変更できません';
+    if (reason === 'not-connected-to-start' || reason === 'missing-start') return 'Startからの進行方向を判定できないため変更できません';
+    if (reason === 'ambiguous-direction') return 'Startからの進行方向が複数あるため変更できません';
+    return 'ストレートのSlope変換条件を満たさないため変更できません';
+  }
+
   function cyclePartsColor(ids) {
     const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
     if (!unique.length) return toast('カラー変更するパーツを選択してください');
+
     snapshot();
-    unique.forEach(id => {
-      const p = findLayoutPartById(id);
-      const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (p.colorKey || 'default')));
-      p.colorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
-    });
-    const first = findLayoutPartById(unique[0]);
+    let changedCount = 0;
+    let semanticCount = 0;
+    const blockedReasons = [];
+
+    for (const id of unique) {
+      const current = findLayoutPartById(id);
+      if (!current) continue;
+      const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (current.colorKey || 'default')));
+      const nextColorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
+
+      if (id === 'start') {
+        current.colorKey = nextColorKey;
+        changedCount += 1;
+        continue;
+      }
+
+      const result = STRAIGHT_COLOR_BEHAVIOR.applyColorChange({
+        mode: state.straightColorBehavior,
+        partId: id,
+        nextColorKey,
+        start: state.start,
+        parts: state.parts,
+        edges: state.connections,
+        catalog: PARTS,
+        graph: LAYOUT_GRAPH
+      });
+
+      if (result.status === 'blocked') {
+        blockedReasons.push(result.reason);
+        continue;
+      }
+
+      state.parts = result.parts;
+      state.connections = LAYOUT_GRAPH.dedupeEdges(result.edges);
+      changedCount += 1;
+      if (result.semanticChange) semanticCount += 1;
+    }
+
+    if (!changedCount) {
+      state.history.pop();
+      const reason = blockedReasons[0];
+      toast(colorBehaviorBlockedMessage(reason));
+      updateUI(); render();
+      return;
+    }
+
+    recalculateBankStates();
+    recalculateLayoutWarnings();
+    rebuildActiveConnectionFromTail();
+    state.ghostProposal = null;
+    state.ghostProposalKey = null;
+
+    const first = findLayoutPartById(unique.find(id => findLayoutPartById(id)) || unique[0]);
     const color = COLORS.find(c => c.key === first?.colorKey)?.name || '標準（グレー）';
-    toast(`${unique.length}個のカラーを「${color}」へ変更しました`);
+    if (blockedReasons.length) {
+      toast(`${changedCount}個を変更、${blockedReasons.length}個はSlope変換できませんでした`);
+    } else if (semanticCount) {
+      toast(`${changedCount}個を「${color}」へ変更し、赤/青のSlopeルールを適用しました`);
+    } else {
+      toast(`${changedCount}個のカラーを「${color}」へ変更しました`);
+    }
     persistLocal(); updateUI(); render();
   }
 
