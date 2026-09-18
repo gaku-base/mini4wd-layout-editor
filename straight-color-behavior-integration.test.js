@@ -15,25 +15,29 @@ test('straight color behavior engine loads before app.js', () => {
   assert.ok(appScript > behavior, 'behavior engine must load before app.js captures it');
 });
 
-test('selection panel exposes both requested straight color behaviors with slope mode as default option', () => {
+test('selection panel exposes both requested straight color behaviors with slope mode first/default', () => {
   assert.match(index, /id="straightColorBehaviorSelect"/);
-  const slopeOption = index.indexOf('<option value="slope-by-color">デフォルト（赤=上り / 青=下り）</option>');
-  const colorOnlyOption = index.indexOf('<option value="color-only">カラーのみ（パーツ変更なし）</option>');
+  const slopeOption = index.indexOf('<option value="slope-by-color">デフォルト（赤=上り \/ 青=下り）<\/option>');
+  const colorOnlyOption = index.indexOf('<option value="color-only">カラーのみ（パーツ変更なし）<\/option>');
   assert.ok(slopeOption >= 0);
   assert.ok(colorOnlyOption > slopeOption);
 });
 
-test('app defaults to slope-by-color, persists preference separately, and routes color changes through the behavior engine', () => {
+test('app defaults to slope-by-color and routes color changes through the pure behavior engine', () => {
   assert.match(app, /straightColorBehavior:\s*STRAIGHT_COLOR_BEHAVIOR\.MODE_SLOPE_BY_COLOR/);
-  assert.match(app, /STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY\s*=\s*'m4wd-straight-color-behavior'/);
-  assert.match(app, /window\.localStorage\.setItem\(STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY, state\.straightColorBehavior\)/);
   assert.match(app, /STRAIGHT_COLOR_BEHAVIOR\.applyColorChange\(\{/);
   assert.match(app, /mode:\s*state\.straightColorBehavior/);
+  assert.match(app, /state\.straightColorBehavior = STRAIGHT_COLOR_BEHAVIOR\.normalizeMode\(els\.straightColorBehaviorSelect\.value\)/);
 });
 
-test('color-derived slope role survives layout serialization and validation', () => {
-  assert.match(app, /\['up', 'down'\]\.includes\(p\.colorSlopeRole\)/);
-  assert.match(persistence, /hasOwnProperty\.call\(part, 'colorSlopeRole'\)[\s\S]*\['up', 'down'\]\.includes\(part\.colorSlopeRole\)/);
+test('behavior selector is runtime-only and does not change the existing layout persistence schema', () => {
+  const serializeStart = app.indexOf('function serializeState');
+  const serializeEnd = app.indexOf('function migratedPartType', serializeStart);
+  const serialize = app.slice(serializeStart, serializeEnd);
+  assert.doesNotMatch(serialize, /straightColorBehavior|colorSlopeRole/);
+  assert.doesNotMatch(app, /STRAIGHT_COLOR_BEHAVIOR_STORAGE_KEY/);
+  assert.doesNotMatch(app, /colorSlopeRole/);
+  assert.doesNotMatch(persistence, /colorSlopeRole|straightColorBehavior/);
 });
 
 test('blocked semantic conversion does not consume an undo snapshot', () => {
