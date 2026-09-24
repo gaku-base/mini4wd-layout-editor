@@ -392,7 +392,15 @@
       '#d9d6d1': shadeColor(color.base, -.08),
       '#f9f7f3': shadeColor(color.base, .04),
       '#f8f6f2': shadeColor(color.base, .05),
-      '#f9f5f1': shadeColor(color.base, .05)
+      '#f9f5f1': shadeColor(color.base, .05),
+      // Slope-style height gradient palette. Keep default green untouched,
+      // but recolor it when the user explicitly selects another course color.
+      '#1b7a5c': color.edge,
+      '#35bd8b': color.base,
+      '#46c89a': shadeColor(color.base, .06),
+      '#82ddb9': shadeColor(color.base, .20),
+      '#156c4f': color.edge,
+      '#1b8964': color.lane
     };
     return svgText.replace(/#[0-9a-f]{6}/gi, match => replacements[match.toLowerCase()] || match);
   }
