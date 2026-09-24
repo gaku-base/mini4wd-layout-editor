@@ -11,10 +11,10 @@
         fill="none" stroke="#8d8c89" stroke-width="0.8"/>
   <path d="M72 0.8 L86.4 1.8 L90.84 10.56 L84.6 35.2 L73.8 34.2 L70.2 25.2 Z"
         fill="#c9c7c4" stroke="#858480" stroke-width="0.9" stroke-linejoin="round"/>
-  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#858480"
+  <path d="M0 30 H36 C66 30 96 6 126 6 H162" fill="none" stroke="#858480"
         stroke-width="13.6" stroke-linecap="butt" stroke-linejoin="round"/>
-  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="url(#bridge)"
+  <path d="M0 30 H36 C66 30 96 6 126 6 H162" fill="none" stroke="url(#bridge)"
         stroke-width="12" stroke-linecap="butt" stroke-linejoin="round"/>
-  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#fff" stroke-opacity="0.34"
+  <path d="M0 30 H36 C66 30 96 6 126 6 H162" fill="none" stroke="#fff" stroke-opacity="0.34"
         stroke-width="0.5"/>
 </svg>
