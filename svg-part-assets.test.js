@@ -32,3 +32,15 @@ test('SVG renderer supports palette variants and mirrored canonical assets', () 
   assert.match(app, /bankRole === 'exit'/);
   assert.match(app, /Object\.values\(PARTS\)\.forEach\(def => queueAsset/);
 });
+
+test('lane-change bridge stroke runs to both connection faces without internal end caps', () => {
+  const svg = fs.readFileSync('assets/templates/lane-change.svg', 'utf8');
+  const fullSpanBridge = /M0 30 H36 C66 30 96 6 126 6 H162/;
+  const matches = svg.match(new RegExp(fullSpanBridge.source, 'g')) || [];
+  assert.equal(matches.length, 3, 'edge, deck and highlight strokes must all span the full part');
+  assert.doesNotMatch(svg, /M36 30 C66 30 96 6 126 6/);
+
+  const app = fs.readFileSync('app.js', 'utf8');
+  assert.match(app, /c\.moveTo\(-def\.w \/ 2, bridge\.start\.y\)/);
+  assert.match(app, /c\.lineTo\(def\.w \/ 2, bridge\.end\.y\)/);
+});
