@@ -1,7 +1,7 @@
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "pixelsPerCm": 20,
-  "rule": "Images are normalized to geometry coordinates. Connection faces must sit on the registered geometry edges.",
+  "rule": "SVG assets are the visual source of truth. Geometry remains authoritative for placement, connectors, dimensions and collision logic.",
   "parts": {
     "straight": {
       "worldBoxCm": [
@@ -11,7 +11,8 @@
       "originCm": [
         27,
         18
-      ]
+      ],
+      "visualSource": "assets/templates/straight.svg"
     },
     "corner45": {
       "worldBoxCm": [
@@ -36,11 +37,12 @@
         17.300065383702393,
         12.233947520724378
       ],
-      "centerlineRadiusCm": 54.0,
-      "innerRadiusCm": 36.0,
-      "outerRadiusCm": 72.0,
+      "centerlineRadiusCm": 54,
+      "innerRadiusCm": 36,
+      "outerRadiusCm": 72,
       "angleDeg": 45,
-      "source": "mathematically generated exact annular sector"
+      "source": "mathematically generated exact annular sector",
+      "visualSource": "assets/templates/corner45-exact.svg"
     },
     "lane-change": {
       "worldBoxCm": [
@@ -56,11 +58,21 @@
         288
       ],
       "connectorsCm": [
-        [-81, 0, 180],
-        [81, 0, 0]
+        [
+          -81,
+          0,
+          180
+        ],
+        [
+          81,
+          0,
+          0
+        ]
       ],
       "profile": "rc1-formal-v1",
-      "source": "runtime vector exported from lane-change-visual.js"
+      "source": "runtime vector exported from lane-change-visual.js",
+      "visualSource": "assets/templates/lane-change.svg",
+      "note": "Bridge end-cap vertical lines removed to avoid a false dead-end appearance."
     },
     "wave": {
       "worldBoxCm": [
@@ -70,7 +82,8 @@
       "originCm": [
         27,
         21
-      ]
+      ],
+      "visualSource": "assets/templates/wave.svg"
     },
     "start": {
       "worldBoxCm": [
@@ -80,7 +93,8 @@
       "originCm": [
         27,
         18
-      ]
+      ],
+      "visualSource": "assets/templates/start.svg"
     },
     "slope": {
       "worldBoxCm": [
@@ -90,7 +104,8 @@
       "originCm": [
         27,
         18
-      ]
+      ],
+      "visualSource": "assets/templates/slope.svg"
     },
     "bank20": {
       "worldBoxCm": [
@@ -100,7 +115,8 @@
       "originCm": [
         14,
         18
-      ]
+      ],
+      "visualSource": "assets/templates/bank20.svg"
     },
     "lc-jump": {
       "worldBoxCm": [
@@ -120,7 +136,8 @@
           27,
           0
         ]
-      ]
+      ],
+      "visualSource": "assets/templates/lc-jump.svg"
     },
     "burning-lc": {
       "worldBoxCm": [
@@ -136,15 +153,24 @@
         1152
       ],
       "connectorsCm": [
-        [-93, -54, 180],
-        [-93, 54, 180]
+        [
+          -93,
+          -54,
+          180
+        ],
+        [
+          -93,
+          54,
+          180
+        ]
       ],
       "internalSeams": {
         "base": 7,
         "overpass": 4
       },
       "profile": "rc1-formal-v1",
-      "source": "runtime vector exported from burning-changer-visual.js"
+      "source": "runtime vector exported from burning-changer-visual.js",
+      "visualSource": "assets/templates/burning-lc.svg"
     }
   }
 }
