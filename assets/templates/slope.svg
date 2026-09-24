@@ -1,3 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="54" height="36" viewBox="0 0 54 36">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#cfc9c4"/><stop offset=".25" stop-color="#efeae5"/><stop offset=".75" stop-color="#efeae5"/><stop offset="1" stop-color="#c8c2bd"/></linearGradient></defs><rect x="0.5" y="0.5" width="53" height="35" fill="url(#g)" stroke="#8e8a87"/><path d="M0 12H54M0 24H54" stroke="#ada9a5"/>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="var(--part-base-m16,#c6c4c0)"/>
+      <stop offset=".42" stop-color="var(--part-base,#efede9)"/>
+      <stop offset=".58" stop-color="var(--part-base,#efede9)"/>
+      <stop offset="1" stop-color="var(--part-base-m12,#d0ceca)"/>
+    </linearGradient>
+  </defs>
+  <rect x="0.5" y="0.5" width="53" height="35" fill="url(#g)" stroke="var(--part-edge,#858480)"/>
+  <path d="M0 12H54M0 24H54" stroke="var(--part-lane,#8d8c89)" fill="none"/>
 </svg>
