@@ -34,6 +34,6 @@ test('serialization and restore preserve each placed part colorKey independently
 });
 
 test('bank state recalculation never rewrites colorKey', () => {
-  const block = sourceBlock(/function recalculateBankStates\(/, /\n  function recalculateLayoutWarnings\(/);
+  const block = sourceBlock(/function recalculateBankStates\(/, /\n  function rewindLastPart\(/);
   assert.doesNotMatch(block, /colorKey\s*=/);
 });
