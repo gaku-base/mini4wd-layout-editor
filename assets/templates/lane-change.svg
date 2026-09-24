@@ -1,22 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="162" height="36" viewBox="0 0 162 36">
   <defs>
     <linearGradient id="bridge" x1="36" y1="30" x2="126" y2="6" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#c6c2bd"/>
-      <stop offset="0.48" stop-color="#f8f6f2"/>
-      <stop offset="1" stop-color="#d4d0ca"/>
+      <stop offset="0" stop-color="var(--part-base-m18,#c1bfbb)"/>
+      <stop offset="0.48" stop-color="var(--part-base-p05,#fcfaf6)"/>
+      <stop offset="1" stop-color="var(--part-base-m12,#d0ceca)"/>
     </linearGradient>
   </defs>
-  <rect x="0.5" y="0.5" width="161" height="35" fill="#efede9" stroke="#858480"/>
+  <rect x="0.5" y="0.5" width="161" height="35" fill="var(--part-base,#efede9)" stroke="var(--part-edge,#858480)"/>
   <path d="M0 12 H36 C66 12 96 24 126 24 H162 M0 24 H36 C66 24 96 12 126 12 H162"
-        fill="none" stroke="#8d8c89" stroke-width="0.8"/>
+        fill="none" stroke="var(--part-lane,#8d8c89)" stroke-width="0.8"/>
   <path d="M72 0.8 L86.4 1.8 L90.84 10.56 L84.6 35.2 L73.8 34.2 L70.2 25.2 Z"
-        fill="#c9c7c4" stroke="#858480" stroke-width="0.9" stroke-linejoin="round"/>
-  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#858480"
+        fill="var(--part-base-m16,#c6c4c0)" stroke="var(--part-edge,#858480)" stroke-width="0.9" stroke-linejoin="round"/>
+  <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="var(--part-edge,#858480)"
         stroke-width="13.6" stroke-linecap="butt" stroke-linejoin="round"/>
   <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="url(#bridge)"
         stroke-width="12" stroke-linecap="butt" stroke-linejoin="round"/>
   <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#fff" stroke-opacity="0.34"
         stroke-width="0.5"/>
-  <path d="M36 24 V36 M126 0 V12"
-        fill="none" stroke="#8d8c89" stroke-width="0.52"/>
 </svg>
