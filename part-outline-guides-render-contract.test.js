@@ -15,12 +15,10 @@ function sourceBlock(source, startPattern, endPattern) {
 }
 
 test('Start default rendering uses the registered SVG before Canvas fallback', () => {
-  const startCatalog = sourceBlock(
+  assert.match(
     catalogSource,
-    /start:\s*\{/,
-    /\n    slope:/
+    /visual:\s*\{\s*file:\s*['"]assets\/templates\/start\.svg['"]/
   );
-  assert.match(startCatalog, /file:\s*['"]assets\/templates\/start\.svg['"]/);
 
   const drawPartAsset = sourceBlock(
     appSource,
