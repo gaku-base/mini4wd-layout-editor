@@ -5250,17 +5250,27 @@
     persistLocal(); updateUI(); render();
   }
 
+  function nextPartColorKey(part) {
+    const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (part?.colorKey || 'default')));
+    return COLORS[(currentIndex + 1) % COLORS.length].key;
+  }
+
+  function cyclePartColor(id) {
+    const part = findLayoutPartById(id);
+    if (!part) return null;
+    // Color is always stored on the placed instance itself. Parts of the same
+    // type (including separate slopes and Bank20 pieces) never share color state.
+    part.colorKey = nextPartColorKey(part);
+    return part.colorKey;
+  }
+
   function cyclePartsColor(ids) {
     const unique = [...new Set(ids)].filter(id => id === 'start' ? !!state.start : state.parts.some(p => p.id === id));
     if (!unique.length) return toast('カラー変更するパーツを選択してください');
     snapshot();
-    unique.forEach(id => {
-      const p = findLayoutPartById(id);
-      const currentIndex = Math.max(0, COLORS.findIndex(c => c.key === (p.colorKey || 'default')));
-      p.colorKey = COLORS[(currentIndex + 1) % COLORS.length].key;
-    });
-    const first = findLayoutPartById(unique[0]);
-    const color = COLORS.find(c => c.key === first?.colorKey)?.name || '標準（グレー）';
+    const changedColorKeys = unique.map(cyclePartColor).filter(Boolean);
+    const firstColorKey = changedColorKeys[0] || 'default';
+    const color = COLORS.find(c => c.key === firstColorKey)?.name || '標準（グレー）';
     toast(`${unique.length}個のカラーを「${color}」へ変更しました`);
     persistLocal(); updateUI(); render();
   }
