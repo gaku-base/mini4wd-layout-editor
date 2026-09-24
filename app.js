@@ -2786,12 +2786,17 @@
     const bridge = geometry.bridge;
     const traceBridge = () => {
       c.beginPath();
-      c.moveTo(bridge.start.x, bridge.start.y);
+      // Keep the elevated lane visually continuous from connection face to
+      // connection face. Starting/stopping the thick stroke at the internal
+      // transition points creates a false vertical wall/dead-end.
+      c.moveTo(-def.w / 2, bridge.start.y);
+      c.lineTo(bridge.start.x, bridge.start.y);
       c.bezierCurveTo(
         bridge.control1.x, bridge.control1.y,
         bridge.control2.x, bridge.control2.y,
         bridge.end.x, bridge.end.y
       );
+      c.lineTo(def.w / 2, bridge.end.y);
     };
 
     // 橋状レーンの縁と天面を分け、3レーン構造と切替方向を明瞭にする。
