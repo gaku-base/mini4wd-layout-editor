@@ -57,11 +57,8 @@
   // 描画設定を1か所に集約し、将来の「継ぎ目表示」切替に備える。
   const RENDER_FEATURES = Object.freeze({ partSeams: true });
   const partAssetCache = new Map();
-  // 標準グレー系は画像の色ムラを避け、同一パレットのベクター描画を使う。
-  // Canva画像へ差し替える際は、この集合から対象を外せば画像表示へ戻せる。
-  const VECTOR_DEFAULT_RENDER_KINDS = new Set([
-    'straight', 'corner45', 'lanechange', 'wave', 'start', 'lcjump', 'burning'
-  ]);
+  // 表示は登録SVGを正本とし、geometryは接続・寸法・干渉判定専用に分離する。
+  // SVGが未読込／読込失敗の瞬間だけ、従来Canvas描画を安全なフォールバックとして使う。
 
   const COLORS = [
     { key: 'default', name: '標準（グレー）', base: '#efede9', lane: '#8d8c89', edge: '#858480' },
@@ -369,58 +366,127 @@
 
 
 
-  function initializePartAssets() {
-    const seen = new Set();
-    const queueAsset = (file) => {
-      if (!file || seen.has(file)) return;
-      seen.add(file);
-      const image = new Image();
-      const record = { image, ready: false, failed: false, file };
-      partAssetCache.set(file, record);
-      image.onload = () => {
-        record.ready = true;
-        state.assetsReady = [...partAssetCache.values()].filter(item => item.ready).length;
-        renderPartPreviews();
-        updateUI();
-        render();
-      };
-      image.onerror = () => {
-        record.failed = true;
-        state.assetsReady = [...partAssetCache.values()].filter(item => item.ready).length;
-        updateUI();
-      };
-      image.src = file;
-    };
-
-    PART_MENU_ORDER.forEach(type => {
-      const def = PARTS[type];
-      if (def?.bank20) {
-        queueAsset('assets/parts/bank20-entry.png');
-        queueAsset('assets/parts/bank20-exit.png');
-      } else if (!VECTOR_DEFAULT_RENDER_KINDS.has(def?.renderKind)) {
-        queueAsset(def?.visual?.file);
-      }
-    });
+  function assetCacheKey(file, colorKey = 'default') {
+    return `${file}::${colorKey}`;
   }
 
-  function assetRecordFor(def) {
+  function colorizedSvgText(svgText, colorKey) {
+    if (colorKey === 'default') return svgText;
+    const color = COLORS.find(item => item.key === colorKey) || COLORS[0];
+    const replacements = {
+      '#efeae5': color.base,
+      '#efede9': color.base,
+      '#ada9a5': color.lane,
+      '#8d8c89': color.lane,
+      '#8e8a87': color.edge,
+      '#858480': color.edge,
+      '#74797d': color.edge,
+      '#cfc9c4': shadeColor(color.base, -.12),
+      '#c8c2bd': shadeColor(color.base, -.16),
+      '#c8c3be': shadeColor(color.base, -.16),
+      '#c6c2bd': shadeColor(color.base, -.16),
+      '#d4d0ca': shadeColor(color.base, -.10),
+      '#c9c7c4': shadeColor(color.base, -.14),
+      '#c1bdb9': shadeColor(color.base, -.18),
+      '#bcb9b5': shadeColor(color.base, -.20),
+      '#d9d6d1': shadeColor(color.base, -.08),
+      '#f9f7f3': shadeColor(color.base, .04),
+      '#f8f6f2': shadeColor(color.base, .05),
+      '#f9f5f1': shadeColor(color.base, .05)
+    };
+    return svgText.replace(/#[0-9a-f]{6}/gi, match => replacements[match.toLowerCase()] || match);
+  }
+
+  function registerSvgVariant(file, svgText, colorKey) {
+    const key = assetCacheKey(file, colorKey);
+    if (partAssetCache.has(key)) return;
+    const image = new Image();
+    const record = { image, ready: false, failed: false, file, colorKey };
+    partAssetCache.set(key, record);
+    const objectUrl = URL.createObjectURL(new Blob([colorizedSvgText(svgText, colorKey)], { type: 'image/svg+xml' }));
+    image.onload = () => {
+      record.ready = true;
+      URL.revokeObjectURL(objectUrl);
+      state.assetsReady = [...partAssetCache.values()].filter(item => item.ready).length;
+      renderPartPreviews();
+      updateUI();
+      render();
+    };
+    image.onerror = () => {
+      record.failed = true;
+      URL.revokeObjectURL(objectUrl);
+      state.assetsReady = [...partAssetCache.values()].filter(item => item.ready).length;
+      updateUI();
+    };
+    image.src = objectUrl;
+  }
+
+  function registerRasterAsset(file) {
+    const key = assetCacheKey(file, 'default');
+    if (partAssetCache.has(key)) return;
+    const image = new Image();
+    const record = { image, ready: false, failed: false, file, colorKey: 'default' };
+    partAssetCache.set(key, record);
+    image.onload = () => {
+      record.ready = true;
+      state.assetsReady = [...partAssetCache.values()].filter(item => item.ready).length;
+      renderPartPreviews();
+      updateUI();
+      render();
+    };
+    image.onerror = () => {
+      record.failed = true;
+      state.assetsReady = [...partAssetCache.values()].filter(item => item.ready).length;
+      updateUI();
+    };
+    image.src = file;
+  }
+
+  function initializePartAssets() {
+    const seen = new Set();
+    const queueAsset = async file => {
+      if (!file || seen.has(file)) return;
+      seen.add(file);
+      if (!/\.svg(?:\?|$)/i.test(file)) {
+        registerRasterAsset(file);
+        return;
+      }
+      try {
+        const response = await fetch(file, { cache: 'no-cache' });
+        if (!response.ok) throw new Error(`SVG asset load failed: ${file} (${response.status})`);
+        const svgText = await response.text();
+        COLORS.forEach(color => registerSvgVariant(file, svgText, color.key));
+      } catch (_) {
+        COLORS.forEach(color => {
+          const key = assetCacheKey(file, color.key);
+          if (!partAssetCache.has(key)) {
+            partAssetCache.set(key, { image: null, ready: false, failed: true, file, colorKey: color.key });
+          }
+        });
+        updateUI();
+      }
+    };
+
+    Object.values(PARTS).forEach(def => queueAsset(def?.visual?.file));
+  }
+
+  function assetRecordFor(def, colorKey = 'default') {
     const file = def?.visual?.file;
-    return file ? partAssetCache.get(file) : null;
+    if (!file) return null;
+    return partAssetCache.get(assetCacheKey(file, colorKey)) || null;
   }
 
   function drawPartAsset(c, def, colorKey = 'default', part = {}) {
-    if (colorKey !== 'default') return false;
-    // 標準グレーはコーナーパーツと完全に同じ色値で描画する。
-    // バーニングLCもベクター描画にすることで内側・外側背景を完全透明にする。
-    if (VECTOR_DEFAULT_RENDER_KINDS.has(def?.renderKind)) return false;
-    let record = assetRecordFor(def);
-    if (def?.bank20) {
-      const role = part?.bankRole === 'exit' ? 'exit' : 'entry';
-      record = partAssetCache.get(`assets/parts/bank20-${role}.png`) || record;
-    }
+    const record = assetRecordFor(def, colorKey);
     if (!record?.ready || !record.image?.naturalWidth) return false;
     const visual = def.visual;
+    c.save();
+    // 右コーナーSVGを正本にし、左コーナーはローカル原点で上下反転する。
+    if (def?.corner45 && def?.cornerVariant === 'left') c.scale(1, -1);
+    // 20度バンクは入口SVGを正本にし、出口は進行方向に合わせて左右反転する。
+    if (def?.bank20 && part?.bankRole === 'exit') c.scale(-1, 1);
     c.drawImage(record.image, -visual.originX, -visual.originY, visual.canvasWidth, visual.canvasHeight);
+    c.restore();
     return true;
   }
 
@@ -2750,15 +2816,6 @@
     c.lineWidth = .5;
     c.stroke();
 
-    // 天面両端は接続面ではなく、1枚内の構造線として細く示す。
-    c.strokeStyle = def.lane;
-    c.lineWidth = .52;
-    for (const cap of bridge.caps) {
-      c.beginPath();
-      c.moveTo(cap.start.x, cap.start.y);
-      c.lineTo(cap.end.x, cap.end.y);
-      c.stroke();
-    }
     c.restore();
   }
 

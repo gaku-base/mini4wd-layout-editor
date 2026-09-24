@@ -17,6 +17,4 @@
         stroke-width="12" stroke-linecap="butt" stroke-linejoin="round"/>
   <path d="M36 30 C66 30 96 6 126 6" fill="none" stroke="#fff" stroke-opacity="0.34"
         stroke-width="0.5"/>
-  <path d="M36 24 V36 M126 0 V12"
-        fill="none" stroke="#8d8c89" stroke-width="0.52"/>
 </svg>
