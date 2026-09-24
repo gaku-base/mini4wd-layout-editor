@@ -160,7 +160,7 @@
       key: '1', name: 'ストレート', short: '直線', renderKind: 'straight',
       w: mmToCm(PART_DIMENSIONS_MM.straight.lengthMm), h: mmToCm(PART_DIMENSIONS_MM.straight.depthMm),
       geometry: STRAIGHT_GEOMETRY,
-      visual: { file: 'assets/parts/straight.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.straight.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.straight.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.straight.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.straight.depthMm) / 2 },
+      visual: { file: 'assets/templates/straight.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.straight.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.straight.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.straight.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.straight.depthMm) / 2 },
       dimensionAudit: {
         placementSpanMm: { value: PART_DIMENSIONS_MM.straight.lengthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
         runtimeFootprintMm: { width: PART_DIMENSIONS_MM.straight.lengthMm, depth: PART_DIMENSIONS_MM.straight.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' }
@@ -171,7 +171,7 @@
       key: '2', name: 'コーナー（45度・右）', short: '45° R', renderKind: 'corner45', corner45: true, cornerVariant: 'right',
       w: mmToCm(PART_DIMENSIONS_MM.corner45.visualWidthMm), h: mmToCm(PART_DIMENSIONS_MM.corner45.visualHeightMm), radius: mmToCm(PART_DIMENSIONS_MM.corner45.centerlineRadiusMm), trackWidth: mmToCm(PART_DIMENSIONS_MM.corner45.trackWidthMm),
       geometry: { centerlineRadius: mmToCm(PART_DIMENSIONS_MM.corner45.centerlineRadiusMm), innerRadius: mmToCm(PART_DIMENSIONS_MM.corner45.innerRadiusMm), outerRadius: mmToCm(PART_DIMENSIONS_MM.corner45.outerRadiusMm), angleDeg: PART_DIMENSIONS_MM.corner45.angleDeg, pathOrientation: 'right', connectors: [{ id: 'a', label: '接続口A', x: mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorA.xMm), y: mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorA.yMm), localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '接続口B', x: mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorB.xMm), y: mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorB.yMm), localZMm: 0, heading: 45, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }] },
-      visual: { file: 'assets/parts/corner45.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.corner45.visualWidthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.corner45.visualHeightMm), originX: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginXMm), originY: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginYMm) },
+      visual: { file: 'assets/templates/corner45-exact.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.corner45.visualWidthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.corner45.visualHeightMm), originX: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginXMm), originY: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginYMm) },
       dimensionAudit: {
         adoptedOuterRadiusMm: { value: PART_DIMENSIONS_MM.corner45.outerRadiusMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
         officialAssembled90OuterMm: { value: OFFICIAL_DIMENSION_REFERENCES_MM.curve90OuterMm, status: 'verified', usage: 'reference-only', source: 'tamiya-circuits-data-pdf' },
@@ -184,7 +184,7 @@
       key: '2', name: 'コーナー（45度・左）', short: '45° L', renderKind: 'corner45', corner45: true, cornerVariant: 'left',
       w: mmToCm(PART_DIMENSIONS_MM.corner45.visualWidthMm), h: mmToCm(PART_DIMENSIONS_MM.corner45.visualHeightMm), radius: mmToCm(PART_DIMENSIONS_MM.corner45.centerlineRadiusMm), trackWidth: mmToCm(PART_DIMENSIONS_MM.corner45.trackWidthMm),
       geometry: { centerlineRadius: mmToCm(PART_DIMENSIONS_MM.corner45.centerlineRadiusMm), innerRadius: mmToCm(PART_DIMENSIONS_MM.corner45.innerRadiusMm), outerRadius: mmToCm(PART_DIMENSIONS_MM.corner45.outerRadiusMm), angleDeg: PART_DIMENSIONS_MM.corner45.angleDeg, pathOrientation: 'left', connectors: [{ id: 'a', label: '接続口A', x: mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorA.xMm), y: -mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorA.yMm), localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '接続口B', x: mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorB.xMm), y: -mmToCm(PART_DIMENSIONS_MM.corner45.rightConnectorB.yMm), localZMm: 0, heading: 315, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }] },
-      visual: { file: 'assets/parts/corner45.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.corner45.visualWidthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.corner45.visualHeightMm), originX: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginXMm), originY: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginYMm) },
+      visual: { file: 'assets/templates/corner45-exact.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.corner45.visualWidthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.corner45.visualHeightMm), originX: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginXMm), originY: mmToCm(PART_DIMENSIONS_MM.corner45.visualOriginYMm) },
       dimensionAudit: {
         adoptedOuterRadiusMm: { value: PART_DIMENSIONS_MM.corner45.outerRadiusMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
         officialAssembled90OuterMm: { value: OFFICIAL_DIMENSION_REFERENCES_MM.curve90OuterMm, status: 'verified', usage: 'reference-only', source: 'tamiya-circuits-data-pdf' },
@@ -203,7 +203,7 @@
         bounds: { minX: -mmToCm(PART_DIMENSIONS_MM.lanechange.lengthMm) / 2, maxX: mmToCm(PART_DIMENSIONS_MM.lanechange.lengthMm) / 2, minY: -mmToCm(PART_DIMENSIONS_MM.lanechange.depthMm) / 2, maxY: mmToCm(PART_DIMENSIONS_MM.lanechange.depthMm) / 2 }
       },
       visual: {
-        file: 'assets/parts/lane-change.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.lanechange.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.lanechange.depthMm),
+        file: 'assets/templates/lane-change.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.lanechange.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.lanechange.depthMm),
         originX: mmToCm(PART_DIMENSIONS_MM.lanechange.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.lanechange.depthMm) / 2, profile: 'rc1-formal-v1'
       },
       dimensionAudit: {
@@ -216,7 +216,7 @@
       key: '4', name: 'ウェーブ', short: '波形', renderKind: 'wave', wave: true,
       w: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm), h: mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm), trackWidth: mmToCm(PART_DIMENSIONS_MM.wave.trackWidthMm), amplitude: mmToCm(PART_DIMENSIONS_MM.wave.amplitudeMm),
       geometry: { width: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm), trackWidth: mmToCm(PART_DIMENSIONS_MM.wave.trackWidthMm), amplitude: mmToCm(PART_DIMENSIONS_MM.wave.amplitudeMm), centroidY: mmToCm(PART_DIMENSIONS_MM.wave.centroidYMm), connectors: [{ id: 'a', label: '左端', x: -mmToCm(PART_DIMENSIONS_MM.wave.lengthMm) / 2, y: mmToCm(PART_DIMENSIONS_MM.wave.connectorYMm), localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '右端', x: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm) / 2, y: mmToCm(PART_DIMENSIONS_MM.wave.connectorYMm), localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -mmToCm(PART_DIMENSIONS_MM.wave.lengthMm) / 2, maxX: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm) / 2, minY: -mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm) / 2, maxY: mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm) / 2 } },
-      visual: { file: 'assets/parts/wave.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm), originX: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm) / 2 },
+      visual: { file: 'assets/templates/wave.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm), originX: mmToCm(PART_DIMENSIONS_MM.wave.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.wave.visualDepthMm) / 2 },
       dimensionAudit: {
         runtimeFootprintMm: { width: PART_DIMENSIONS_MM.wave.lengthMm, depth: PART_DIMENSIONS_MM.wave.visualDepthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' }
       },
@@ -226,7 +226,7 @@
       key: '5', name: 'スタート', short: 'START', renderKind: 'start', special: 'start',
       w: mmToCm(PART_DIMENSIONS_MM.start.lengthMm), h: mmToCm(PART_DIMENSIONS_MM.start.depthMm),
       geometry: START_GEOMETRY,
-      visual: { file: 'assets/parts/start.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.start.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.start.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.start.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.start.depthMm) / 2 },
+      visual: { file: 'assets/templates/start.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.start.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.start.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.start.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.start.depthMm) / 2 },
       dimensionAudit: {
         placementSpanMm: { value: PART_DIMENSIONS_MM.start.lengthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
         runtimeFootprintMm: { width: PART_DIMENSIONS_MM.start.lengthMm, depth: PART_DIMENSIONS_MM.start.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' }
@@ -237,7 +237,7 @@
       key: '6', name: 'スロープ', short: '坂', renderKind: 'slope', slope: true,
       w: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm), h: mmToCm(PART_DIMENSIONS_MM.slope.depthMm),
       geometry: { width: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm), height: mmToCm(PART_DIMENSIONS_MM.slope.depthMm), connectors: [{ id: 'a', label: '低端', x: -mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm) / 2, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '高端', x: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm) / 2, y: 0, localZMm: PART_DIMENSIONS_MM.slope.heightDeltaMm, heading: 0, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm) / 2, maxX: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm) / 2, minY: -mmToCm(PART_DIMENSIONS_MM.slope.depthMm) / 2, maxY: mmToCm(PART_DIMENSIONS_MM.slope.depthMm) / 2 } },
-      visual: { file: 'assets/parts/slope.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.slope.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.slope.depthMm) / 2 },
+      visual: { file: 'assets/templates/slope.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.slope.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.slope.horizontalSpanMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.slope.depthMm) / 2 },
       height: { startMm: 0, endMm: PART_DIMENSIONS_MM.slope.heightDeltaMm, maxMm: PART_DIMENSIONS_MM.slope.heightDeltaMm },
       dimensionAudit: {
         horizontalSpanMm: { value: PART_DIMENSIONS_MM.slope.horizontalSpanMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
@@ -304,7 +304,7 @@
       key: '7', name: '20度バンク入口／出口', short: '20°', renderKind: 'bank20', bank20: true,
       w: BANK20_PROJECTED_LENGTH_CM, h: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm),
       geometry: { width: BANK20_PROJECTED_LENGTH_CM, height: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm), connectors: [{ id: 'a', label: '平面側', x: -BANK20_HALF_PROJECTED_LENGTH_CM, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, bankTransitionToDeg: PART_DIMENSIONS_MM.bank20.bankAngleDeg, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: 'バンク側', x: BANK20_HALF_PROJECTED_LENGTH_CM, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: PART_DIMENSIONS_MM.bank20.bankAngleDeg, bankTransitionToDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -BANK20_HALF_PROJECTED_LENGTH_CM, maxX: BANK20_HALF_PROJECTED_LENGTH_CM, minY: -mmToCm(PART_DIMENSIONS_MM.bank20.depthMm) / 2, maxY: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm) / 2 } },
-      visual: { file: 'assets/parts/bank20.png', canvasWidth: BANK20_PROJECTED_LENGTH_CM, canvasHeight: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm), originX: BANK20_HALF_PROJECTED_LENGTH_CM, originY: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm) / 2 },
+      visual: { file: 'assets/templates/bank20.svg', canvasWidth: BANK20_PROJECTED_LENGTH_CM, canvasHeight: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm), originX: BANK20_HALF_PROJECTED_LENGTH_CM, originY: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm) / 2 },
       bank: { angleDeg: PART_DIMENSIONS_MM.bank20.bankAngleDeg, dynamicRole: true },
       dimensionAudit: {
         projectedConnectorSpanMm: { value: PART_DIMENSIONS_MM.bank20.connectorSpanMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
@@ -337,7 +337,7 @@
       key: '8', name: 'LCジャンプ', short: 'JUMP', renderKind: 'lcjump', lcjump: true,
       w: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm), h: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm),
       geometry: { width: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm), height: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm), connectors: [{ id: 'a', label: '左端', x: -mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, y: 0, localZMm: 0, heading: 180, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }, { id: 'b', label: '右端', x: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, y: 0, localZMm: 0, heading: 0, pitchDeg: 0, bankAngleDeg: 0, shape: 'jcjc-3lane', laneCount: 3 }], bounds: { minX: -mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, maxX: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, minY: -mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm) / 2, maxY: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm) / 2 } },
-      visual: { file: 'assets/parts/lc-jump.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm) / 2 },
+      visual: { file: 'assets/templates/lc-jump.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm) / 2 },
       dimensionAudit: {
         runtimeFootprintMm: { width: PART_DIMENSIONS_MM.lcjump.lengthMm, depth: PART_DIMENSIONS_MM.lcjump.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
         constructionReference: { value: null, status: 'verified', usage: 'reference-only', source: 'tamiya-2015-station-championship-report', note: 'Tamiya describes LC Jump as using only the lane-change approach portion; the adopted placement dimensions remain the current project values.' }
@@ -357,7 +357,7 @@
         bounds: { minX: -mmToCm(PART_DIMENSIONS_MM.burning.visualOriginXMm), maxX: mmToCm(PART_DIMENSIONS_MM.burning.displayWidthMm - PART_DIMENSIONS_MM.burning.visualOriginXMm), minY: -mmToCm(PART_DIMENSIONS_MM.burning.visualOriginYMm), maxY: mmToCm(PART_DIMENSIONS_MM.burning.displayDepthMm - PART_DIMENSIONS_MM.burning.visualOriginYMm) }
       },
       visual: {
-        file: 'assets/parts/burning-lc.png', canvasWidth: mmToCm(PART_DIMENSIONS_MM.burning.displayWidthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.burning.displayDepthMm),
+        file: 'assets/templates/burning-lc.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.burning.displayWidthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.burning.displayDepthMm),
         originX: mmToCm(PART_DIMENSIONS_MM.burning.visualOriginXMm), originY: mmToCm(PART_DIMENSIONS_MM.burning.visualOriginYMm), profile: 'rc1-formal-v1'
       },
       dimensionAudit: {
