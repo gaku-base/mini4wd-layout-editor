@@ -2818,15 +2818,6 @@
     c.lineWidth = .5;
     c.stroke();
 
-    // 天面両端は接続面ではなく、1枚内の構造線として細く示す。
-    c.strokeStyle = def.lane;
-    c.lineWidth = .52;
-    for (const cap of bridge.caps) {
-      c.beginPath();
-      c.moveTo(cap.start.x, cap.start.y);
-      c.lineTo(cap.end.x, cap.end.y);
-      c.stroke();
-    }
     c.restore();
   }
 
