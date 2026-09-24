@@ -467,15 +467,13 @@
       }
     };
 
-    PART_MENU_ORDER.forEach(type => queueAsset(PARTS[type]?.visual?.file));
+    Object.values(PARTS).forEach(def => queueAsset(def?.visual?.file));
   }
 
   function assetRecordFor(def, colorKey = 'default') {
     const file = def?.visual?.file;
     if (!file) return null;
-    return partAssetCache.get(assetCacheKey(file, colorKey))
-      || partAssetCache.get(assetCacheKey(file, 'default'))
-      || null;
+    return partAssetCache.get(assetCacheKey(file, colorKey)) || null;
   }
 
   function drawPartAsset(c, def, colorKey = 'default', part = {}) {
