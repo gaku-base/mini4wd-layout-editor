@@ -44,3 +44,15 @@ test('lane-change bridge stroke runs to both connection faces without internal e
   assert.match(app, /c\.moveTo\(-def\.w \/ 2, bridge\.start\.y\)/);
   assert.match(app, /c\.lineTo\(def\.w \/ 2, bridge\.end\.y\)/);
 });
+
+test('20-degree bank default palette matches the slope height gradient', () => {
+  const bank = fs.readFileSync('assets/templates/bank20.svg', 'utf8');
+  for (const color of ['#1b7a5c', '#35bd8b', '#46c89a', '#82ddb9', '#156c4f', '#1b8964']) {
+    assert.equal(bank.includes(color), true, color);
+  }
+
+  const app = fs.readFileSync('app.js', 'utf8');
+  assert.match(app, /'#35bd8b': color\.base/);
+  assert.match(app, /'#156c4f': color\.edge/);
+  assert.match(app, /'#1b8964': color\.lane/);
+});
