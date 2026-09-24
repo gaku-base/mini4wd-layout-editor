@@ -1,17 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="180" height="144" viewBox="0 0 180 144">
   <defs>
     <linearGradient id="overpass" x1="37.8" y1="30" x2="37.8" y2="114" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#bcb9b5"/>
-      <stop offset="0.5" stop-color="#d9d6d1"/>
-      <stop offset="1" stop-color="#f9f7f3"/>
+      <stop offset="0" stop-color="var(--part-base-m20,#bdbbb7)"/>
+      <stop offset="0.5" stop-color="var(--part-base-m08,#dbd9d5)"/>
+      <stop offset="1" stop-color="var(--part-base-p05,#fcfaf6)"/>
     </linearGradient>
   </defs>
   <path d="M0 18 H108 A54 54 0 0 1 108 126 H0"
-        fill="none" stroke="#efede9" stroke-width="36" stroke-linecap="butt" stroke-linejoin="round"/>
+        fill="none" stroke="var(--part-base,#efede9)" stroke-width="36" stroke-linecap="butt" stroke-linejoin="round"/>
   <path d="M0 0 H108 A72 72 0 0 1 108 144 H0 M0 36 H108 A36 36 0 0 1 108 108 H0"
-        fill="none" stroke="#858480" stroke-width="1.05"/>
+        fill="none" stroke="var(--part-edge,#858480)" stroke-width="1.05"/>
   <path d="M0 12 H108 A60 60 0 0 1 108 132 H0 M0 24 H108 A48 48 0 0 1 108 120 H0"
-        fill="none" stroke="#8d8c89" stroke-width="0.8"/>
+        fill="none" stroke="var(--part-lane,#8d8c89)" stroke-width="0.8"/>
   <path d="M54 0 V36 M108 0 V36 M133.456 46.544 L158.912 21.088 M144 72 H180
            M133.456 97.456 L158.912 122.912 M108 108 V144 M54 108 V144"
         fill="none" stroke="#74797d" stroke-width="0.52"/>
@@ -19,7 +19,7 @@
         fill="none" stroke="#202426" stroke-opacity="0.24" stroke-width="15.8"
         stroke-linecap="butt" stroke-linejoin="round"/>
   <path d="M0 30 H37.8 C96 30 96 114 37.8 114 H0"
-        fill="none" stroke="#858480" stroke-width="13.6"
+        fill="none" stroke="var(--part-edge,#858480)" stroke-width="13.6"
         stroke-linecap="butt" stroke-linejoin="round"/>
   <path d="M0 30 H37.8 C96 30 96 114 37.8 114 H0"
         fill="none" stroke="url(#overpass)" stroke-width="12"
