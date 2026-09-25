@@ -27,11 +27,19 @@ async function main() {
   page.on('console', message => { if (message.type() === 'error') consoleErrors.push(message.text()); });
   page.on('dialog', async dialog => dialog.accept());
   await page.route('**/favicon.ico', route => route.fulfill({ status: 204, body: '' }));
-  await page.addInitScript(() => { window.__COURSE_ENABLE_DEBUG__ = true; });
+  await page.addInitScript(() => {
+    window.__COURSE_ENABLE_DEBUG__ = true;
+    Object.defineProperty(window, '__mini4wdCourseDebug', {
+      configurable: false,
+      enumerable: false,
+      writable: true,
+      value: undefined
+    });
+  });
 
   try {
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 20000 });
-    await page.waitForFunction(() => !!window.__mini4wdCourseDebug?.renderPartDataUrl, { timeout: TIMEOUT });
+    await page.waitForFunction(() => !!window.__mini4wdCourseDebug?.renderPartDataUrl, null, { timeout: TIMEOUT });
 
     const result = await page.evaluate(async () => {
       async function pixels(dataUrl) {
