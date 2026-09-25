@@ -62,7 +62,8 @@ jobs:
           test -f browser-connector-target-lock-smoke.js
           test -f browser-start-boundary-snap-smoke.js
           test -f browser-part-color-independence-smoke.js
-          test -f browser-pimentoso-extract.js\n          test -f browser-tpb7w4-rebuild.js
+          test -f browser-pimentoso-extract.js
+          test -f browser-tpb7w4-rebuild.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -166,7 +167,8 @@ jobs:
           node browser-ui-controls-smoke.js
           node browser-slope-visibility-smoke.js
           node browser-part-color-independence-smoke.js
-          node browser-pimentoso-extract.js\n          node browser-tpb7w4-rebuild.js
+          node browser-pimentoso-extract.js
+          node browser-tpb7w4-rebuild.js
           node browser-slope-underpass-smoke.js
           node browser-bank20-projection-smoke.js
           node browser-connector-target-lock-smoke.js
