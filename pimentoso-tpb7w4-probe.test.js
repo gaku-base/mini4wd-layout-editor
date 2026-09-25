@@ -23,10 +23,18 @@ test('probe Pimentoso TPB7W4 public layout endpoints', async () => {
   console.log('HTML_LEN', html.length);
   console.log('HTML_CODE_SNIPS', snippets(html, CODE, 220));
 
-  const loadRes = await fetch(`${BASE}/load/${CODE}.js`);
+  const pageCookie = pageRes.headers.get('set-cookie') || '';
+  const loadRes = await fetch(`${BASE}/load/${CODE}.js`, {
+    headers: {
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'text/javascript, application/javascript, application/ecmascript, application/x-ecmascript, */*; q=0.01',
+      'Referer': `${BASE}/${CODE}`,
+      ...(pageCookie ? { 'Cookie': pageCookie.split(';')[0] } : {})
+    }
+  });
   console.log('LOAD_STATUS', loadRes.status);
   const loadText = await loadRes.text();
-  console.log('LOAD_BODY', loadText.slice(0, 30000));
+  console.log('LOAD_BODY', loadText.slice(0, 50000));
 
   const apiRes = await fetch(`${BASE}/api/track/${CODE}`);
   console.log('API_STATUS', apiRes.status);
