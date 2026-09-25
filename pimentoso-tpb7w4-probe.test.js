@@ -1,0 +1,55 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const BASE = 'https://mini4wd-track-editor.pimentoso.com';
+const CODE = 'TPB7W4';
+
+function snippets(text, needle, radius = 180) {
+  const out = [];
+  let from = 0;
+  while (out.length < 20) {
+    const i = text.indexOf(needle, from);
+    if (i < 0) break;
+    out.push(text.slice(Math.max(0, i - radius), Math.min(text.length, i + needle.length + radius)).replace(/\s+/g, ' '));
+    from = i + needle.length;
+  }
+  return out;
+}
+
+test('probe Pimentoso TPB7W4 public layout endpoints', async () => {
+  const pageRes = await fetch(`${BASE}/${CODE}`, { redirect: 'follow' });
+  console.log('PAGE', pageRes.status, pageRes.url);
+  const html = await pageRes.text();
+  console.log('HTML_LEN', html.length);
+  console.log('HTML_CODE_SNIPS', snippets(html, CODE, 220));
+
+  const apiRes = await fetch(`${BASE}/api/track/${CODE}`);
+  console.log('API_STATUS', apiRes.status);
+  const apiText = await apiRes.text();
+  console.log('API_BODY', apiText.slice(0, 5000));
+
+  const scriptSrcs = [...html.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)].map(m => m[1]);
+  console.log('SCRIPTS', scriptSrcs);
+
+  for (const src of scriptSrcs) {
+    const url = new URL(src, BASE).href;
+    if (!url.startsWith(BASE)) continue;
+    const res = await fetch(url);
+    const text = await res.text();
+    const hits = [
+      ...snippets(text, '/api/', 240),
+      ...snippets(text, 'track_data', 240),
+      ...snippets(text, 'trackData', 240),
+      ...snippets(text, 'loadTrack', 240),
+      ...snippets(text, 'pieces', 240),
+      ...snippets(text, 'fabric', 240),
+      ...snippets(text, 'canvas', 240)
+    ];
+    if (hits.length) {
+      console.log('SCRIPT_HITS', url, hits.slice(0, 30));
+    }
+  }
+
+  assert.equal(pageRes.ok, true);
+  assert.equal(apiRes.ok, true);
+});
