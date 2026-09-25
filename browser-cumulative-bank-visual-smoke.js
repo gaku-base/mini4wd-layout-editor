@@ -129,9 +129,78 @@ async function main() {
         `Bank20 outgoing edge must shrink by stage: ${bankStages.map(stage => stage.right).join(' > ')}`);
     }
 
+    await page.evaluate(() => {
+      const debug = window.__mini4wdCourseDebug;
+      const base = debug.getState();
+      const parts = [
+        { id:'up-1', type:'bank20', x:138.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:1 },
+        { id:'up-2', type:'bank20', x:161.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:2 },
+        { id:'up-3', type:'bank20', x:184.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:3 },
+        { id:'up-4', type:'bank20', x:207.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:4 },
+        { id:'banked-straight', type:'straight', x:246, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'blue', zMm:0, zOrder:5 },
+        { id:'down-1', type:'bank20', x:284.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:6 },
+        { id:'down-2', type:'bank20', x:307.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:7 },
+        { id:'down-3', type:'bank20', x:330.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:8 },
+        { id:'down-4', type:'bank20', x:353.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:9 },
+        { id:'flat-straight', type:'straight', x:392, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'red', zMm:0, zOrder:10 }
+      ];
+      const connections = [
+        ['start','b','up-1','a'],
+        ['up-1','b','up-2','a'],
+        ['up-2','b','up-3','a'],
+        ['up-3','b','up-4','a'],
+        ['up-4','b','banked-straight','a'],
+        ['banked-straight','b','down-1','b'],
+        ['down-1','a','down-2','b'],
+        ['down-2','a','down-3','b'],
+        ['down-3','a','down-4','b'],
+        ['down-4','a','flat-straight','a']
+      ].map((edge, index) => ({
+        partAId:edge[0], connectorAId:edge[1], partBId:edge[2], connectorBId:edge[3], createdOrder:index + 1
+      }));
+      debug.loadState({
+        ...base,
+        field:{ ...base.field, originX:0, originY:0, widthCm:520, heightCm:240, gridCm:10 },
+        start:{ id:'start', type:'start', x:100, y:120, rotation:0, zMm:0, pitchDeg:0, bankAngleDeg:0, zOrder:0, colorKey:'default' },
+        parts,
+        connections,
+        activeConnection:null,
+        selectedType:'straight',
+        rotation:0
+      });
+    });
+
+    const propagated = await page.evaluate(() => {
+      const state = window.__mini4wdCourseDebug.getState();
+      const runtime = window.__mini4wdCourseDebug.getRuntimeState();
+      return {
+        parts:Object.fromEntries(state.parts.map(part => [part.id, {
+          bankAngleDeg:part.bankAngleDeg,
+          bankAngle:part.bankAngle,
+          endpointAngles:(part.endpointStates || []).map(endpoint => endpoint.bankAngle)
+        }])),
+        bankWarnings:runtime.bankWarnings
+      };
+    });
+
+    assert.deepEqual(propagated.parts['up-1'].endpointAngles, [0,20]);
+    assert.deepEqual(propagated.parts['up-2'].endpointAngles, [20,40]);
+    assert.deepEqual(propagated.parts['up-3'].endpointAngles, [40,60]);
+    assert.deepEqual(propagated.parts['up-4'].endpointAngles, [60,80]);
+    assert.equal(propagated.parts['banked-straight'].bankAngleDeg, 80);
+    assert.deepEqual(propagated.parts['banked-straight'].endpointAngles, [80,80]);
+    assert.deepEqual(propagated.parts['down-1'].endpointAngles, [60,80]);
+    assert.deepEqual(propagated.parts['down-2'].endpointAngles, [40,60]);
+    assert.deepEqual(propagated.parts['down-3'].endpointAngles, [20,40]);
+    assert.deepEqual(propagated.parts['down-4'].endpointAngles, [0,20]);
+    assert.equal(propagated.parts['flat-straight'].bankAngleDeg, 0);
+    assert.deepEqual(propagated.parts['flat-straight'].endpointAngles, [0,0]);
+    assert.deepEqual(propagated.bankWarnings, []);
+
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
 
+    console.log('✓ connected Bank20 chain propagates 0→20→40→60→80° and unwinds 80→60→40→20→0°');
     console.log(`✓ banked straight visual heights 0/20/40/60/80° = ${heights.join('/')}`);
     console.log('✓ Bank20 transitions taper correctly for 0→20, 20→40, 40→60 and 60→80 degrees');
     console.log('✓ cumulative bank visual browser rehearsal passed');
