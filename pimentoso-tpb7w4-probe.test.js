@@ -23,6 +23,11 @@ test('probe Pimentoso TPB7W4 public layout endpoints', async () => {
   console.log('HTML_LEN', html.length);
   console.log('HTML_CODE_SNIPS', snippets(html, CODE, 220));
 
+  const loadRes = await fetch(`${BASE}/load/${CODE}.js`);
+  console.log('LOAD_STATUS', loadRes.status);
+  const loadText = await loadRes.text();
+  console.log('LOAD_BODY', loadText.slice(0, 30000));
+
   const apiRes = await fetch(`${BASE}/api/track/${CODE}`);
   console.log('API_STATUS', apiRes.status);
   const apiText = await apiRes.text();
