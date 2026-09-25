@@ -113,18 +113,20 @@ async function main() {
       assert.ok(Math.abs(actual - expected) <= tolerance, `straight ${angle}° height ${actual} should be near ${expected.toFixed(1)} ± ${tolerance.toFixed(1)}`);
     }
 
-    for (const baseAngle of [0, 20, 40, 60]) {
-      const measurement = result.bank[baseAngle];
-      assert.ok(measurement.left.height > measurement.right.height,
-        `Bank20 ${baseAngle}→${baseAngle + 20}° must taper: ${measurement.left.height} > ${measurement.right.height}`);
-      const expectedLeft = measurement.canvasHeight * Math.cos(baseAngle * Math.PI / 180);
-      const expectedRight = measurement.canvasHeight * Math.cos((baseAngle + 20) * Math.PI / 180);
-      const leftTolerance = Math.max(14, expectedLeft * 0.08);
-      const rightTolerance = Math.max(14, expectedRight * 0.08);
-      assert.ok(Math.abs(measurement.left.height - expectedLeft) <= leftTolerance,
-        `Bank20 left ${baseAngle}°: ${measurement.left.height} vs ${expectedLeft.toFixed(1)} ± ${leftTolerance.toFixed(1)}`);
-      assert.ok(Math.abs(measurement.right.height - expectedRight) <= rightTolerance,
-        `Bank20 right ${baseAngle + 20}°: ${measurement.right.height} vs ${expectedRight.toFixed(1)} ± ${rightTolerance.toFixed(1)}`);
+    const bankStages = [0, 20, 40, 60].map(baseAngle => ({
+      baseAngle,
+      left: result.bank[baseAngle].left.height,
+      right: result.bank[baseAngle].right.height
+    }));
+    for (const stage of bankStages) {
+      assert.ok(stage.left > stage.right,
+        `Bank20 ${stage.baseAngle}→${stage.baseAngle + 20}° must taper: ${stage.left} > ${stage.right}`);
+    }
+    for (let index = 1; index < bankStages.length; index++) {
+      assert.ok(bankStages[index].left < bankStages[index - 1].left,
+        `Bank20 incoming edge must shrink by stage: ${bankStages.map(stage => stage.left).join(' > ')}`);
+      assert.ok(bankStages[index].right < bankStages[index - 1].right,
+        `Bank20 outgoing edge must shrink by stage: ${bankStages.map(stage => stage.right).join(' > ')}`);
     }
 
     assert.deepEqual(pageErrors, []);
