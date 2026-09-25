@@ -7023,7 +7023,7 @@
       renderExportDataUrl: scale => createExportCanvas(Number(scale)).toDataURL('image/png'),
       resolvePartPose,
       tracePartGeometry: part => JSON.parse(JSON.stringify(partRenderTrace(part))),
-      renderPartDataUrl: (type, bankRole = 'entry', scale = 1) => {
+      renderPartDataUrl: (type, bankRole = 'entry', scale = 1, bankAngleDeg = 0) => {
         const def = PARTS[type];
         if (!def?.visual) return null;
         const renderScale = Math.max(1, Math.min(8, Math.round(Number(scale) || 1)));
@@ -7034,7 +7034,7 @@
         c.scale(renderScale, renderScale);
         c.translate(def.visual.originX, def.visual.originY);
         if (type === 'start') drawStartLane(c, { x:0, y:0, rotation:0 }, true, true);
-        else drawPart(c, { id:'qa', type, x:0, y:0, rotation:0, colorKey:'default', bankRole }, { exportMode:true });
+        else drawPart(c, { id:'qa', type, x:0, y:0, rotation:0, colorKey:'default', bankRole, bankAngleDeg:Number(bankAngleDeg) || 0 }, { exportMode:true });
         return canvas.toDataURL('image/png');
       }
     };
