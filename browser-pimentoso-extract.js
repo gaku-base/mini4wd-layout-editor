@@ -106,6 +106,40 @@ async function main() {
       };
     });
 
+    const spriteInspect = await page.evaluate(() => {
+      const simplify = value => {
+        if (value == null || ['string','number','boolean'].includes(typeof value)) return value;
+        if (Array.isArray(value) && value.length <= 20 && value.every(item => item == null || ['string','number','boolean'].includes(typeof item))) return value;
+        if (value && typeof value === 'object') {
+          const out = {};
+          for (const [key, item] of Object.entries(value)) {
+            if (item == null || ['string','number','boolean'].includes(typeof item)) out[key] = item;
+            else if (Array.isArray(item) && item.length <= 20 && item.every(v => v == null || ['string','number','boolean'].includes(typeof v))) out[key] = item;
+          }
+          return out;
+        }
+        return undefined;
+      };
+      const list = Array.isArray(window.sprites) ? window.sprites : [];
+      return {
+        count: list.length,
+        sprites: list.map((sprite, index) => {
+          const out = { index, ctor: sprite?.constructor?.name || null, keys: Object.keys(sprite || {}) };
+          for (const key of Object.keys(sprite || {})) {
+            try {
+              const v = simplify(sprite[key]);
+              if (v !== undefined) out[key] = v;
+            } catch (_) {}
+          }
+          return out;
+        }),
+        getTrackBoundsSource: typeof window.getTrackBounds === 'function' ? String(window.getTrackBounds).slice(0, 12000) : null,
+        parseTrackSource: typeof window.parseTrack === 'function' ? String(window.parseTrack).slice(0, 16000) : null,
+        boundsNoArgs: (() => { try { return window.getTrackBounds?.(); } catch (e) { return { error: String(e) }; } })()
+      };
+    });
+    console.log('SPRITES', JSON.stringify(spriteInspect));
+
     console.log('INSPECT', JSON.stringify(inspect));
     console.log('NETWORK', JSON.stringify(network));
 
