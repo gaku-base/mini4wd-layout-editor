@@ -174,15 +174,21 @@ function layoutBounds(pageLayout, catalog, poseApi) {
 
 async function main() {
   if (!CHROME_BIN) throw new Error('CHROME_BIN required');
-  const sourceResponse = await fetch('https://mini4wd-track-editor.pimentoso.com/load/TPB7W4.js');
-  assert.equal(sourceResponse.status, 200);
-  const sourceJs = await sourceResponse.text();
-  const sourceMatch = sourceJs.match(/var text = '([^']*)'/);
-  assert.ok(sourceMatch?.[1], 'TPB7W4 source track string not found');
-  SOURCE = sourceMatch[1];
   fs.mkdirSync(ARTIFACT_DIR,{recursive:true});
   const browser=await chromium.launch({executablePath:CHROME_BIN,headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
   const context=await browser.newContext({viewport:{width:1700,height:1050}});
+
+  const sourcePage=await context.newPage();
+  await sourcePage.goto('https://mini4wd-track-editor.pimentoso.com/TPB7W4',{waitUntil:'domcontentloaded',timeout:45000});
+  const sourceJs=await sourcePage.evaluate(async () => {
+    const response=await fetch('/load/TPB7W4.js',{credentials:'include'});
+    return await response.text();
+  });
+  const sourceMatch=sourceJs.match(/var text = '([^']*)'/);
+  assert.ok(sourceMatch?.[1], 'TPB7W4 source track string not found');
+  SOURCE=sourceMatch[1];
+  await sourcePage.close();
+
   const page=await context.newPage();
   const errors=[];
   page.on('pageerror',e=>errors.push(e.stack||e.message));
