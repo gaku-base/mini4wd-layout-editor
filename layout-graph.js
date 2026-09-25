@@ -659,7 +659,8 @@
         edge,
         point: { x: endpoint.x, y: endpoint.y },
         heading: endpoint.directionDeg,
-        connectionWidthMm: endpoint.connectionWidthMm
+        connectionWidthMm: endpoint.connectionWidthMm,
+        bankAngleDeg: endpoint.bankAngleDeg
       });
     });
     return result;
