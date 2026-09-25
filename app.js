@@ -508,8 +508,9 @@
   }
 
   function endpointState(value = {}) {
+    const angle = Number(value.bankAngle);
     return {
-      bankAngle: Number(value.bankAngle) === 20 ? 20 : 0,
+      bankAngle: Number.isFinite(angle) && Math.abs(angle) > 1e-9 ? angle : 0,
       bankSectionId: value.bankSectionId || null,
       elevationMm: Number(value.elevationMm) || 0
     };
@@ -1844,7 +1845,8 @@
     for (const seam of seams) {
       const style = PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams, selected: !!options.selected && isSelected(owner.id), exportMode: !!options.exportMode });
       if (!style) continue;
-      const halfWidth = (Number(seam.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM) / 20 - style.edgeInset;
+      const halfWidth = ((Number(seam.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM)
+        * LAYOUT_GRAPH.bankProjectionScale(Number(seam.bankAngleDeg) || 0)) / 20 - style.edgeInset;
       c.save(); c.translate(seam.point.x, seam.point.y); c.rotate(seam.heading * Math.PI / 180);
       c.strokeStyle = style.color; c.lineWidth = style.lineWidth; c.lineCap = 'butt';
       c.beginPath(); c.moveTo(0, -halfWidth); c.lineTo(0, halfWidth); c.stroke(); c.restore();
@@ -2670,6 +2672,48 @@
     return PART_RENDER_POSE.tracePart(PARTS[part.type], part);
   }
 
+  function partBankVisualAngle(part, def = PARTS[part?.type]) {
+    if (!part || !def || def.bank20) return 0;
+    const angle = Number(part.bankAngleDeg ?? part.bankAngle);
+    return Number.isFinite(angle) ? angle : 0;
+  }
+
+  function applyBankVisualProjection(c, part, def) {
+    const angle = partBankVisualAngle(part, def);
+    if (Math.abs(angle) <= LAYOUT_GRAPH.ANGLE_EPSILON_DEG) return null;
+    const transform = LAYOUT_GRAPH.bankProjectionTransform(def, angle);
+    c.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
+    return transform;
+  }
+
+  function bankEndpointAngles(part, def) {
+    const connectors = LAYOUT_GRAPH.connectorsForDefinition(def);
+    return connectors.map((connector, index) => {
+      const stored = Number(part?.endpointStates?.[index]?.bankAngle);
+      if (Number.isFinite(stored)) return stored;
+      return (Number(part?.bankAngleDeg) || 0) + (Number(connector.bankAngleDeg) || 0);
+    });
+  }
+
+  function bankTransitionPalette(part, def) {
+    if (!part?.colorKey || part.colorKey === 'default') {
+      return {
+        low: '#1b7a5c',
+        mid: '#35bd8b',
+        high: '#82ddb9',
+        edge: '#156c4f',
+        lane: '#1b8964'
+      };
+    }
+    return {
+      low: shadeColor(def.base, -.16),
+      mid: def.base,
+      high: shadeColor(def.base, .20),
+      edge: def.edge,
+      lane: def.lane
+    };
+  }
+
   function drawPart(c, part, opts = {}) {
     const def = resolvePartDef(part);
     if (!def) return;
@@ -2679,15 +2723,16 @@
     c.save();
     c.translate(part.x, part.y);
     c.rotate(pose.rotation * Math.PI / 180);
+    const bankProjection = applyBankVisualProjection(c, part, def);
     recordCornerDiagnostic('resolved-pose', part, { poseSource: 'resolvePartPose' });
-    const usedAsset = drawPartAsset(c, def, part.colorKey || 'default', part);
+    const usedAsset = def.bank20 ? false : drawPartAsset(c, def, part.colorKey || 'default', part);
     if (!usedAsset) {
       if (def.corner45) drawCorner45(c, def, exportMode);
       else if (def.wave) drawWave(c, def, exportMode);
       else if (def.burning) drawBurningGraphic(c, def);
       else drawStraightLike(c, def, exportMode, part);
     }
-    recordCornerDiagnostic('drawn', part, { poseSource: 'resolvePartPose', usedAsset });
+    recordCornerDiagnostic('drawn', part, { poseSource: 'resolvePartPose', usedAsset, bankProjection });
     if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
     if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
@@ -2706,7 +2751,9 @@
     if (!style) return;
     for (const endpoint of partEndpoints(part)) {
       if (hidden.has(endpoint.connectorId)) continue;
-      const face = PART_SEAMS.connectorFace(endpoint, { edgeInsetCm: style.edgeInset });
+      const projectedWidthMm = (Number(endpoint.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM)
+        * LAYOUT_GRAPH.bankProjectionScale(Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0);
+      const face = PART_SEAMS.connectorFace({ ...endpoint, connectionWidthMm: projectedWidthMm }, { edgeInsetCm: style.edgeInset });
       c.save();
       c.strokeStyle = style.color;
       c.lineWidth = style.lineWidth;
@@ -2727,6 +2774,10 @@
 
 
   function drawStraightLike(c, def, exportMode, part = {}) {
+    if (def.bank20) {
+      drawBankGraphic(c, def, part);
+      return;
+    }
     if (def.lcjump) {
       drawJumpGraphic(c, def);
       return;
@@ -2751,7 +2802,6 @@
 
     if (def.lanechange) drawLaneChangeGraphic(c, def);
     if (def.slope) drawSlopeGraphic(c, def);
-    if (def.bank20) drawBankGraphic(c, def, part);
   }
 
 
@@ -2857,27 +2907,48 @@
 
   function drawBankGraphic(c, def, part = {}) {
     c.save();
-    const role = part.bankRole || 'entry';
-    const reverse = role === 'exit' ? -1 : 1;
-    const grad = c.createLinearGradient(-def.w / 2 * reverse, 0, def.w / 2 * reverse, 0);
-    grad.addColorStop(0, shadeColor(def.base, -.16));
-    grad.addColorStop(.52, def.base);
-    grad.addColorStop(1, shadeColor(def.base, .05));
-    c.globalAlpha = .82;
-    c.fillStyle = grad;
-    c.fillRect(-def.w / 2 + 1, -def.h / 2 + 1, def.w - 2, def.h - 2);
-    c.globalAlpha = 1;
+    const angles = bankEndpointAngles(part, def);
+    const leftAngle = Number(angles[0]) || 0;
+    const rightAngle = Number(angles[1]) || 0;
+    const leftScale = LAYOUT_GRAPH.bankProjectionScale(leftAngle);
+    const rightScale = LAYOUT_GRAPH.bankProjectionScale(rightAngle);
     const trackWidth = Number(def.geometry?.height) || Number(def.h) || TRACK_WIDTH_CM;
-    c.strokeStyle = def.lane;
+    const half = trackWidth / 2;
+    const x0 = -def.w / 2;
+    const x1 = def.w / 2;
+    const palette = bankTransitionPalette(part, def);
+    const risingToRight = Math.abs(rightAngle) >= Math.abs(leftAngle);
+    const grad = c.createLinearGradient(x0, 0, x1, 0);
+    grad.addColorStop(0, risingToRight ? palette.low : palette.high);
+    grad.addColorStop(.52, palette.mid);
+    grad.addColorStop(1, risingToRight ? palette.high : palette.low);
+
+    c.beginPath();
+    c.moveTo(x0, -half * leftScale);
+    c.lineTo(x1, -half * rightScale);
+    c.lineTo(x1, half * rightScale);
+    c.lineTo(x0, half * leftScale);
+    c.closePath();
+    c.fillStyle = grad;
+    c.fill();
+    c.strokeStyle = palette.edge;
+    c.lineWidth = 1.05;
+    c.stroke();
+
+    c.strokeStyle = palette.lane;
     c.lineWidth = .8;
-    for (let i = 1; i < 3; i++) {
-      const y = -trackWidth / 2 + trackWidth * i / 3;
-      c.beginPath(); c.moveTo(-def.w / 2, y); c.lineTo(def.w / 2, y); c.stroke();
+    for (const laneFraction of [-1 / 6, 1 / 6]) {
+      c.beginPath();
+      c.moveTo(x0, trackWidth * laneFraction * leftScale);
+      c.lineTo(x1, trackWidth * laneFraction * rightScale);
+      c.stroke();
     }
-    c.fillStyle = 'rgba(60,60,58,.68)';
-    c.font = '700 4.5px sans-serif';
-    c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(role === 'exit' ? 'OUT' : 'IN', 0, 0);
+
+    c.fillStyle = 'rgba(40,52,46,.72)';
+    c.font = '700 3.8px sans-serif';
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(`${Math.round(leftAngle)}→${Math.round(rightAngle)}°`, 0, 0);
     c.restore();
   }
 
@@ -3575,16 +3646,25 @@
     let sectionId = incoming.bankSectionId;
     const transitionConnectors = localEndpoints(type).filter(endpoint => endpoint.bankTransitionToDeg != null);
     if (transitionConnectors.length) {
-      if (incoming.bankAngle === 20) {
-        bankRole = 'exit';
-        endpointStates[otherIndex] = endpointState({ bankAngle: 0, elevationMm: incoming.elevationMm });
-        partBankAngle = 20;
+      const transition = LAYOUT_GRAPH.bankTransitionForDefinition(PARTS[type], incoming.bankAngle, attachedIndex);
+      const outgoingAngle = transition.outgoingAngleDeg;
+      const epsilon = LAYOUT_GRAPH.ANGLE_EPSILON_DEG;
+      bankRole = transition.role;
+      if (Math.abs(outgoingAngle) > epsilon) {
+        sectionId = incoming.bankSectionId || bankSectionId || 'bank-pending';
       } else {
-        bankRole = 'entry';
-        sectionId = bankSectionId || `bank-pending`;
-        endpointStates[otherIndex] = endpointState({ bankAngle: 20, bankSectionId: sectionId, elevationMm: incoming.elevationMm });
-        partBankAngle = 20;
+        sectionId = null;
       }
+      endpointStates[attachedIndex] = endpointState({
+        ...incoming,
+        bankSectionId: Math.abs(incoming.bankAngle) > epsilon ? (incoming.bankSectionId || sectionId) : null
+      });
+      endpointStates[otherIndex] = endpointState({
+        bankAngle: outgoingAngle,
+        bankSectionId: Math.abs(outgoingAngle) > epsilon ? sectionId : null,
+        elevationMm: incoming.elevationMm
+      });
+      partBankAngle = transition.midpointAngleDeg;
     }
     return { endpointStates, bankRole, bankAngle: partBankAngle, bankSectionId: sectionId };
   }
@@ -5034,9 +5114,11 @@
     const id = makeId();
     let bankSectionId = proposal.bankSectionId;
     let endpointStates = proposal.endpointStates?.map(endpointState);
-    if (PARTS[proposal.type]?.bank20 && proposal.bankRole === 'entry') {
+    if (PARTS[proposal.type]?.bank20 && proposal.bankSectionId === 'bank-pending') {
       bankSectionId = `bank-${id}`;
-      endpointStates = endpointStates.map(value => value.bankAngle === 20 ? endpointState({ ...value, bankSectionId }) : value);
+      endpointStates = endpointStates.map(value => Math.abs(value.bankAngle) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG
+        ? endpointState({ ...value, bankSectionId })
+        : value);
     }
     const part = {
       ...renderPartFromProposal(proposal, id),
@@ -5121,6 +5203,7 @@
       part.endpointStates = [endpointState(), endpointState()];
       part.bankRole = null;
       part.bankAngle = 0;
+      part.bankAngleDeg = 0;
       part.bankSectionId = null;
     });
 
@@ -5158,16 +5241,16 @@
       const attached = connected.endpointIndex;
       const other = attached === 0 ? 1 : 0;
       const bank = connectionStateForPlacement(part.type, value, attached, part.bankSectionId || `bank-${part.id}`);
-      if (part.endpointStates[attached]?.bankAngle && part.endpointStates[attached].bankAngle !== bank.endpointStates[attached].bankAngle) {
+      if (Math.abs(Number(part.endpointStates[attached]?.bankAngle) || 0) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG
+        && Math.abs(part.endpointStates[attached].bankAngle - bank.endpointStates[attached].bankAngle) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG) {
         state.bankWarnings.push(`${partDisplayName(part)}のバンク状態が両側で一致しません`);
       }
+      const attachedConnector = localEndpoints(part.type)[attached];
       part.endpointStates = bank.endpointStates;
       part.bankRole = bank.bankRole;
       part.bankAngle = bank.bankAngle;
-      part.bankSectionId = bank.bankRole === 'entry' ? `bank-${part.id}` : bank.bankSectionId;
-      if (part.bankRole === 'entry') {
-        part.endpointStates[other] = endpointState({ ...part.endpointStates[other], bankSectionId: part.bankSectionId });
-      }
+      part.bankAngleDeg = value.bankAngle - (Number(attachedConnector?.bankAngleDeg) || 0);
+      part.bankSectionId = bank.bankSectionId;
       const outgoingRaw = raw.find(item => item.sourceId === part.id && item.endpointIndex === other);
       if (outgoingRaw) queue.push({ endpoint: outgoingRaw, value: endpointState(part.endpointStates[other]) });
     }
@@ -6940,7 +7023,7 @@
       renderExportDataUrl: scale => createExportCanvas(Number(scale)).toDataURL('image/png'),
       resolvePartPose,
       tracePartGeometry: part => JSON.parse(JSON.stringify(partRenderTrace(part))),
-      renderPartDataUrl: (type, bankRole = 'entry', scale = 1) => {
+      renderPartDataUrl: (type, bankRole = 'entry', scale = 1, bankAngleDeg = 0) => {
         const def = PARTS[type];
         if (!def?.visual) return null;
         const renderScale = Math.max(1, Math.min(8, Math.round(Number(scale) || 1)));
@@ -6951,7 +7034,7 @@
         c.scale(renderScale, renderScale);
         c.translate(def.visual.originX, def.visual.originY);
         if (type === 'start') drawStartLane(c, { x:0, y:0, rotation:0 }, true, true);
-        else drawPart(c, { id:'qa', type, x:0, y:0, rotation:0, colorKey:'default', bankRole }, { exportMode:true });
+        else drawPart(c, { id:'qa', type, x:0, y:0, rotation:0, colorKey:'default', bankRole, bankAngleDeg:Number(bankAngleDeg) || 0 }, { exportMode:true });
         return canvas.toDataURL('image/png');
       }
     };

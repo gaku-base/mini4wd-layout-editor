@@ -225,6 +225,72 @@
     return finite(target?.bankAngleDeg) - finite(moving?.bankAngleDeg);
   }
 
+  function bankProjectionScale(angleDeg) {
+    return Math.abs(Math.cos(finite(angleDeg) * Math.PI / 180));
+  }
+
+  function bankTransitionForDefinition(definition, incomingAngleDeg = 0, attachedIndex = 0) {
+    const connectors = connectorsForDefinition(definition);
+    if (connectors.length < 2) {
+      const angle = finite(incomingAngleDeg);
+      return {
+        incomingAngleDeg: angle,
+        outgoingAngleDeg: angle,
+        deltaDeg: 0,
+        midpointAngleDeg: angle,
+        attachedIndex: 0,
+        otherIndex: 0,
+        role: null
+      };
+    }
+    const index = Math.max(0, Math.min(connectors.length - 1, Math.trunc(finite(attachedIndex))));
+    const otherIndex = index === 0 ? 1 : 0;
+    const incoming = finite(incomingAngleDeg);
+    const delta = finite(connectors[otherIndex]?.bankAngleDeg) - finite(connectors[index]?.bankAngleDeg);
+    const outgoing = incoming + delta;
+    const magnitudeDelta = Math.abs(outgoing) - Math.abs(incoming);
+    return {
+      incomingAngleDeg: incoming,
+      outgoingAngleDeg: outgoing,
+      deltaDeg: delta,
+      midpointAngleDeg: (incoming + outgoing) / 2,
+      attachedIndex: index,
+      otherIndex,
+      role: magnitudeDelta > ANGLE_EPSILON_DEG ? 'entry'
+        : magnitudeDelta < -ANGLE_EPSILON_DEG ? 'exit'
+          : null
+    };
+  }
+
+  function bankProjectionTransform(definition, angleDeg = 0) {
+    const connectors = connectorsForDefinition(definition);
+    const scale = bankProjectionScale(angleDeg);
+    if (connectors.length < 2) {
+      return { a: 1, b: 0, c: 0, d: scale, e: 0, f: 0, scale, angleDeg: finite(angleDeg) };
+    }
+    const left = connectors[0];
+    const right = connectors[1];
+    const dx = right.localX - left.localX;
+    const dy = right.localY - left.localY;
+    const length = Math.hypot(dx, dy);
+    if (length <= 1e-9) {
+      return { a: 1, b: 0, c: 0, d: scale, e: 0, f: 0, scale, angleDeg: finite(angleDeg) };
+    }
+    const ux = dx / length;
+    const uy = dy / length;
+    const nx = -uy;
+    const ny = ux;
+    const a = ux * ux + scale * nx * nx;
+    const b = uy * ux + scale * ny * nx;
+    const c = ux * uy + scale * nx * ny;
+    const d = uy * uy + scale * ny * ny;
+    const cx = (left.localX + right.localX) / 2;
+    const cy = (left.localY + right.localY) / 2;
+    const e = cx - (a * cx + c * cy);
+    const f = cy - (b * cx + d * cy);
+    return { a, b, c, d, e, f, scale, angleDeg: finite(angleDeg), centerX: cx, centerY: cy };
+  }
+
   function solveSnapPose(partValue, localConnectorValue, target) {
     const part = normalizePart(partValue);
     const local = normalizeConnector(localConnectorValue);
@@ -593,7 +659,8 @@
         edge,
         point: { x: endpoint.x, y: endpoint.y },
         heading: endpoint.directionDeg,
-        connectionWidthMm: endpoint.connectionWidthMm
+        connectionWidthMm: endpoint.connectionWidthMm,
+        bankAngleDeg: endpoint.bankAngleDeg
       });
     });
     return result;
@@ -604,7 +671,7 @@
     normalizeAngle, angleDistance, rotate, normalizeConnector, connectorsForDefinition, normalizePart,
     worldConnector, allWorldConnectors, endpointKey, normalizeEdge, edgeKey, dedupeEdges, addEdge,
     removeEdgesForParts, connectorUsage, duplicateConnectorWarnings, connectedComponent,
-    connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, mirroredConnector, solveSnapPose, snapCandidates, snapTargetKey, nearestCandidateForEachTarget, choosePlacement, verticalEnvelope,
+    connectorCompatible, connectorsInheritBank, bankAdjustmentForDefinition, bankProjectionScale, bankTransitionForDefinition, bankProjectionTransform, mirroredConnector, solveSnapPose, snapCandidates, snapTargetKey, nearestCandidateForEachTarget, choosePlacement, verticalEnvelope,
     boundsOverlap, verticalOverlap, polygonArea, polygonBounds, occupancyPolygon, polygonIntersectionArea, interferenceWarnings, validateEdges, seamOwner, seamsByOwner
   });
 });

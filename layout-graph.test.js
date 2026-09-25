@@ -174,3 +174,52 @@ test('49 グループ吸着はbank差分を剛体適用しedge追加後に再計
 test('50 高さedge不一致は自動修正せず閉合警告を表示', () => {
   assert.match(appSource, /'height-mismatch': '高さが閉合していません'/);
 });
+
+
+test('51 Bank20 accumulates 20-degree stages through connector A and unwinds through connector B', () => {
+  let angle = 0;
+  for (const expected of [20, 40, 60, 80]) {
+    const transition = G.bankTransitionForDefinition(catalog.bank20, angle, 0);
+    assert.equal(transition.outgoingAngleDeg, expected);
+    assert.equal(transition.deltaDeg, 20);
+    assert.equal(transition.role, 'entry');
+    angle = transition.outgoingAngleDeg;
+  }
+  for (const expected of [60, 40, 20, 0]) {
+    const transition = G.bankTransitionForDefinition(catalog.bank20, angle, 1);
+    assert.equal(transition.outgoingAngleDeg, expected);
+    assert.equal(transition.deltaDeg, -20);
+    assert.equal(transition.role, 'exit');
+    angle = transition.outgoingAngleDeg;
+  }
+  assert.equal(angle, 0);
+});
+
+test('52 bank visual projection uses cosine width at 20, 40, 60 and 80 degrees', () => {
+  const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-12, `${actual} !== ${expected}`);
+  close(G.bankProjectionScale(20), Math.cos(20 * Math.PI / 180));
+  close(G.bankProjectionScale(40), Math.cos(40 * Math.PI / 180));
+  close(G.bankProjectionScale(60), 0.5);
+  close(G.bankProjectionScale(80), Math.cos(80 * Math.PI / 180));
+});
+
+test('53 bank visual projection keeps both connector centres fixed', () => {
+  const def = {
+    geometry: {
+      connectors: [
+        { id:'a', x:-20, y:-10, heading:180, bankAngleDeg:0 },
+        { id:'b', x:20, y:10, heading:0, bankAngleDeg:0 }
+      ]
+    }
+  };
+  const transform = G.bankProjectionTransform(def, 60);
+  const apply = point => ({
+    x: transform.a * point.x + transform.c * point.y + transform.e,
+    y: transform.b * point.x + transform.d * point.y + transform.f
+  });
+  for (const connector of G.connectorsForDefinition(def)) {
+    const point = apply({ x: connector.localX, y: connector.localY });
+    assert.ok(Math.abs(point.x - connector.localX) < 1e-9);
+    assert.ok(Math.abs(point.y - connector.localY) < 1e-9);
+  }
+});
