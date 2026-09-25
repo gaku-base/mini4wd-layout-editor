@@ -56,7 +56,14 @@ test('probe Pimentoso TPB7W4 public layout endpoints', async () => {
       ...snippets(text, 'loadTrack', 240),
       ...snippets(text, 'pieces', 240),
       ...snippets(text, 'fabric', 240),
-      ...snippets(text, 'canvas', 240)
+      ...snippets(text, 'canvas', 240),
+      ...snippets(text, 'Str1', 1000),
+      ...snippets(text, 'Cor1', 1000),
+      ...snippets(text, 'Chi1', 1000),
+      ...snippets(text, 'Lan1', 1000),
+      ...snippets(text, 'Ban1', 1000),
+      ...snippets(text, 'parseTrack', 1400),
+      ...snippets(text, 'Sprite.extend', 1000)
     ];
     if (hits.length) {
       console.log('SCRIPT_HITS', url, hits.slice(0, 30));
