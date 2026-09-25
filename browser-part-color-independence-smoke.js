@@ -95,7 +95,7 @@ async function main() {
       if (dialog?.open) dialog.close();
     });
 
-    await page.locator('#fitViewBtn').click();
+    await page.evaluate(() => document.querySelector('#fitViewBtn')?.click());
     await page.waitForTimeout(350);
 
     assert.deepEqual(colorsOf(await readLayout(page)), {
@@ -157,7 +157,7 @@ async function main() {
       const dialog = document.querySelector('#setupDialog');
       if (dialog?.open) dialog.close();
     });
-    await page.locator('#fitViewBtn').click();
+    await page.evaluate(() => document.querySelector('#fitViewBtn')?.click());
     await page.waitForTimeout(300);
 
     assert.deepEqual(colorsOf(await readLayout(page)), {
