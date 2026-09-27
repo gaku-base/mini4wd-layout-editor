@@ -41,32 +41,32 @@ function rect(minX, minY, maxX, maxY) {
   ];
 }
 
-const slopeFootprintMm = rect(-270, -180, 270, 180);
+const slopeFootprintMm = rect(-290, -180, 290, 180);
 const slopeAtOrigin = { positionMm: { x: 0, y: 0 }, rotationDeg: 0 };
 
-test('uses the single approved 272mm boundary from the verified slope profile', () => {
+test('uses the single approved 292mm boundary from the verified slope profile', () => {
   assert.equal(PROFILE.status, 'verified');
-  assert.equal(PROFILE.floorBlockingSideWallLengthMm, 270);
+  assert.equal(PROFILE.floorBlockingSideWallLengthMm, 290);
   assert.equal(PROFILE.underpassSafetyMarginMm, 2);
-  assert.equal(PROFILE.underpassBlockedThroughXMm, 272);
+  assert.equal(PROFILE.underpassBlockedThroughXMm, 292);
 
   const atBoundary = UNDERPASS.classifySlopeUnderpassPolygonOverlap({
     slopePlacement: slopeAtOrigin,
     slopeFootprintPolygonMm: slopeFootprintMm,
     lowerCoursePolygonMm: rect(2, -50, 100, 50)
   });
-  assert.equal(atBoundary.overlapMinXMm, 272);
+  assert.equal(atBoundary.overlapMinXMm, 292);
   assert.equal(atBoundary.status, 'blocked-by-underpass-zone');
-  assert.equal(atBoundary.reasonCode, 'overlap-enters-272mm-blocked-zone');
+  assert.equal(atBoundary.reasonCode, 'overlap-enters-292mm-blocked-zone');
 
   const justBeyond = UNDERPASS.classifySlopeUnderpassPolygonOverlap({
     slopePlacement: slopeAtOrigin,
     slopeFootprintPolygonMm: slopeFootprintMm,
     lowerCoursePolygonMm: rect(2.001, -50, 100, 50)
   });
-  assert.ok(justBeyond.overlapMinXMm > 272);
+  assert.ok(justBeyond.overlapMinXMm > 292);
   assert.equal(justBeyond.status, 'clear-by-approved-rule');
-  assert.equal(justBeyond.reasonCode, 'overlap-entirely-beyond-272mm');
+  assert.equal(justBeyond.reasonCode, 'overlap-entirely-beyond-292mm');
 });
 
 test('actual editor straight polygon is blocked when it crosses the low-side zone', () => {
@@ -74,30 +74,30 @@ test('actual editor straight polygon is blocked when it crosses the low-side zon
   const lower = editorPart('low', 'straight', 0, 0, 90);
   const result = classifyEditorPair(slope, lower);
   assert.equal(result.status, 'blocked-by-underpass-zone');
-  assert.ok(result.overlapMinXMm < 272);
+  assert.ok(result.overlapMinXMm < 292);
   assert.ok(result.overlapAreaMm2 > 0);
 });
 
 test('actual editor straight polygon clears when its full overlap is on the high side', () => {
   const slope = editorPart('s', 'slope', 0, 0, 0);
-  const lower = editorPart('high', 'straight', 20, 0, 90);
+  const lower = editorPart('high', 'straight', 22, 0, 90);
   const result = classifyEditorPair(slope, lower);
   assert.equal(result.status, 'clear-by-approved-rule');
-  assert.ok(result.overlapMinXMm > 272);
+  assert.ok(result.overlapMinXMm > 292);
   assert.ok(result.overlapMaxXMm <= 540 + 1e-7);
 });
 
-test('actual editor straight polygon respects the 272mm edge instead of using its centre position', () => {
+test('actual editor straight polygon respects the 292mm edge instead of using its centre position', () => {
   const slope = editorPart('s', 'slope', 0, 0, 0);
-  const boundary = editorPart('boundary', 'straight', 18.2, 0, 90);
-  const beyond = editorPart('beyond', 'straight', 18.2001, 0, 90);
+  const boundary = editorPart('boundary', 'straight', 20.2, 0, 90);
+  const beyond = editorPart('beyond', 'straight', 20.2001, 0, 90);
 
   const boundaryResult = classifyEditorPair(slope, boundary);
   const beyondResult = classifyEditorPair(slope, beyond);
   assert.equal(boundaryResult.status, 'blocked-by-underpass-zone');
-  assert.ok(boundaryResult.overlapMinXMm <= 272 + 1e-7);
+  assert.ok(boundaryResult.overlapMinXMm <= 292 + 1e-7);
   assert.equal(beyondResult.status, 'clear-by-approved-rule');
-  assert.ok(beyondResult.overlapMinXMm > 272);
+  assert.ok(beyondResult.overlapMinXMm > 292);
 });
 
 test('diagonal crossing uses the intersecting polygon extent, not a centred 90-degree assumption', () => {
@@ -108,20 +108,20 @@ test('diagonal crossing uses the intersecting polygon extent, not a centred 90-d
   const lowResult = classifyEditorPair(slope, lowSideDiagonal);
   const highResult = classifyEditorPair(slope, highSideDiagonal);
   assert.equal(lowResult.status, 'blocked-by-underpass-zone');
-  assert.ok(lowResult.overlapMinXMm < 272);
+  assert.ok(lowResult.overlapMinXMm < 292);
   assert.equal(highResult.status, 'clear-by-approved-rule');
-  assert.ok(highResult.overlapMinXMm > 272);
+  assert.ok(highResult.overlapMinXMm > 292);
 });
 
 test('rotating the slope rotates the low-to-high axis used by the same polygon rule', () => {
   const slope = editorPart('s', 'slope', 0, 0, 90);
-  const lowerHighSide = editorPart('high-y', 'straight', 0, 20, 0);
+  const lowerHighSide = editorPart('high-y', 'straight', 0, 22, 0);
   const lowerLowSide = editorPart('low-y', 'straight', 0, 0, 0);
 
   const highResult = classifyEditorPair(slope, lowerHighSide);
   const lowResult = classifyEditorPair(slope, lowerLowSide);
   assert.equal(highResult.status, 'clear-by-approved-rule');
-  assert.ok(highResult.overlapMinXMm > 272);
+  assert.ok(highResult.overlapMinXMm > 292);
   assert.equal(lowResult.status, 'blocked-by-underpass-zone');
 });
 
@@ -156,7 +156,7 @@ test('invalid or string-valued geometry stays indeterminate instead of being coe
 test('polygon classification is pure and does not mutate caller geometry', () => {
   const input = {
     slopePlacement: { positionMm: { x: 12, y: -8 }, rotationDeg: 45 },
-    slopeFootprintPolygonMm: rect(-270, -180, 270, 180),
+    slopeFootprintPolygonMm: rect(-290, -180, 290, 180),
     lowerCoursePolygonMm: rect(50, -100, 180, 100)
   };
   const before = JSON.stringify(input);
