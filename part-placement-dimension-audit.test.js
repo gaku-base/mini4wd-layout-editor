@@ -37,15 +37,15 @@ function assertDeepFrozen(value, path = 'root') {
 }
 
 test('molded-fit part dimension master is the project placement authority and is immutable at runtime', () => {
-  assert.equal(DIM.version, '2026-09-16-molded-fit-v1');
-  assert.equal(DIM.basis, 'project-owner-approved-current-runtime-with-molding-tolerance');
+  assert.equal(DIM.version, '2026-09-27-owner-measured-fit-v2');
+  assert.equal(DIM.basis, 'project-owner-real-measurement-and-approved-runtime-geometry');
   assertDeepFrozen(DIM, 'PART_DIMENSIONS_MM');
   assert.equal(CATALOG.TRACK_WIDTH_CM * 10, DIM.common.runtimeTrackWidthMm);
   assert.equal(CATALOG.STRAIGHT_CONNECTION_WIDTH_MM, DIM.common.connectionFaceOuterWidthMm);
 });
 
 test('official nominal references stay separate and never replace adopted molded-fit dimensions', () => {
-  assert.equal(CATALOG.DIMENSION_AUDIT_VERSION, '2026-09-16');
+  assert.equal(CATALOG.DIMENSION_AUDIT_VERSION, '2026-09-27');
   assert.equal(CATALOG.OFFICIAL_JCJC_LANE_WIDTH_MM, 115);
   assert.equal(CATALOG.OFFICIAL_JCJC_FENCE_HEIGHT_MM, 50);
   assert.equal(CATALOG.OFFICIAL_JCJC_CURVE_90_OUTER_MM, 717);
