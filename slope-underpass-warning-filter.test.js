@@ -26,7 +26,7 @@ const filteredWarnings = (warnings, parts) => FILTER.filterApprovedSlopeUnderpas
 test('legacy warning exists for same-level high-side crossing, then approved filter removes it', () => {
   const parts = [
     part('s', 'slope', 0, 0, 0, 0),
-    part('lower', 'straight', 20, 0, 90, 0)
+    part('lower', 'straight', 22, 0, 90, 0)
   ];
   const legacy = legacyWarnings(parts);
   assert.equal(legacy.length, 1, 'legacy solid-envelope warning should exist before filter');
@@ -44,8 +44,8 @@ test('low-side crossing keeps warning and attaches exact blocked polygon metadat
   const filtered = filteredWarnings(legacy, parts);
   assert.equal(filtered.length, 1);
   assert.equal(filtered[0].slopeUnderpass.status, 'blocked-underpass');
-  assert.equal(filtered[0].slopeUnderpass.blockedThroughXMm, 272);
-  assert.ok(filtered[0].slopeUnderpass.overlapMinXMm < 272);
+  assert.equal(filtered[0].slopeUnderpass.blockedThroughXMm, 292);
+  assert.ok(filtered[0].slopeUnderpass.overlapMinXMm < 292);
   assert.ok(filtered[0].slopeUnderpass.overlapAreaMm2 > 0);
   assert.ok(filtered[0].slopeUnderpass.intersectionFragmentsMm.length > 0);
 });
@@ -63,7 +63,7 @@ test('diagonal high-side crossing is removed while diagonal low-side crossing re
   assert.equal(filteredWarnings(lowLegacy, [slope, low]).length, 1);
 });
 
-test('different base Z remains a warning even when XY overlap is beyond 272mm', () => {
+test('different base Z remains a warning even when XY overlap is beyond 292mm', () => {
   const parts = [
     part('s', 'slope', 0, 0, 0, 10),
     part('lower', 'straight', 20, 0, 90, 0)
