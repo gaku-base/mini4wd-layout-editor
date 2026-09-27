@@ -20,8 +20,8 @@
   // derived from it so placement, connector geometry, visual bounds and current
   // 2D occupancy stay synchronized.
   const PART_DIMENSIONS_MM = deepFreeze({
-    version: '2026-09-16-molded-fit-v1',
-    basis: 'project-owner-approved-current-runtime-with-molding-tolerance',
+    version: '2026-09-27-owner-measured-fit-v2',
+    basis: 'project-owner-real-measurement-and-approved-runtime-geometry',
     common: {
       runtimeTrackWidthMm: 360,
       connectionFaceOuterWidthMm: 370
@@ -65,7 +65,7 @@
       heightDeltaMm: 115
     },
     bank20: {
-      connectorSpanMm: 230,
+      connectorSpanMm: 220,
       depthMm: 360,
       bankAngleDeg: 20
     },
@@ -107,7 +107,7 @@
   const OFFICIAL_JCJC_FENCE_HEIGHT_MM = OFFICIAL_DIMENSION_REFERENCES_MM.fenceHeightMm;
   const OFFICIAL_JCJC_CURVE_90_OUTER_MM = OFFICIAL_DIMENSION_REFERENCES_MM.curve90OuterMm;
   const OFFICIAL_JCJC_CURVE_180_OUTER_WIDTH_MM = OFFICIAL_DIMENSION_REFERENCES_MM.curve180OuterWidthMm;
-  const DIMENSION_AUDIT_VERSION = '2026-09-16';
+  const DIMENSION_AUDIT_VERSION = '2026-09-27';
   const BANK20_PROJECTED_LENGTH_MM = PART_DIMENSIONS_MM.bank20.connectorSpanMm;
   const BANK20_PROJECTED_LENGTH_CM = mmToCm(BANK20_PROJECTED_LENGTH_MM);
   const BANK20_HALF_PROJECTED_LENGTH_CM = BANK20_PROJECTED_LENGTH_CM / 2;
@@ -247,11 +247,11 @@
       },
       measurements: {
         floorBlockingSideWallLengthFromLowEndMm: {
-          value: 270,
+          value: 290,
           status: 'verified',
           confidence: 'high',
           appliesTo: ['left', 'right'],
-          source: 'project-owner-approved-2026-09-01'
+          source: 'project-owner-real-measurement-2026-09-27'
         },
         sideWallHeightAboveRunningSurfaceMm: {
           value: 50,
@@ -307,8 +307,8 @@
       visual: { file: 'assets/templates/bank20.svg', canvasWidth: BANK20_PROJECTED_LENGTH_CM, canvasHeight: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm), originX: BANK20_HALF_PROJECTED_LENGTH_CM, originY: mmToCm(PART_DIMENSIONS_MM.bank20.depthMm) / 2 },
       bank: { angleDeg: PART_DIMENSIONS_MM.bank20.bankAngleDeg, dynamicRole: true },
       dimensionAudit: {
-        projectedConnectorSpanMm: { value: PART_DIMENSIONS_MM.bank20.connectorSpanMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
-        runtimeFootprintMm: { width: PART_DIMENSIONS_MM.bank20.connectorSpanMm, depth: PART_DIMENSIONS_MM.bank20.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
+        projectedConnectorSpanMm: { value: PART_DIMENSIONS_MM.bank20.connectorSpanMm, status: 'verified', source: 'project-owner-real-measurement-2026-09-27' },
+        runtimeFootprintMm: { width: PART_DIMENSIONS_MM.bank20.connectorSpanMm, depth: PART_DIMENSIONS_MM.bank20.depthMm, status: 'verified', source: 'project-owner-real-measurement-2026-09-27' },
         bankAngleDeg: { value: PART_DIMENSIONS_MM.bank20.bankAngleDeg, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' }
       },
       measurements: {
@@ -316,7 +316,7 @@
           value: BANK20_PROJECTED_LENGTH_MM,
           status: 'verified',
           confidence: 'high',
-          source: 'project-owner-approved-2026-09-04'
+          source: 'project-owner-real-measurement-2026-09-27'
         },
         transitionArcChordMm: {
           value: 225.75,

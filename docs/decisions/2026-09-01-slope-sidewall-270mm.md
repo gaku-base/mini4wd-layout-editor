@@ -1,3 +1,5 @@
+> Superseded by 2026-09-27 owner real measurement: Bank20=220mm / slope floor-contact=290mm / safety boundary=292mm.
+
 # スロープ側壁・長手形状（270mm / 50mm / 2.5mm / R398→直線→R803）
 
 決定日: 2026-09-01

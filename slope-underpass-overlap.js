@@ -262,9 +262,9 @@
     return Object.freeze({
       status: range.status,
       reasonCode: range.status === 'blocked-by-underpass-zone'
-        ? 'overlap-enters-272mm-blocked-zone'
+        ? 'overlap-enters-292mm-blocked-zone'
         : (range.status === 'clear-by-approved-rule'
-          ? 'overlap-entirely-beyond-272mm'
+          ? 'overlap-entirely-beyond-292mm'
           : 'xy-polygons-separated'),
       overlapAreaMm2,
       overlapMinXMm: range.minXMm,

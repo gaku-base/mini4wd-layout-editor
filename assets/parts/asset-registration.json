@@ -1,5 +1,5 @@
 {
-  "version": "1.4.0",
+  "version": "1.4.1",
   "pixelsPerCm": 20,
   "rule": "SVG assets are the visual source of truth. Geometry remains authoritative for placement, connectors, dimensions and collision logic.",
   "parts": {
@@ -109,11 +109,11 @@
     },
     "bank20": {
       "worldBoxCm": [
-        28,
+        22,
         36
       ],
       "originCm": [
-        14,
+        11,
         18
       ],
       "visualSource": "assets/templates/bank20.svg"

@@ -56,9 +56,9 @@ async function main() {
       return {
         runtimeWrapped: Boolean(graph.__m4wdSlopeUnderpassRuntimeWrapped),
         straightLow: summarize(part('straight-low', 'straight', 0, 0, 90)),
-        straightHigh: summarize(part('straight-high', 'straight', 20, 0, 90)),
-        straightBoundary: summarize(part('straight-boundary', 'straight', 18.2, 0, 90)),
-        straightBeyond: summarize(part('straight-beyond', 'straight', 18.2001, 0, 90)),
+        straightHigh: summarize(part('straight-high', 'straight', 22, 0, 90)),
+        straightBoundary: summarize(part('straight-boundary', 'straight', 20.2, 0, 90)),
+        straightBeyond: summarize(part('straight-beyond', 'straight', 20.2001, 0, 90)),
         diagonalLow: summarize(part('diagonal-low', 'straight', 30, 0, 45)),
         diagonalHigh: summarize(part('diagonal-high', 'straight', 35, 0, 45)),
         cornerLow: summarize(part('corner-low', 'corner-45-right', 0, 0, 0)),
@@ -70,8 +70,8 @@ async function main() {
       assert.equal(warnings.length, 1, `${label}: blocked crossing must keep one warning`);
       assert.equal(warnings[0].type, 'interference', `${label}: warning type`);
       assert.equal(warnings[0].underpassStatus, 'blocked-underpass', `${label}: slope underpass status`);
-      assert.equal(warnings[0].blockedThroughXMm, 272, `${label}: approved boundary`);
-      assert.ok(warnings[0].overlapMinXMm <= 272, `${label}: overlap must enter blocked zone`);
+      assert.equal(warnings[0].blockedThroughXMm, 292, `${label}: approved boundary`);
+      assert.ok(warnings[0].overlapMinXMm <= 292, `${label}: overlap must enter blocked zone`);
     };
     const assertClear = (warnings, label) => {
       assert.equal(warnings.length, 0, `${label}: approved high-side underpass must suppress interference warning`);
@@ -80,8 +80,8 @@ async function main() {
     assert.equal(result.runtimeWrapped, true, 'browser must use the installed slope-underpass runtime wrapper');
     assertBlocked(result.straightLow, 'straight low-side');
     assertClear(result.straightHigh, 'straight high-side');
-    assertBlocked(result.straightBoundary, 'straight X=272mm boundary');
-    assertClear(result.straightBeyond, 'straight just beyond X=272mm');
+    assertBlocked(result.straightBoundary, 'straight X=292mm boundary');
+    assertClear(result.straightBeyond, 'straight just beyond X=292mm');
     assertBlocked(result.diagonalLow, '45deg diagonal entering blocked zone');
     assertClear(result.diagonalHigh, '45deg diagonal wholly on high side');
     assertBlocked(result.cornerLow, '45deg corner low-side');

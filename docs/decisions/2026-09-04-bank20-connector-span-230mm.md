@@ -1,3 +1,5 @@
+> Superseded by 2026-09-27 owner real measurement: Bank20=220mm / slope floor-contact=290mm / safety boundary=292mm.
+
 # Bank20 接続口間230mm・総延長0.66m 正式採用決定
 
 - Date: 2026-09-04
