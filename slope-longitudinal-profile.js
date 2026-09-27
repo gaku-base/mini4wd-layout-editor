@@ -10,7 +10,7 @@
   const RISE_MM = 115;
   const LOWER_ARC_RADIUS_MM = 398;
   const UPPER_ARC_RADIUS_MM = 803;
-  const FLOOR_BLOCKING_SIDEWALL_LENGTH_MM = 270;
+  const FLOOR_BLOCKING_SIDEWALL_LENGTH_MM = 290;
   const UNDERPASS_SAFETY_MARGIN_MM = 2;
   const UNDERPASS_BLOCKED_THROUGH_X_MM = FLOOR_BLOCKING_SIDEWALL_LENGTH_MM + UNDERPASS_SAFETY_MARGIN_MM;
 
@@ -76,9 +76,9 @@
     return Math.asin((HORIZONTAL_MM - x) / UPPER_ARC_RADIUS_MM) * 180 / Math.PI;
   }
 
-  // The physical floor-reaching side wall ends at x=270 mm. The project-owner
-  // approved an additional 2 mm interference margin on 2026-09-02, so x<=272
-  // is treated as blocked for layout collision purposes. At x>272 the lower
+  // The physical floor-reaching side wall ends at x=290 mm from the 2026-09-27 real measurement. The project-owner
+  // keeps the additional 2 mm interference margin, so x<=292
+  // is treated as blocked for layout collision purposes. At x>292 the lower
   // course may pass under the slope. An explicit underside offset can still be
   // supplied for diagnostic clearance calculations, but it does not change the
   // approved pass/fail boundary.
@@ -124,8 +124,8 @@
 
   // Arbitrary lower-course positions and crossing angles are handled by first
   // projecting the lower-course occupied polygon onto the slope-local X axis.
-  // If any overlapping part of that projected range reaches x<=272 mm, it is
-  // blocked. Only a footprint whose entire overlap lies at x>272 mm is clear.
+  // If any overlapping part of that projected range reaches x<=292 mm, it is
+  // blocked. Only a footprint whose entire overlap lies at x>292 mm is clear.
   function classifyUnderpassLongitudinalRange(minXMm, maxXMm) {
     if (typeof minXMm !== 'number' || !Number.isFinite(minXMm)
       || typeof maxXMm !== 'number' || !Number.isFinite(maxXMm)) return null;
@@ -239,7 +239,7 @@
 
   return Object.freeze({
     status: 'verified',
-    source: 'project-owner-approved-2026-09-01',
+    source: 'project-owner-real-measurement-2026-09-27',
     horizontalMm: HORIZONTAL_MM,
     riseMm: RISE_MM,
     lowerArcRadiusMm: LOWER_ARC_RADIUS_MM,
