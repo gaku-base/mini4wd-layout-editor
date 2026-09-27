@@ -68,11 +68,11 @@ test('underpass is blocked through x=292 and clear immediately above the approve
 });
 
 test('arbitrary crossing footprints fail if any projected overlap reaches x<=292 and clear only when wholly above it', () => {
-  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(280, 500).status, 'clear-by-approved-rule');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(300, 500).status, 'clear-by-approved-rule');
   assert.equal(PROFILE.classifyUnderpassLongitudinalRange(292.001, 500).status, 'clear-by-approved-rule');
   assert.equal(PROFILE.classifyUnderpassLongitudinalRange(292, 500).status, 'blocked-by-underpass-zone');
   assert.equal(PROFILE.classifyUnderpassLongitudinalRange(285, 500).status, 'blocked-by-underpass-zone');
-  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(500, 280).status, 'clear-by-approved-rule');
+  assert.equal(PROFILE.classifyUnderpassLongitudinalRange(500, 300).status, 'clear-by-approved-rule');
   assert.equal(PROFILE.classifyUnderpassLongitudinalRange(-100, -1).status, 'no-overlap');
   assert.equal(PROFILE.classifyUnderpassLongitudinalRange(541, 600).status, 'no-overlap');
   assert.equal(PROFILE.classifyUnderpassLongitudinalRange('280', 500), null);
