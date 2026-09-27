@@ -41,7 +41,7 @@ function rect(minX, minY, maxX, maxY) {
   ];
 }
 
-const slopeFootprintMm = rect(-290, -180, 290, 180);
+const slopeFootprintMm = rect(-270, -180, 270, 180);
 const slopeAtOrigin = { positionMm: { x: 0, y: 0 }, rotationDeg: 0 };
 
 test('uses the single approved 292mm boundary from the verified slope profile', () => {
@@ -53,7 +53,7 @@ test('uses the single approved 292mm boundary from the verified slope profile', 
   const atBoundary = UNDERPASS.classifySlopeUnderpassPolygonOverlap({
     slopePlacement: slopeAtOrigin,
     slopeFootprintPolygonMm: slopeFootprintMm,
-    lowerCoursePolygonMm: rect(2, -50, 100, 50)
+    lowerCoursePolygonMm: rect(22, -50, 100, 50)
   });
   assert.equal(atBoundary.overlapMinXMm, 292);
   assert.equal(atBoundary.status, 'blocked-by-underpass-zone');
@@ -62,7 +62,7 @@ test('uses the single approved 292mm boundary from the verified slope profile', 
   const justBeyond = UNDERPASS.classifySlopeUnderpassPolygonOverlap({
     slopePlacement: slopeAtOrigin,
     slopeFootprintPolygonMm: slopeFootprintMm,
-    lowerCoursePolygonMm: rect(2.001, -50, 100, 50)
+    lowerCoursePolygonMm: rect(22.001, -50, 100, 50)
   });
   assert.ok(justBeyond.overlapMinXMm > 292);
   assert.equal(justBeyond.status, 'clear-by-approved-rule');
@@ -156,7 +156,7 @@ test('invalid or string-valued geometry stays indeterminate instead of being coe
 test('polygon classification is pure and does not mutate caller geometry', () => {
   const input = {
     slopePlacement: { positionMm: { x: 12, y: -8 }, rotationDeg: 45 },
-    slopeFootprintPolygonMm: rect(-290, -180, 290, 180),
+    slopeFootprintPolygonMm: rect(-270, -180, 270, 180),
     lowerCoursePolygonMm: rect(50, -100, 180, 100)
   };
   const before = JSON.stringify(input);
