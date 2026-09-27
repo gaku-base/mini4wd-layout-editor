@@ -53,21 +53,21 @@ function wrappedGraph() {
 }
 
 test('runtime wrapper preserves the legacy warning first, then clears only an approved high-side underpass', () => {
-  const lower = lowerStraight(20);
+  const lower = lowerStraight(22);
   assert.equal(legacyWarnings(lower).length, 1, 'legacy engine should report the XY/Z overlap before filtering');
   const graph = wrappedGraph();
   const warnings = graph.interferenceWarnings([slope, lower], catalog, boundsForPart, { edges: [] });
-  assert.equal(warnings.length, 0, 'approved overlap entirely beyond X=272mm should be cleared');
+  assert.equal(warnings.length, 0, 'approved overlap entirely beyond X=292mm should be cleared');
 });
 
-test('runtime wrapper keeps the warning when any overlap enters the X<=272mm blocked zone', () => {
+test('runtime wrapper keeps the warning when any overlap enters the X<=292mm blocked zone', () => {
   const lower = lowerStraight(18);
   assert.equal(legacyWarnings(lower).length, 1);
   const graph = wrappedGraph();
   const warnings = graph.interferenceWarnings([slope, lower], catalog, boundsForPart, { edges: [] });
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].slopeUnderpass?.status, 'blocked-underpass');
-  assert.ok(warnings[0].slopeUnderpass.overlapMinXMm <= 272);
+  assert.ok(warnings[0].slopeUnderpass.overlapMinXMm <= 292);
 });
 
 test('runtime install is idempotent and does not wrap an already wrapped graph twice', () => {
