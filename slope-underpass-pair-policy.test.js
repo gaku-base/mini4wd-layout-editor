@@ -41,10 +41,10 @@ test('approved flat lower-course definitions are limited to level non-special co
 
 test('same-base flat course on high side is eligible for clear-underpass', () => {
   const slope = part('s', 'slope', 0, 0, 0, 0);
-  const lower = part('lower', 'straight', 20, 0, 90, 0);
+  const lower = part('lower', 'straight', 22, 0, 90, 0);
   const result = classify(slope, lower);
   assert.equal(result.status, 'clear-underpass');
-  assert.equal(result.reasonCode, 'same-level-flat-course-beyond-272mm');
+  assert.equal(result.reasonCode, 'same-level-flat-course-beyond-292mm');
   assert.equal(result.level.status, 'same-base-level');
   assert.equal(result.xy.status, 'clear-by-approved-rule');
 });
@@ -54,7 +54,7 @@ test('same-base flat course entering low-side zone stays blocked', () => {
   const lower = part('lower', 'straight', 0, 0, 90, 0);
   const result = classify(slope, lower);
   assert.equal(result.status, 'blocked-underpass');
-  assert.equal(result.reasonCode, 'same-level-flat-course-enters-272mm-zone');
+  assert.equal(result.reasonCode, 'same-level-flat-course-enters-292mm-zone');
   assert.equal(result.xy.status, 'blocked-by-underpass-zone');
 });
 
