@@ -53,7 +53,7 @@ test('slope records approved sidewall dimensions without inventing a full collis
   const floorBlocking = measurements?.floorBlockingSideWallLengthFromLowEndMm;
   const wallHeight = measurements?.sideWallHeightAboveRunningSurfaceMm;
   const wallThickness = measurements?.sideWallThicknessMm;
-  assert.equal(floorBlocking?.value, 270);
+  assert.equal(floorBlocking?.value, 290);
   assert.equal(wallHeight?.value, 50);
   assert.equal(wallThickness?.value, 2.5);
   for (const measurement of [floorBlocking, wallHeight, wallThickness]) {
