@@ -108,10 +108,10 @@
     });
 
     if (xy.status === 'clear-by-approved-rule') {
-      return Object.freeze({ status: 'clear-underpass', reasonCode: 'same-level-flat-course-beyond-272mm', level, xy });
+      return Object.freeze({ status: 'clear-underpass', reasonCode: 'same-level-flat-course-beyond-292mm', level, xy });
     }
     if (xy.status === 'blocked-by-underpass-zone') {
-      return Object.freeze({ status: 'blocked-underpass', reasonCode: 'same-level-flat-course-enters-272mm-zone', level, xy });
+      return Object.freeze({ status: 'blocked-underpass', reasonCode: 'same-level-flat-course-enters-292mm-zone', level, xy });
     }
     if (xy.status === 'no-overlap') {
       return Object.freeze({ status: 'no-overlap', reasonCode: 'xy-polygons-separated', level, xy });
