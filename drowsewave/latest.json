@@ -2,7 +2,7 @@
   "channel": "stable",
   "version": "0.1.46",
   "url": "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/DROWSEWAVE_Studio_v0.1.46.zip",
-  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "sha256": "b3517e72a3e3dc61e2c6214831dfdaf58793d8afd1cca69a60a9dab58aef1a4a",
   "publishedAt": "2026-09-30T00:30:00+09:00",
-  "notes": "v0.1.46 adds the in-app updater. This version is the bootstrap version; future versions are staged in-app and applied on next launch."
+  "notes": "v0.1.46 adds the in-app updater. This is the bootstrap version; future newer packages are staged while the app is open and applied only on the next launch."
 }
