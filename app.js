@@ -532,7 +532,7 @@
       pctx.scale(scale, scale);
       pctx.translate(-(bounds.minX + bounds.maxX) / 2, -(bounds.minY + bounds.maxY) / 2);
       if (type === 'start') drawStartLane(pctx, { x: 0, y: 0, rotation: 0 }, true, false);
-      else drawPart(pctx, { id: 'preview', type, x: 0, y: 0, rotation: 0, colorKey: 'default', bankRole: 'entry' }, { exportMode: true });
+      else drawPart(pctx, { id: 'preview', type, x: 0, y: 0, rotation: 0, colorKey: 'default', bankRole: 'entry' }, { exportMode: true, suppressElevationLabels: true });
       pctx.restore();
     });
   }
@@ -2714,6 +2714,70 @@
     };
   }
 
+  function elevationEndLabelEntries(part, def) {
+    if (!part || !def || (!def.slope && !def.bank20)) return [];
+    const endpoints = partEndpoints(part);
+    if (endpoints.length < 2) return [];
+
+    let lowIndex = 0;
+    let highIndex = 1;
+    if (def.slope) {
+      const z0 = Number(endpoints[0]?.zMm) || 0;
+      const z1 = Number(endpoints[1]?.zMm) || 0;
+      if (z0 > z1) {
+        lowIndex = 1;
+        highIndex = 0;
+      }
+    } else {
+      const a0 = Math.abs(Number(endpoints[0]?.connectionState?.bankAngle ?? endpoints[0]?.bankAngleDeg) || 0);
+      const a1 = Math.abs(Number(endpoints[1]?.connectionState?.bankAngle ?? endpoints[1]?.bankAngleDeg) || 0);
+      if (a0 > a1) {
+        lowIndex = 1;
+        highIndex = 0;
+      }
+    }
+
+    return [
+      { text: 'LOW', endpoint: endpoints[lowIndex], kind: 'low' },
+      { text: 'HIGH', endpoint: endpoints[highIndex], kind: 'high' }
+    ];
+  }
+
+  function drawElevationEndLabels(c, part, def, opts = {}) {
+    if (opts.suppressElevationLabels) return;
+    const entries = elevationEndLabelEntries(part, def);
+    if (!entries.length) return;
+
+    const inwardCm = def.bank20 ? 3.6 : 4.8;
+    for (const entry of entries) {
+      const endpoint = entry.endpoint;
+      const dx = part.x - endpoint.x;
+      const dy = part.y - endpoint.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const x = endpoint.x + dx / length * inwardCm;
+      const y = endpoint.y + dy / length * inwardCm;
+      const width = entry.kind === 'high' ? 7.8 : 6.8;
+      const height = 4.6;
+
+      c.save();
+      c.translate(x, y);
+      c.fillStyle = 'rgba(24, 30, 28, .88)';
+      c.strokeStyle = 'rgba(255, 255, 255, .92)';
+      c.lineWidth = .45;
+      c.beginPath();
+      c.roundRect(-width / 2, -height / 2, width, height, 1.1);
+      c.fill();
+      c.stroke();
+
+      c.fillStyle = '#ffffff';
+      c.font = '800 2.9px sans-serif';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(entry.text, 0, .1);
+      c.restore();
+    }
+  }
+
   function drawPart(c, part, opts = {}) {
     const def = resolvePartDef(part);
     if (!def) return;
@@ -2736,6 +2800,7 @@
     if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
     if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
+    drawElevationEndLabels(c, part, def, opts);
     drawPartConnectionFaces(c, part, opts);
   }
 
