@@ -46,23 +46,60 @@
   font-family: var(--pr-font);
 }
 
-.presentation-view::before {
-  content: "レイアウト出力";
+.presentation-window-header {
   grid-column: 1 / -1;
   grid-row: 1;
   display: grid;
-  place-items: center;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr);
+  align-items: center;
   box-sizing: border-box;
+  min-width: 0;
+  padding: 8px 16px;
   background: linear-gradient(180deg, #0d151f, #091019);
   border-bottom: 3px solid var(--pr-orange);
-  color: #fff;
-  font-size: 24px;
-  font-style: italic;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-shadow: 0 1px 0 #000;
   box-shadow: 0 8px 26px rgba(0,0,0,.30);
 }
+.presentation-window-title {
+  justify-self: start;
+  color: #fff;
+  font-size: 16px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.presentation-workspace-tabs {
+  grid-column: 2;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--pr-line);
+  border-radius: 10px;
+  background: #070c12;
+}
+.presentation-workspace-tab {
+  min-width: 124px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--pr-muted);
+  cursor: pointer;
+  font: 900 12px/1 var(--pr-font);
+  letter-spacing: .04em;
+}
+.presentation-workspace-tab:hover {
+  color: var(--pr-text);
+  border-color: #46586f;
+  background: #16212c;
+}
+.presentation-workspace-tab.active,
+.presentation-workspace-tab[aria-selected="true"] {
+  color: var(--pr-on-orange);
+  border-color: #ffb24c;
+  background: linear-gradient(180deg, var(--pr-orange-bright), #f07c00);
+}
+.presentation-view.has-workspace-tabs .presentation-back { display: none; }
 
 body.presentation-mode-open {
   width: 100%;
@@ -296,10 +333,23 @@ body.presentation-mode-open > #app { display: none !important; }
     grid-template-columns: minmax(0,1fr);
     grid-template-rows: 46px minmax(0,42vh) minmax(0,1fr);
   }
-  .presentation-view::before {
+  .presentation-window-header {
     grid-column: 1;
     grid-row: 1;
-    font-size: 18px;
+    grid-template-columns: 1fr;
+    padding: 5px 7px;
+  }
+  .presentation-window-title { display: none; }
+  .presentation-workspace-tabs {
+    grid-column: 1;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .presentation-workspace-tab {
+    flex: 1 1 50%;
+    min-width: 0;
+    height: 32px;
+    padding-inline: 6px;
   }
   .presentation-toolbar {
     grid-column: 1;
