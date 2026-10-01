@@ -38,7 +38,7 @@ async function main() {
     mark('load-app');
     await page.goto(BASE_URL, { waitUntil:'networkidle', timeout:20000 });
     await page.waitForFunction(() => typeof window.__mini4wdCourseDebug?.loadState === 'function', {timeout:TIMEOUT});
-    await page.waitForFunction(() => window.M4WD_PRESENTATION?.version === 2 && document.querySelector('#presentationBtn'), {timeout:TIMEOUT});
+    await page.waitForFunction(() => window.M4WD_PRESENTATION?.version >= 3 && document.querySelector('#outputTabBtn'), {timeout:TIMEOUT});
 
     mark('load-mixed-layout');
     await page.evaluate(() => {
@@ -69,7 +69,7 @@ async function main() {
     const stateBefore = await page.evaluate(() => window.__mini4wdCourseDebug.getState());
 
     mark('open-grid-presentation');
-    await page.locator('#presentationBtn').click();
+    await page.locator('#outputTabBtn').click();
     await page.locator('#presentationView').waitFor({state:'visible',timeout:TIMEOUT});
     await page.waitForFunction(() => {
       const d = window.M4WD_PRESENTATION.getDiagnostics();
