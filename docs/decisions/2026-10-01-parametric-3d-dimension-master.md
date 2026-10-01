@@ -45,6 +45,8 @@ Current simplified vertical-detail cases:
 - LC Jump
 - Burning Lane Change bridge height
 
+Lane Change now mirrors the adopted 2D SVG bridge path in plan view using normalized coordinates scaled from the current dimension master, but every bridge sample remains at z=0 until a verified bridge-height/profile measurement exists. Burning Lane Change already follows its adopted 2D plan path with the same rule. LC Jump remains footprint-only because its vertical launch profile is not yet verified.
+
 These remain eligible for later refinement when verified physical dimensions are available.
 
 ## Regression requirement for future 2D changes
