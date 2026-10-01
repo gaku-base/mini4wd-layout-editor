@@ -1,17 +1,19 @@
 {
   "channel": "stable",
-  "version": "0.1.60",
+  "version": "0.1.61",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part04.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part05.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part06.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.60/part07.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part05.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part06.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part07.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part08.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.61/part09.b64"
   ],
-  "sha256": "25ab58fb89d1f34e30431f9660d356493409b275cdbaae8bcc95e0766a5873c0",
-  "publishedAt": "2026-10-01T14:29:00+09:00",
-  "notes": "v0.1.60 restores and stabilizes the production workflow: portable FFmpeg, first-track handling and managed archive, ambience fallback, dedicated video backgrounds with ultra-slow zoom, automatic draft production with similarity BLOCK redesign/retry, private YouTube auto-upload after final approval, startup Sheets/Analytics sync, and crash recovery. v0.1.59 was not released because rehearsal found and fixed a BLOCK-flow regression."
+  "sha256": "75a8892cbfd805d621658d016a14505932c1e2bf760db53a4a97bfe6811d990b",
+  "publishedAt": "2026-10-01T15:16:00+09:00",
+  "notes": "v0.1.61 reorganizes the app for clarity without changing production logic: grouped navigation, quick-start guide, clearer similarity/quality checks, current startup instructions, organized docs/tests, and updater support for START_HERE/tests with rollback cleanup."
 }
