@@ -8,7 +8,6 @@
 
   const VERSION = '1.0.0';
   const EPS = 1e-6;
-  const DEFAULT_FENCE_HEIGHT_MM = 50;
   const DEFAULT_SAMPLES = 24;
   const CURVE_SAMPLES = 20;
   const WAVE_SAMPLES = 36;
@@ -55,7 +54,9 @@
       return finite(dimensions.corner45?.trackWidthMm, dimensions.common?.runtimeTrackWidthMm);
     }
     if (type === 'burning') return finite(dimensions.burning?.trackWidthMm, dimensions.common?.runtimeTrackWidthMm);
-    return finite(dimensions.common?.runtimeTrackWidthMm, 360);
+    const width = finite(dimensions.common?.runtimeTrackWidthMm, NaN);
+    if (!Number.isFinite(width) || width <= 0) throw new Error('runtimeTrackWidthMm is required for 3D generation.');
+    return width;
   }
 
   function fenceHeightMm(type, catalog) {
@@ -63,7 +64,8 @@
     const measured = finite(definition?.measurements?.sideWallHeightAboveRunningSurfaceMm?.value, NaN);
     if (Number.isFinite(measured) && measured > 0) return measured;
     const official = finite(catalog?.OFFICIAL_DIMENSION_REFERENCES_MM?.fenceHeightMm, NaN);
-    return Number.isFinite(official) && official > 0 ? official : DEFAULT_FENCE_HEIGHT_MM;
+    if (Number.isFinite(official) && official > 0) return official;
+    throw new Error(`Fence height is required for 3D generation: ${type}`);
   }
 
   function colorContract(type, part = {}, catalog = {}) {
