@@ -38,7 +38,7 @@ async function main() {
     mark('load-app');
     await page.goto(BASE_URL, { waitUntil:'networkidle', timeout:20000 });
     await page.waitForFunction(() => typeof window.__mini4wdCourseDebug?.loadState === 'function', {timeout:TIMEOUT});
-    await page.waitForFunction(() => window.M4WD_PRESENTATION?.version === 2 && document.querySelector('#presentationBtn'), {timeout:TIMEOUT});
+    await page.waitForFunction(() => window.M4WD_PRESENTATION?.version >= 3 && document.querySelector('#presentationBtn'), {timeout:TIMEOUT});
 
     mark('load-mixed-layout');
     await page.evaluate(() => {
