@@ -37,8 +37,8 @@ function assertDeepFrozen(value, path = 'root') {
 }
 
 test('molded-fit part dimension master is the project placement authority and is immutable at runtime', () => {
-  assert.equal(DIM.version, '2026-09-27-owner-measured-fit-v2');
-  assert.equal(DIM.basis, 'project-owner-real-measurement-and-approved-runtime-geometry');
+  assert.equal(DIM.version, '2026-10-01-lanechange-photo-fit-v3');
+  assert.equal(DIM.basis, 'project-owner-real-measurement-and-approved-runtime-geometry-plus-explicit-provisional-photo-derived-verticals');
   assertDeepFrozen(DIM, 'PART_DIMENSIONS_MM');
   assert.equal(CATALOG.TRACK_WIDTH_CM * 10, DIM.common.runtimeTrackWidthMm);
   assert.equal(CATALOG.STRAIGHT_CONNECTION_WIDTH_MM, DIM.common.connectionFaceOuterWidthMm);
@@ -76,6 +76,11 @@ test('straight and Start runtime geometry is derived from the mm master', () => 
 test('lane change, wave, slope, Bank20 and LC Jump runtime placement comes from the mm master', () => {
   close(connectorSpanMm('lanechange'), DIM.lanechange.lengthMm, 'lanechange span');
   close(PARTS.lanechange.h * 10, DIM.lanechange.depthMm, 'lanechange depth');
+  assert.equal(DIM.lanechange.bridge.riseMm, 95);
+  assert.equal(DIM.lanechange.bridge.uncertaintyMm, 10);
+  assert.equal(DIM.lanechange.bridge.status, 'provisional-photo-derived');
+  assert.equal(PARTS.lanechange.dimensionAudit.bridgeVerticalProfile.status, 'provisional-photo-derived');
+  assert.equal(PARTS.lanechange.dimensionAudit.bridgeVerticalProfile.usage, '3d-visual-approximation');
 
   close(PARTS.wave.w * 10, DIM.wave.lengthMm, 'wave length');
   close(PARTS.wave.h * 10, DIM.wave.visualDepthMm, 'wave visual depth');
