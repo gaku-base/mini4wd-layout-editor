@@ -11,7 +11,8 @@ const appSource = fs.readFileSync('./app.js', 'utf8');
 test('new layout dialog keeps one internal setup tab and exposes the saved-space library before dimensions', () => {
   assert.deepEqual(NEW_LAYOUT_TABS.TABS.map(tab => tab.id), ['layout-space']);
   assert.equal(NEW_LAYOUT_TABS.DEFAULT_TAB, 'layout-space');
-  assert.doesNotMatch(indexHtml, /role="tablist"/);
+  const setupDialog = indexHtml.match(/<dialog id="setupDialog"[\s\S]*?<\/dialog>/)?.[0] || '';
+  assert.doesNotMatch(setupDialog, /role="tablist"/);
   assert.match(indexHtml, /id="fieldWidthInput"/);
   assert.match(indexHtml, /id="fieldHeightInput"/);
   assert.match(indexHtml, /id="gridInput"/);

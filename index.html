@@ -28,11 +28,15 @@
           <p>2D Course Layout Release Candidate <span class="version">v1.1 RC6</span></p>
         </div>
       </div>
+      <nav id="workspaceTabs" class="workspace-tabs" role="tablist" aria-label="画面切替">
+        <button id="layoutTabBtn" class="workspace-tab active" type="button" role="tab" aria-selected="true" aria-controls="app">LAYOUT</button>
+        <button id="outputTabBtn" class="workspace-tab" type="button" role="tab" aria-selected="false" aria-controls="presentationView">OUTPUT</button>
+      </nav>
       <div class="top-actions">
         <button id="newBtn" class="button ghost" type="button">新規</button>
         <button id="saveBtn" class="button ghost" type="button">JSON保存</button>
         <label class="button ghost file-button">JSON読込<input id="loadInput" type="file" accept="application/json,.json" /></label>
-        <button id="exportBtn" class="button primary" type="button">PNG出力</button>
+        <button id="exportBtn" class="button primary legacy-direct-export" type="button">PNG出力</button>
       </div>
     </header>
 

@@ -19,7 +19,8 @@ test('new-layout entry starts with the saved-space library and the new-space ste
   assert.match(html, /id="gridInput"/);
   assert.match(html, /id="wizardNextLayoutBtn"[^>]*>次へ：設置不可エリア設定</);
   assert.doesNotMatch(html, /configureObstaclesInput|adjustRoomShapeInput/);
-  assert.doesNotMatch(html, /role="tablist"/);
+  const setupDialog = html.match(/<dialog id="setupDialog"[\s\S]*?<\/dialog>/)?.[0] || '';
+  assert.doesNotMatch(setupDialog, /role="tablist"/);
 });
 
 test('creating the space enters unified canvas venue setup', () => {

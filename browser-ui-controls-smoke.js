@@ -25,7 +25,7 @@ async function main() {
   try {
     await page.goto(BASE_URL, { waitUntil:'networkidle', timeout:20000 });
     await page.waitForFunction(() => document.documentElement.dataset.uiControlsCleanupInstalled === '1', {timeout:TIMEOUT});
-    await page.waitForFunction(() => document.querySelector('#presentationBtn')?.textContent?.includes('発表・出力'), {timeout:TIMEOUT});
+    await page.waitForFunction(() => document.querySelector('#outputTabBtn')?.textContent?.trim() === 'OUTPUT', {timeout:TIMEOUT});
     await page.evaluate(() => {
       const setupDialog = document.querySelector('#setupDialog');
       if (setupDialog?.open) setupDialog.close();
@@ -36,15 +36,17 @@ async function main() {
       newText:document.querySelector('#newBtn')?.textContent?.trim(),
       saveText:document.querySelector('#saveBtn')?.textContent?.trim(),
       loadText:document.querySelector('#loadInput')?.closest('label')?.textContent?.trim(),
-      presentationText:document.querySelector('#presentationBtn')?.textContent?.trim(),
+      layoutTabText:document.querySelector('#layoutTabBtn')?.textContent?.trim(),
+      outputTabText:document.querySelector('#outputTabBtn')?.textContent?.trim(),
       legacyHidden:getComputedStyle(document.querySelector('#exportBtn')).display === 'none'
     }));
     assert.equal(top.newText, '＋ 新規作成');
     assert.equal(top.saveText, '💾 レイアウト保存');
     assert.equal(top.loadText, '📂 レイアウト読込');
-    assert.equal(top.presentationText, '▣ 発表・出力');
+    assert.equal(top.layoutTabText, 'LAYOUT');
+    assert.equal(top.outputTabText, 'OUTPUT');
     assert.equal(top.legacyHidden, true);
-    console.log('✓ top actions are consolidated into four clear user-facing controls');
+    console.log('✓ LAYOUT / OUTPUT tabs replace the former presentation top action');
 
     const editor = await page.evaluate(() => ({
       undo:document.querySelector('#undoBtn')?.textContent?.trim(),
@@ -74,7 +76,7 @@ async function main() {
     ]);
     console.log('✓ display and placement utilities are consolidated into one menu');
 
-    await page.locator('#presentationBtn').click();
+    await page.locator('#outputTabBtn').click();
     await page.locator('#presentationView').waitFor({state:'visible',timeout:TIMEOUT});
     await page.waitForFunction(() => document.querySelector('#presentationCourseOnlyPngBtn'), {timeout:TIMEOUT});
     const outputs = await page.evaluate(() => ({
@@ -95,9 +97,9 @@ async function main() {
       return clicked;
     });
     assert.equal(bridgeWorked, 1);
-    console.log('✓ legacy course-only PNG remains available inside 発表・出力');
+    console.log('✓ legacy course-only PNG remains available inside OUTPUT');
 
-    await page.locator('#presentationBackBtn').click();
+    await page.locator('#presentationLayoutTabBtn').click();
     await page.locator('#presentationView').waitFor({state:'hidden',timeout:TIMEOUT});
     await page.setViewportSize({width:390,height:844});
     await page.waitForTimeout(100);
