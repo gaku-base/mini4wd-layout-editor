@@ -43,7 +43,7 @@ Current non-final vertical-detail cases:
 
 - Lane Change: photo/instruction-derived provisional 3D profile
 - LC Jump: provisional 3D profile inherited from the Lane Change rising approach
-- Burning Lane Change: bridge height/profile still unmeasured
+- Burning Lane Change: photo-derived provisional 3D profile with official 20° type reference
 
 Lane Change mirrors the adopted 2D SVG bridge path in plan view using normalized coordinates scaled from the current dimension master. Its vertical profile is now explicitly provisional rather than flat: both connectors remain z=0, the bridge rises smoothly and symmetrically to approximately 95mm at the center, then returns to z=0. The approximation carries ±10mm uncertainty and must not be treated as a Tamiya-published nominal dimension.
 
@@ -55,9 +55,11 @@ LC Jump now follows the official 2015 description that it uses only the Lane Cha
 
 This LC Jump model is intentionally tagged provisional-photo-derived. The Tamiya 2015 Station Championship report is the construction reference for “Lane Change approach only,” while the 69579 Lane Change set description confirms that separate bridge-approach components exist. The existing 2D footprint and connector geometry are not changed.
 
-Burning Lane Change already follows its adopted 2D plan path while its bridge height stays unresolved.
+Burning Lane Change keeps the adopted 1800 × 1440mm 3-lane plan geometry and the existing single-lane bridge path. Tamiya's 2016 SPRING event reports explicitly identify the official event section as a 20° Burning Changer, and the official event photo shows a smoothly banked elevated crossing. Because that official hardware is a 5-lane event section while the app represents a 3-lane custom-style Burning LC, no official 5-lane physical dimensions are copied into the 3-lane master.
 
-All provisional Lane Change and LC Jump vertical values must be replaced or recalculated if direct physical measurements become available.
+For OUTPUT 3D only, the bridge is therefore marked provisional-photo-derived: z=0 and bank=0° at both ends, rising smoothly with a symmetric sine-squared profile to a 120mm running-surface peak and 20° peak bank at the center, then returning symmetrically. The 120mm value is a rounded photo-scale approximation near one JCJC lane width, with ±25mm uncertainty. A photographed 3-lane custom Burning LC is used only as a shape cross-check, and a modern third-party 3-lane support envelope (H160mm) is used only as a sanity bound; neither is treated as Tamiya specification data.
+
+All provisional Lane Change, LC Jump and Burning Lane Change vertical values must be replaced or recalculated if direct physical measurements become available.
 
 ## Regression requirement for future 2D changes
 
