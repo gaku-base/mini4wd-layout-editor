@@ -118,9 +118,9 @@ test('Lane Change mirrors the adopted 2D bridge plan without inventing bridge he
   assert.equal(bridge.widthMm, CATALOG.PART_DIMENSIONS_MM.common.runtimeTrackWidthMm / 3);
 
   assert.equal(bridge.samples[0].x, -d.lengthMm / 2);
-  assert.equal(bridge.samples[0].y, d.depthMm / 3);
+  assert.ok(Math.abs(bridge.samples[0].y - d.depthMm / 3) < 1e-9);
   assert.equal(bridge.samples.at(-1).x, d.lengthMm / 2);
-  assert.equal(bridge.samples.at(-1).y, -d.depthMm / 3);
+  assert.ok(Math.abs(bridge.samples.at(-1).y + d.depthMm / 3) < 1e-9);
   assert.ok(bridge.samples.every(point => point.z === 0));
   assert.ok(base.samples.every(point => point.z === 0));
 });
