@@ -13,6 +13,7 @@
   const WAVE_SAMPLES = 36;
   const BURNING_ARC_SAMPLES = 36;
   const BURNING_BRIDGE_SAMPLES = 24;
+  const LANECHANGE_BRIDGE_SAMPLES = 24;
 
   function finite(value, fallback = 0) {
     const number = Number(value);
@@ -224,6 +225,51 @@
     };
   }
 
+  function laneChangePaths(part, catalog) {
+    const d = catalogDimensions(catalog).lanechange;
+    const length = finite(d.lengthMm);
+    const depth = finite(d.depthMm);
+    const trackWidth = runtimeTrackWidthMm(catalog, 'lanechange');
+    const laneWidth = trackWidth / 3;
+    const bank = finite(part?.bankAngleDeg);
+    const leftX = -length / 2;
+    const rightX = length / 2;
+
+    // Match the adopted 2D lane-change SVG plan path by normalized coordinates
+    // (viewBox 162 x 36) while deriving every physical size from the current
+    // 2D dimension master. Vertical bridge height is intentionally not invented.
+    const approachX = leftX + length * (36 / 162);
+    const exitX = leftX + length * (126 / 162);
+    const startY = depth * (30 / 36 - .5);
+    const endY = depth * (6 / 36 - .5);
+    const curve = {
+      start:{ x:approachX, y:startY },
+      control1:{ x:leftX + length * (66 / 162), y:startY },
+      control2:{ x:leftX + length * (96 / 162), y:endY },
+      end:{ x:exitX, y:endY }
+    };
+
+    const bridge = [{ x:leftX, y:startY, z:0, bankDeg:bank, t:0 }];
+    for (let index = 1; index <= 6; index += 1) {
+      const t = index / 6;
+      bridge.push({ x:leftX + (approachX - leftX) * t, y:startY, z:0, bankDeg:bank, t:.15 * t });
+    }
+    for (let index = 1; index <= LANECHANGE_BRIDGE_SAMPLES; index += 1) {
+      const t = index / LANECHANGE_BRIDGE_SAMPLES;
+      const point = pointOnCubic(curve, t);
+      bridge.push({ x:point.x, y:point.y, z:0, bankDeg:bank, t:.15 + .7 * t });
+    }
+    for (let index = 1; index <= 6; index += 1) {
+      const t = index / 6;
+      bridge.push({ x:exitX + (rightX - exitX) * t, y:endY, z:0, bankDeg:bank, t:.85 + .15 * t });
+    }
+
+    return [
+      { id:'main', samples:straightPath(length, () => 0, () => bank), widthMm:trackWidth, laneCount:3, simplifiedVertical:true },
+      { id:'bridge-planar', samples:bridge, widthMm:laneWidth, laneCount:1, auxiliary:true, simplifiedVertical:true, planSource:'assets/templates/lane-change.svg' }
+    ];
+  }
+
   function burningPaths(part, catalog) {
     const d = catalogDimensions(catalog).burning;
     const leftX = finite(d.endpointXMm);
@@ -287,7 +333,7 @@
     const bank = finite(part?.bankAngleDeg);
     if (type === 'straight') return [{ id:'main', samples:straightPath(d.straight.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
     if (type === 'start') return [{ id:'main', samples:straightPath(d.start.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
-    if (type === 'lanechange') return [{ id:'main', samples:straightPath(d.lanechange.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3, simplifiedVertical:true }];
+    if (type === 'lanechange') return laneChangePaths(part, catalog);
     if (type === 'lcjump') return [{ id:'main', samples:straightPath(d.lcjump.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3, simplifiedVertical:true }];
     if (type === 'wave') return [{ id:'main', samples:wavePath(type, part, catalog), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
     if (type === 'slope') return [{ id:'main', samples:slopePath(part, catalog, dependencies), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
