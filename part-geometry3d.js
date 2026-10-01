@@ -127,7 +127,8 @@
         outerRadiusMm:d.burning.outerRadiusMm,
         endpointXMm:d.burning.endpointXMm,
         endpointYMm:d.burning.endpointYMm,
-        arcCenterXMm:d.burning.arcCenterXMm
+        arcCenterXMm:d.burning.arcCenterXMm,
+        bridge:Object.freeze({ ...d.burning.bridge })
       });
     }
     return Object.freeze({});
@@ -355,6 +356,15 @@
     ];
   }
 
+  function burningBridgeProfileAtT(t, dimensions) {
+    const u = clamp(finite(t), 0, 1);
+    const shape = Math.sin(Math.PI * u) ** 2;
+    return {
+      z:finite(dimensions?.bridge?.riseMm) * shape,
+      bankDeltaDeg:finite(dimensions?.bridge?.bankAngleDeg) * shape
+    };
+  }
+
   function burningPaths(part, catalog) {
     const d = catalogDimensions(catalog).burning;
     const leftX = finite(d.endpointXMm);
@@ -395,21 +405,53 @@
     };
     const bridge = [{ x:leftX, y:bridgeTopY, z:0, bankDeg:bank, t:0 }];
     for (let index = 1; index <= 6; index += 1) {
-      const t = index / 6;
-      bridge.push({ x:leftX + (curve.start.x - leftX) * t, y:bridgeTopY, z:0, bankDeg:bank, t:.15 * t });
+      const localT = index / 6;
+      const t = .15 * localT;
+      const profile = burningBridgeProfileAtT(t, d);
+      bridge.push({
+        x:leftX + (curve.start.x - leftX) * localT,
+        y:bridgeTopY,
+        z:profile.z,
+        bankDeg:bank + profile.bankDeltaDeg,
+        t
+      });
     }
     for (let index = 1; index <= BURNING_BRIDGE_SAMPLES; index += 1) {
-      const t = index / BURNING_BRIDGE_SAMPLES;
-      const point = pointOnCubic(curve, t);
-      bridge.push({ x:point.x, y:point.y, z:0, bankDeg:bank, t:.15 + .7 * t });
+      const localT = index / BURNING_BRIDGE_SAMPLES;
+      const t = .15 + .7 * localT;
+      const point = pointOnCubic(curve, localT);
+      const profile = burningBridgeProfileAtT(t, d);
+      bridge.push({ x:point.x, y:point.y, z:profile.z, bankDeg:bank + profile.bankDeltaDeg, t });
     }
     for (let index = 1; index <= 6; index += 1) {
-      const t = index / 6;
-      bridge.push({ x:curve.end.x + (leftX - curve.end.x) * t, y:bridgeBottomY, z:0, bankDeg:bank, t:.85 + .15 * t });
+      const localT = index / 6;
+      const t = .85 + .15 * localT;
+      const profile = burningBridgeProfileAtT(t, d);
+      bridge.push({
+        x:curve.end.x + (leftX - curve.end.x) * localT,
+        y:bridgeBottomY,
+        z:profile.z,
+        bankDeg:bank + profile.bankDeltaDeg,
+        t
+      });
     }
+    bridge[bridge.length - 1].z = 0;
+    bridge[bridge.length - 1].bankDeg = bank;
+
     return [
       { id:'base', samples:base, widthMm:trackWidth, laneCount:3, auxiliary:false },
-      { id:'bridge-planar', samples:bridge, widthMm:laneWidth, laneCount:1, auxiliary:true }
+      {
+        id:'bridge-elevated',
+        samples:bridge,
+        widthMm:laneWidth,
+        laneCount:1,
+        auxiliary:true,
+        provisionalVertical:true,
+        verticalProfile:d.bridge?.profile || 'symmetric-sine-squared',
+        bankProfile:d.bridge?.bankProfile || 'symmetric-sine-squared',
+        verticalProfileStatus:d.bridge?.status || 'provisional-photo-derived',
+        officialTypeDeg:finite(d.bridge?.bankAngleDeg)
+      }
     ];
   }
 
@@ -673,7 +715,7 @@
     warnings.push(...integrity.warnings);
     if (type === 'lanechange') warnings.push('lanechange-vertical-profile-photo-derived-provisional');
     if (type === 'lcjump') warnings.push('lcjump-vertical-profile-lanechange-approach-provisional');
-    if (type === 'burning') warnings.push('burning-bridge-vertical-detail-not-yet-measured');
+    if (type === 'burning') warnings.push('burning-vertical-profile-photo-derived-provisional');
 
     return Object.freeze({
       type,
@@ -696,9 +738,9 @@
     const model={
       version:VERSION,
       type,
-      fidelity:(type==='lanechange'||type==='lcjump')
+      fidelity:(type==='lanechange'||type==='lcjump'||type==='burning')
         ? 'photo-derived-provisional-3d'
-        : type==='burning' ? 'planar-dimensions-verified' : 'dimensional-3d',
+        : 'dimensional-3d',
       sourceCatalogVersion:catalog?.PART_DIMENSIONS_MM?.version || null,
       sourceDimensions:sourceDimensionSnapshot(type,catalog),
       physicalTrackWidthMm:runtimeTrackWidthMm(catalog,type),
