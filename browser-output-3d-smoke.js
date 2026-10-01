@@ -146,7 +146,7 @@ async function main() {
     assert.equal(diagnostics.render.viewMode,'3d');
     assert.equal(diagnostics.render.course3d.invalidParts.length,0);
     assert.equal(diagnostics.render.course3d.partCount,15);
-    assert.equal(diagnostics.render.course3d.catalogVersion,'2026-09-27-owner-measured-fit-v2');
+    assert.equal(diagnostics.render.course3d.catalogVersion,'2026-10-01-lanechange-photo-fit-v3');
     assert.ok(diagnostics.render.course3d.sceneBounds.maxZ >= 230);
 
     const bankAudit = await page.evaluate(() => {
@@ -193,22 +193,28 @@ async function main() {
         window.M4WD_PART_CATALOG,
         {slopeProfile:window.M4WD_SLOPE_LONGITUDINAL_PROFILE}
       );
-      const bridge=model.paths.find(path=>path.id==='bridge-planar');
+      const bridge=model.paths.find(path=>path.id==='bridge-elevated');
       return {
         valid:model.audit.valid,
-        warning:model.audit.warnings.includes('vertical-detail-not-yet-measured'),
+        warning:model.audit.warnings.includes('lanechange-vertical-profile-photo-derived-provisional'),
+        fidelity:model.fidelity,
         pathCount:model.paths.length,
         bridgeStart:bridge?.samples?.[0] || null,
         bridgeEnd:bridge?.samples?.at(-1) || null,
-        bridgeZ:bridge?.samples?.map(point=>point.z) || []
+        peakZ:Math.max(...(bridge?.samples?.map(point=>point.z) || [0])),
+        supportFaces:model.faces.filter(face=>String(face.pathId).startsWith('lanechange-support-')).length
       };
     });
     assert.equal(laneChangeAudit.valid,true);
     assert.equal(laneChangeAudit.warning,true);
+    assert.equal(laneChangeAudit.fidelity,'photo-derived-provisional-3d');
     assert.equal(laneChangeAudit.pathCount,2);
     assert.ok(laneChangeAudit.bridgeStart);
     assert.ok(laneChangeAudit.bridgeEnd);
-    assert.ok(laneChangeAudit.bridgeZ.every(z=>z===0));
+    assert.ok(Math.abs(laneChangeAudit.bridgeStart.z)<1e-9);
+    assert.ok(Math.abs(laneChangeAudit.bridgeEnd.z)<1e-9);
+    assert.ok(Math.abs(laneChangeAudit.peakZ-95)<.2);
+    assert.equal(laneChangeAudit.supportFaces,2);
 
     const beforeDrag = await page.evaluate(() => window.M4WD_PRESENTATION.get3dCamera());
     const canvas = page.locator('#presentationCanvas');
@@ -260,7 +266,7 @@ async function main() {
     console.log('✓ OUTPUT switches between real 2D and 3D rendered previews');
     console.log('✓ 3D scene has no invalid part geometry and uses the current dimension-master version');
     console.log('✓ Slope is 540mm/115mm and Bank20 60→80° uses the measured 220mm span');
-    console.log('✓ Lane Change renders its 2D-derived planar bridge path without invented vertical height');
+    console.log('✓ Lane Change renders a 95mm ±10mm photo-derived provisional bridge rise with two center supports');
     console.log('✓ 3D drag orbit, wheel zoom, TOP and ISO controls work');
     console.log('✓ returning to LAYOUT preserves parts and connections');
     console.log('Browser OUTPUT 3D rehearsal passed.');
