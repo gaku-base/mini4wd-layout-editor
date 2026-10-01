@@ -98,7 +98,12 @@
         connectorB:Object.freeze({ ...d.corner45.rightConnectorB })
       });
     }
-    if (type === 'lanechange') return Object.freeze({ lengthMm:d.lanechange.lengthMm, depthMm:d.lanechange.depthMm, trackWidthMm:common.runtimeTrackWidthMm });
+    if (type === 'lanechange') return Object.freeze({
+      lengthMm:d.lanechange.lengthMm,
+      depthMm:d.lanechange.depthMm,
+      trackWidthMm:common.runtimeTrackWidthMm,
+      bridge:Object.freeze({ ...d.lanechange.bridge })
+    });
     if (type === 'wave') return Object.freeze({ lengthMm:d.wave.lengthMm, visualDepthMm:d.wave.visualDepthMm, trackWidthMm:d.wave.trackWidthMm, amplitudeMm:d.wave.amplitudeMm, connectorYMm:d.wave.connectorYMm });
     if (type === 'slope') return Object.freeze({ horizontalSpanMm:d.slope.horizontalSpanMm, depthMm:d.slope.depthMm, heightDeltaMm:d.slope.heightDeltaMm, trackWidthMm:common.runtimeTrackWidthMm });
     if (type === 'bank20') return Object.freeze({ connectorSpanMm:d.bank20.connectorSpanMm, depthMm:d.bank20.depthMm, bankAngleDeg:d.bank20.bankAngleDeg, trackWidthMm:common.runtimeTrackWidthMm });
@@ -225,6 +230,12 @@
     };
   }
 
+  function laneChangeBridgeHeightAtT(t, dimensions) {
+    const u = clamp(finite(t), 0, 1);
+    const rise = finite(dimensions?.bridge?.riseMm);
+    return rise * Math.sin(Math.PI * u) ** 2;
+  }
+
   function laneChangePaths(part, catalog) {
     const d = catalogDimensions(catalog).lanechange;
     const length = finite(d.lengthMm);
@@ -251,22 +262,48 @@
 
     const bridge = [{ x:leftX, y:startY, z:0, bankDeg:bank, t:0 }];
     for (let index = 1; index <= 6; index += 1) {
-      const t = index / 6;
-      bridge.push({ x:leftX + (approachX - leftX) * t, y:startY, z:0, bankDeg:bank, t:.15 * t });
+      const localT = index / 6;
+      const t = .15 * localT;
+      bridge.push({
+        x:leftX + (approachX - leftX) * localT,
+        y:startY,
+        z:laneChangeBridgeHeightAtT(t, d),
+        bankDeg:bank,
+        t
+      });
     }
     for (let index = 1; index <= LANECHANGE_BRIDGE_SAMPLES; index += 1) {
-      const t = index / LANECHANGE_BRIDGE_SAMPLES;
-      const point = pointOnCubic(curve, t);
-      bridge.push({ x:point.x, y:point.y, z:0, bankDeg:bank, t:.15 + .7 * t });
+      const localT = index / LANECHANGE_BRIDGE_SAMPLES;
+      const t = .15 + .7 * localT;
+      const point = pointOnCubic(curve, localT);
+      bridge.push({ x:point.x, y:point.y, z:laneChangeBridgeHeightAtT(t, d), bankDeg:bank, t });
     }
     for (let index = 1; index <= 6; index += 1) {
-      const t = index / 6;
-      bridge.push({ x:exitX + (rightX - exitX) * t, y:endY, z:0, bankDeg:bank, t:.85 + .15 * t });
+      const localT = index / 6;
+      const t = .85 + .15 * localT;
+      bridge.push({
+        x:exitX + (rightX - exitX) * localT,
+        y:endY,
+        z:laneChangeBridgeHeightAtT(t, d),
+        bankDeg:bank,
+        t
+      });
     }
+    bridge[bridge.length - 1].z = 0;
 
     return [
-      { id:'main', samples:straightPath(length, () => 0, () => bank), widthMm:trackWidth, laneCount:3, simplifiedVertical:true },
-      { id:'bridge-planar', samples:bridge, widthMm:laneWidth, laneCount:1, auxiliary:true, simplifiedVertical:true, planSource:'assets/templates/lane-change.svg' }
+      { id:'main', samples:straightPath(length, () => 0, () => bank), widthMm:trackWidth, laneCount:3 },
+      {
+        id:'bridge-elevated',
+        samples:bridge,
+        widthMm:laneWidth,
+        laneCount:1,
+        auxiliary:true,
+        provisionalVertical:true,
+        planSource:'assets/templates/lane-change.svg',
+        verticalProfile:d.bridge?.profile || 'symmetric-sine-squared',
+        verticalProfileStatus:d.bridge?.status || 'provisional-photo-derived'
+      }
     ];
   }
 
@@ -419,6 +456,53 @@
     return { vertices, faces, lines, colors };
   }
 
+  function buildLaneChangeSupportMeshes(paths, catalog, colors) {
+    const d = catalogDimensions(catalog).lanechange;
+    const bridge = paths.find(path => path.id === 'bridge-elevated');
+    if (!bridge?.samples?.length) return [];
+    const rise = finite(d.bridge?.riseMm);
+    const span = finite(d.bridge?.supportPanelSpanMm);
+    if (!(rise > 0) || !(span > 0)) return [];
+
+    let centerIndex = 0;
+    let centerDistance = Infinity;
+    bridge.samples.forEach((sample, index) => {
+      const distance = Math.abs(finite(sample.t) - .5);
+      if (distance < centerDistance) {
+        centerDistance = distance;
+        centerIndex = index;
+      }
+    });
+
+    const sample = bridge.samples[centerIndex];
+    const tangent = tangentAt(bridge.samples, centerIndex);
+    const nx = -tangent.y;
+    const ny = tangent.x;
+    const halfSpan = span / 2;
+    const halfWidth = finite(bridge.widthMm) / 2;
+
+    return [-1, 1].map(side => {
+      const lateral = side * halfWidth;
+      const cx = finite(sample.x) + nx * lateral;
+      const cy = finite(sample.y) + ny * lateral;
+      const vertices = [];
+      const faces = [];
+      const lines = [];
+      const a = addVertex(vertices, { x:cx - tangent.x * halfSpan, y:cy - tangent.y * halfSpan, z:0 });
+      const b = addVertex(vertices, { x:cx + tangent.x * halfSpan, y:cy + tangent.y * halfSpan, z:0 });
+      const c = addVertex(vertices, { x:cx + tangent.x * halfSpan, y:cy + tangent.y * halfSpan, z:rise });
+      const dTop = addVertex(vertices, { x:cx - tangent.x * halfSpan, y:cy - tangent.y * halfSpan, z:rise });
+      addFace(faces, [a,b,c,dTop], 'wall', side < 0 ? 'lanechange-support-left' : 'lanechange-support-right', true);
+      lines.push(Object.freeze({
+        kind:'edge',
+        pathId:side < 0 ? 'lanechange-support-left' : 'lanechange-support-right',
+        auxiliary:true,
+        points:Object.freeze([vertices[a], vertices[b], vertices[c], vertices[dTop], vertices[a]])
+      }));
+      return { vertices, faces, lines, colors };
+    });
+  }
+
   function mergeMeshes(meshes) {
     const vertices = [];
     const faces = [];
@@ -539,7 +623,8 @@
     const integrity=validateMeshIntegrity(model);
     errors.push(...integrity.errors);
     warnings.push(...integrity.warnings);
-    if (type === 'lanechange' || type === 'lcjump') warnings.push('vertical-detail-not-yet-measured');
+    if (type === 'lanechange') warnings.push('lanechange-vertical-profile-photo-derived-provisional');
+    if (type === 'lcjump') warnings.push('vertical-detail-not-yet-measured');
     if (type === 'burning') warnings.push('burning-bridge-vertical-detail-not-yet-measured');
 
     return Object.freeze({
@@ -558,11 +643,14 @@
     const fence=fenceHeightMm(type,catalog);
     const colors=colorContract(type,part,catalog);
     const ribbons=paths.map(path => buildRibbon(path,fence,colors));
-    const merged=mergeMeshes(ribbons);
+    const supportMeshes=type==='lanechange' ? buildLaneChangeSupportMeshes(paths,catalog,colors) : [];
+    const merged=mergeMeshes([...ribbons,...supportMeshes]);
     const model={
       version:VERSION,
       type,
-      fidelity:(type==='lanechange'||type==='lcjump'||type==='burning')?'planar-dimensions-verified':'dimensional-3d',
+      fidelity:type==='lanechange'
+        ? 'photo-derived-provisional-3d'
+        : (type==='lcjump'||type==='burning') ? 'planar-dimensions-verified' : 'dimensional-3d',
       sourceCatalogVersion:catalog?.PART_DIMENSIONS_MM?.version || null,
       sourceDimensions:sourceDimensionSnapshot(type,catalog),
       physicalTrackWidthMm:runtimeTrackWidthMm(catalog,type),
