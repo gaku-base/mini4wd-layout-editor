@@ -1,10 +1,12 @@
 (function bootstrapPresentationMode(root) {
   'use strict';
-  if (!root || !root.document || root.M4WD_PRESENTATION?.version >= 2) return;
+  if (!root || !root.document || root.M4WD_PRESENTATION?.version >= 3) return;
 
   const DATA = root.M4WD_PRESENTATION_DATA;
   const RENDERER = root.M4WD_PRESENTATION_RENDERER;
   const EXPORT = root.M4WD_PRESENTATION_EXPORT;
+  const GEOMETRY_3D = root.M4WD_PART_GEOMETRY_3D;
+  const RENDERER_3D = root.M4WD_OUTPUT_3D_RENDERER;
   const CATALOG = root.M4WD_PART_CATALOG;
   if (!DATA || !RENDERER || !EXPORT || !CATALOG) return;
 
@@ -27,14 +29,19 @@
   const dependencies = Object.freeze({
     poseApi: root.M4WD_PART_RENDER_POSE,
     laneApi: root.M4WD_LANE_CHANGE_VISUAL,
-    burningApi: root.M4WD_BURNING_CHANGER_VISUAL
+    burningApi: root.M4WD_BURNING_CHANGER_VISUAL,
+    slopeProfile: root.M4WD_SLOPE_LONGITUDINAL_PROFILE
   });
 
   let background = 'grid';
   let orientation = 'auto';
+  let outputView = '2d';
+  let camera3d = RENDERER_3D?.normalizeCamera?.(RENDERER_3D.ISO_CAMERA) || { yawDeg:-42, tiltDeg:58, zoom:1 };
+  let cameraDrag3d = null;
   let metadata = loadMetadata();
   let currentModel = null;
   let lastDiagnostics = null;
+  let last3dDiagnostics = null;
   let previewScheduled = false;
   let runtimeGuardAtOpen = null;
   let pendingNewLayout = null;
@@ -202,6 +209,44 @@
     const toolbar = root.document.createElement('div');
     toolbar.className = 'presentation-toolbar';
 
+    const viewGroup = root.document.createElement('div');
+    viewGroup.id = 'presentationViewModeGroup';
+    viewGroup.className = 'presentation-control-group presentation-view-mode-group';
+    const viewLabel = root.document.createElement('span');
+    viewLabel.className = 'presentation-control-label';
+    viewLabel.textContent = 'VIEW';
+    const view2d = optionButton('presentationView2d','2D','2d','output-view');
+    const view3d = optionButton('presentationView3d','3D','3d','output-view');
+    if (!RENDERER_3D || !GEOMETRY_3D) {
+      view3d.disabled = true;
+      view3d.title = '3Dモジュールを読み込めません';
+    }
+    viewGroup.append(viewLabel, view2d, view3d);
+    viewGroup.addEventListener('click', onChoice);
+
+    const cameraGroup = root.document.createElement('div');
+    cameraGroup.id = 'presentation3dCameraGroup';
+    cameraGroup.className = 'presentation-control-group presentation-3d-camera-group';
+    const cameraLabel = root.document.createElement('span');
+    cameraLabel.className = 'presentation-control-label';
+    cameraLabel.textContent = '3D';
+    const cameraTop = root.document.createElement('button');
+    cameraTop.id = 'presentation3dTopBtn';
+    cameraTop.type = 'button';
+    cameraTop.className = 'presentation-choice';
+    cameraTop.textContent = 'TOP';
+    cameraTop.addEventListener('click', () => set3dCamera(RENDERER_3D?.TOP_CAMERA));
+    const cameraIso = root.document.createElement('button');
+    cameraIso.id = 'presentation3dIsoBtn';
+    cameraIso.type = 'button';
+    cameraIso.className = 'presentation-choice';
+    cameraIso.textContent = 'ISO';
+    cameraIso.addEventListener('click', () => set3dCamera(RENDERER_3D?.ISO_CAMERA));
+    const cameraHelp = root.document.createElement('span');
+    cameraHelp.className = 'presentation-3d-help';
+    cameraHelp.textContent = 'Drag: Rotate / Wheel: Zoom';
+    cameraGroup.append(cameraLabel, cameraTop, cameraIso, cameraHelp);
+
     const back = root.document.createElement('button');
     back.id = 'presentationBackBtn';
     back.type = 'button';
@@ -255,7 +300,7 @@
     status.className = 'presentation-status';
     status.setAttribute('role','status');
 
-    toolbar.append(back, name1.label, name2.label, layouter.label, bgGroup, orientationGroup, png, print, status);
+    toolbar.append(back, viewGroup, cameraGroup, name1.label, name2.label, layouter.label, bgGroup, orientationGroup, png, print, status);
 
     const stage = root.document.createElement('div');
     stage.className = 'presentation-stage';
@@ -263,6 +308,11 @@
     canvas.id = 'presentationCanvas';
     canvas.className = 'presentation-canvas';
     stage.appendChild(canvas);
+    canvas.addEventListener('pointerdown', on3dPointerDown);
+    canvas.addEventListener('pointermove', on3dPointerMove);
+    canvas.addEventListener('pointerup', on3dPointerUp);
+    canvas.addEventListener('pointercancel', on3dPointerUp);
+    canvas.addEventListener('wheel', on3dWheel, { passive:false });
 
     const printSheet = root.document.createElement('div');
     printSheet.id = 'presentationPrintSheet';
@@ -278,6 +328,7 @@
     view.classList.add('has-workspace-tabs');
     syncMetadataInputs();
     syncChoiceButtons();
+    syncOutputViewControls();
     syncWorkspaceTabs('layout');
     return view;
   }
@@ -305,6 +356,7 @@
     if (!button) return;
     if (button.dataset.group === 'background') background = button.dataset.value;
     if (button.dataset.group === 'orientation') orientation = button.dataset.value;
+    if (button.dataset.group === 'output-view') setOutputView(button.dataset.value);
     syncChoiceButtons();
     schedulePreview();
   }
@@ -312,6 +364,73 @@
   function syncChoiceButtons() {
     root.document.querySelectorAll('.presentation-choice[data-group="background"]').forEach(button => button.classList.toggle('is-active', button.dataset.value === background));
     root.document.querySelectorAll('.presentation-choice[data-group="orientation"]').forEach(button => button.classList.toggle('is-active', button.dataset.value === orientation));
+    root.document.querySelectorAll('.presentation-choice[data-group="output-view"]').forEach(button => button.classList.toggle('is-active', button.dataset.value === outputView));
+  }
+
+  function syncOutputViewControls() {
+    const cameraGroup = root.document.getElementById('presentation3dCameraGroup');
+    if (cameraGroup) cameraGroup.hidden = outputView !== '3d';
+    const canvas = root.document.getElementById('presentationCanvas');
+    if (canvas) canvas.classList.toggle('is-3d', outputView === '3d');
+  }
+
+  function setOutputView(value) {
+    const next = value === '3d' && RENDERER_3D && GEOMETRY_3D ? '3d' : '2d';
+    if (outputView === next) {
+      syncChoiceButtons();
+      syncOutputViewControls();
+      return outputView;
+    }
+    outputView = next;
+    cameraDrag3d = null;
+    syncChoiceButtons();
+    syncOutputViewControls();
+    schedulePreview();
+    return outputView;
+  }
+
+  function set3dCamera(value) {
+    if (!RENDERER_3D) return camera3d;
+    camera3d = RENDERER_3D.normalizeCamera(value || RENDERER_3D.ISO_CAMERA);
+    schedulePreview();
+    return { ...camera3d };
+  }
+
+  function on3dPointerDown(event) {
+    if (outputView !== '3d' || event.button !== 0 || !RENDERER_3D) return;
+    const canvas = event.currentTarget;
+    cameraDrag3d = { pointerId:event.pointerId, x:event.clientX, y:event.clientY, camera:{ ...camera3d } };
+    canvas.setPointerCapture?.(event.pointerId);
+    canvas.classList.add('is-orbiting');
+    event.preventDefault();
+  }
+
+  function on3dPointerMove(event) {
+    if (!cameraDrag3d || event.pointerId !== cameraDrag3d.pointerId || !RENDERER_3D) return;
+    const dx = event.clientX - cameraDrag3d.x;
+    const dy = event.clientY - cameraDrag3d.y;
+    camera3d = RENDERER_3D.normalizeCamera({
+      ...cameraDrag3d.camera,
+      yawDeg:cameraDrag3d.camera.yawDeg + dx * .35,
+      tiltDeg:cameraDrag3d.camera.tiltDeg + dy * .28
+    });
+    schedulePreview();
+    event.preventDefault();
+  }
+
+  function on3dPointerUp(event) {
+    if (!cameraDrag3d || event.pointerId !== cameraDrag3d.pointerId) return;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    event.currentTarget.classList.remove('is-orbiting');
+    cameraDrag3d = null;
+  }
+
+  function on3dWheel(event) {
+    if (outputView !== '3d' || !RENDERER_3D) return;
+    const factor = Math.exp(-Number(event.deltaY || 0) * .0012);
+    camera3d = RENDERER_3D.normalizeCamera({ ...camera3d, zoom:camera3d.zoom * factor });
+    schedulePreview();
+    event.preventDefault();
   }
 
   function rendererOptions() {
@@ -321,6 +440,50 @@
   function previewSize(model) {
     const resolved = EXPORT.resolveOrientation(model, orientation);
     return resolved === 'landscape' ? { width:1440, height:1018 } : { width:960, height:1358 };
+  }
+
+  function composeOutput(canvas, model, options = {}) {
+    const mode = options.viewMode || outputView;
+    const diagnostics = EXPORT.composePresentation(canvas, model, {
+      document:root.document,
+      renderer:RENDERER,
+      catalog:CATALOG,
+      dependencies,
+      background:options.background || background,
+      orientation:options.orientation || orientation,
+      width:options.width,
+      height:options.height,
+      dpi:options.dpi
+    });
+    if (mode !== '3d' || !RENDERER_3D || !GEOMETRY_3D) {
+      last3dDiagnostics = null;
+      return Object.freeze({ ...diagnostics, viewMode:'2d', course3dDiagnostics:null });
+    }
+
+    const rect = diagnostics.rects?.course;
+    if (!rect) return Object.freeze({ ...diagnostics, viewMode:'3d', course3dDiagnostics:null });
+    const courseCanvas = root.document.createElement('canvas');
+    courseCanvas.width = Math.max(1, Math.round(rect.w));
+    courseCanvas.height = Math.max(1, Math.round(rect.h));
+    const course3dDiagnostics = RENDERER_3D.renderCourse3D(courseCanvas, model, {
+      geometryApi:GEOMETRY_3D,
+      catalog:CATALOG,
+      dependencies,
+      camera:camera3d,
+      background:options.background || background,
+      width:courseCanvas.width,
+      height:courseCanvas.height
+    });
+    const context = canvas.getContext('2d');
+    context.clearRect(rect.x, rect.y, rect.w, rect.h);
+    context.drawImage(courseCanvas, rect.x, rect.y, rect.w, rect.h);
+    context.save();
+    context.strokeStyle = '#9fa9b4';
+    context.lineWidth = Math.max(1, Math.min(rect.w, rect.h) * .0015);
+    context.strokeRect(rect.x, rect.y, rect.w, rect.h);
+    context.restore();
+    last3dDiagnostics = course3dDiagnostics;
+    return Object.freeze({ ...diagnostics, viewMode:'3d', course3dDiagnostics });
   }
 
   function refresh() {
@@ -334,18 +497,20 @@
       return null;
     }
     const size = previewSize(model);
-    lastDiagnostics = EXPORT.composePresentation(canvas, model, {
-      document:root.document,
-      renderer:RENDERER,
-      catalog:CATALOG,
-      dependencies,
+    lastDiagnostics = composeOutput(canvas, model, {
       background,
       orientation,
       width:size.width,
       height:size.height,
-      dpi:120
+      dpi:120,
+      viewMode:outputView
     });
-    setStatus(DATA.validateMetadata(metadata).valid ? '' : '大会名1行目を入力してください', false);
+    const invalid3d = lastDiagnostics?.course3dDiagnostics?.invalidParts?.length || 0;
+    if (outputView === '3d' && invalid3d) {
+      setStatus(`3D形状チェックエラー ${invalid3d}件`, true);
+    } else {
+      setStatus(DATA.validateMetadata(metadata).valid ? '' : '大会名1行目を入力してください', false);
+    }
     return lastDiagnostics;
   }
 
@@ -407,11 +572,11 @@
     const model = buildModel();
     if (!model) return null;
     const canvas = root.document.createElement('canvas');
-    const diagnostics = EXPORT.composePresentation(canvas, model, {
-      document:root.document, renderer:RENDERER, catalog:CATALOG, dependencies,
-      background, orientation, dpi:EXPORT.DEFAULT_DPI
+    const diagnostics = composeOutput(canvas, model, {
+      background, orientation, dpi:EXPORT.DEFAULT_DPI, viewMode:outputView
     });
-    const filename = `${DATA.sanitizeFilename(metadata)}_レイアウト.png`;
+    const suffix = outputView === '3d' ? '_3D' : '';
+    const filename = `${DATA.sanitizeFilename(metadata)}_レイアウト${suffix}.png`;
     setStatus('PNGを作成しています…', false);
     const blob = await EXPORT.downloadPng(canvas, filename, root.document);
     setStatus(`PNG保存完了 (${Math.round(blob.size / 1024)} KB)`, false);
@@ -424,9 +589,8 @@
     if (!model) return null;
     const resolved = EXPORT.resolveOrientation(model, orientation);
     const canvas = root.document.createElement('canvas');
-    const diagnostics = EXPORT.composePresentation(canvas, model, {
-      document:root.document, renderer:RENDERER, catalog:CATALOG, dependencies,
-      background, orientation:resolved, dpi:180
+    const diagnostics = composeOutput(canvas, model, {
+      background, orientation:resolved, dpi:180, viewMode:outputView
     });
     const image = root.document.getElementById('presentationPrintImage');
     image.src = canvas.toDataURL('image/png');
@@ -520,10 +684,14 @@
       counts:model?.counts?.map(item => ({ key:item.key, count:item.count, label:item.label })) || [],
       length:model?.length || null,
       field:model?.field || null,
+      outputView,
+      camera3d,
       render:lastDiagnostics ? {
         page:lastDiagnostics.page,
+        viewMode:lastDiagnostics.viewMode || outputView,
         courseGridCm:lastDiagnostics.courseDiagnostics?.gridCm,
-        courseViewport:lastDiagnostics.courseDiagnostics?.viewport
+        courseViewport:lastDiagnostics.courseDiagnostics?.viewport,
+        course3d:lastDiagnostics.course3dDiagnostics || last3dDiagnostics
       } : null,
       runtimeGuardAtOpen,
       runtimeNow
@@ -533,13 +701,13 @@
   function composeForTest(options = {}) {
     const model = buildModel();
     const canvas = root.document.createElement('canvas');
-    const diagnostics = EXPORT.composePresentation(canvas, model, {
-      document:root.document, renderer:RENDERER, catalog:CATALOG, dependencies,
+    const diagnostics = composeOutput(canvas, model, {
       background:options.background || background,
       orientation:options.orientation || orientation,
       width:options.width,
       height:options.height,
-      dpi:options.dpi || 96
+      dpi:options.dpi || 96,
+      viewMode:options.viewMode || outputView
     });
     return { canvas, diagnostics };
   }
@@ -550,7 +718,7 @@
   installNewLayoutMetadataGuard();
 
   const api = Object.freeze({
-    version:2,
+    version:3,
     open,
     close,
     refresh,
@@ -561,7 +729,11 @@
     getMetadata:() => ({ ...metadata }),
     setMetadata:value => { saveMetadata(value); syncMetadataInputs(); schedulePreview(); return { ...metadata }; },
     setBackground:value => { if (RENDERER.BACKGROUNDS.includes(value)) { background=value; syncChoiceButtons(); schedulePreview(); } return background; },
-    setOrientation:value => { if (['auto','landscape','portrait'].includes(value)) { orientation=value; syncChoiceButtons(); schedulePreview(); } return orientation; }
+    setOrientation:value => { if (['auto','landscape','portrait'].includes(value)) { orientation=value; syncChoiceButtons(); schedulePreview(); } return orientation; },
+    getOutputView:() => outputView,
+    setOutputView,
+    get3dCamera:() => ({ ...camera3d }),
+    set3dCamera
   });
   Object.defineProperty(root, 'M4WD_PRESENTATION', { configurable:true, enumerable:false, writable:false, value:api });
 })(typeof window !== 'undefined' ? window : null);

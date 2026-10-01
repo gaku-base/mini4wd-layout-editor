@@ -205,6 +205,8 @@
       [`presentation-data.js?v=${CACHE_KEY}`, 'm4wdPresentationData'],
       [`presentation-renderer.js?v=${CACHE_KEY}`, 'm4wdPresentationRenderer'],
       [`presentation-export.js?v=${CACHE_KEY}`, 'm4wdPresentationExport'],
+      [`part-geometry3d.js?v=${CACHE_KEY}`, 'm4wdPartGeometry3d'],
+      [`output-3d-renderer.js?v=${CACHE_KEY}`, 'm4wdOutput3dRenderer'],
       [`presentation-mode.js?v=${CACHE_KEY}`, 'm4wdPresentationMode']
     ];
     const loadAt = index => {

@@ -50,6 +50,8 @@ jobs:
           test -f presentation-data.js
           test -f presentation-renderer.js
           test -f presentation-export.js
+          test -f part-geometry3d.js
+          test -f output-3d-renderer.js
           test -f presentation-mode.js
           test -f browser-presentation-rehearsal.js
           test -f ui-controls-cleanup.js
@@ -63,6 +65,7 @@ jobs:
           test -f browser-connector-target-lock-smoke.js
           test -f browser-start-boundary-snap-smoke.js
           test -f browser-workspace-tabs-smoke.js
+          test -f browser-output-3d-smoke.js
           test -f browser-part-color-independence-smoke.js
 
       - name: Setup Node.js
@@ -167,6 +170,7 @@ jobs:
           node browser-ui-controls-smoke.js
           node browser-slope-visibility-smoke.js
           node browser-workspace-tabs-smoke.js
+          node browser-output-3d-smoke.js
           node browser-part-color-independence-smoke.js
           node browser-slope-underpass-smoke.js
           node browser-bank20-projection-smoke.js
