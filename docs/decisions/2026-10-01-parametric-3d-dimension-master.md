@@ -42,7 +42,7 @@ Parts whose special vertical detail has not been verified must keep their verifi
 Current non-final vertical-detail cases:
 
 - Lane Change: photo/instruction-derived provisional 3D profile
-- LC Jump: vertical launch profile still unmeasured
+- LC Jump: provisional 3D profile inherited from the Lane Change rising approach
 - Burning Lane Change: bridge height/profile still unmeasured
 
 Lane Change mirrors the adopted 2D SVG bridge path in plan view using normalized coordinates scaled from the current dimension master. Its vertical profile is now explicitly provisional rather than flat: both connectors remain z=0, the bridge rises smoothly and symmetrically to approximately 95mm at the center, then returns to z=0. The approximation carries ±10mm uncertainty and must not be treated as a Tamiya-published nominal dimension.
@@ -51,9 +51,13 @@ The 95mm value is based on cross-checking the official Tamiya 69579 assembled pr
 
 Two simplified support panels are rendered at the center for visual fidelity. Their longitudinal span uses 93mm from the support-part envelope, while their rendered vertical extent stops at the modeled running-surface rise. They are visual approximations only.
 
-Burning Lane Change already follows its adopted 2D plan path while its bridge height stays unresolved. LC Jump remains footprint-only because its launch profile is not yet verified.
+LC Jump now follows the official 2015 description that it uses only the Lane Change approach portion. The adopted LC Jump placement footprint remains 540 × 360mm and both editor connectors remain at the existing z=0 contract, but OUTPUT 3D adds one auxiliary raised approach lane. Its vertical shape is not given an independent guessed height: the renderer takes the rising prefix of the current Lane Change provisional profile using the adopted physical length ratio 540/1620 = 1/3. With the current 95mm Lane Change peak this derives a launch-edge running-surface rise of 71.25mm. That number is therefore derived, not a separately measured LC Jump dimension, and will automatically change if the Lane Change provisional profile or adopted lengths are corrected.
 
-All provisional Lane Change vertical values must be replaced if direct physical measurements become available.
+This LC Jump model is intentionally tagged provisional-photo-derived. The Tamiya 2015 Station Championship report is the construction reference for “Lane Change approach only,” while the 69579 Lane Change set description confirms that separate bridge-approach components exist. The existing 2D footprint and connector geometry are not changed.
+
+Burning Lane Change already follows its adopted 2D plan path while its bridge height stays unresolved.
+
+All provisional Lane Change and LC Jump vertical values must be replaced or recalculated if direct physical measurements become available.
 
 ## Regression requirement for future 2D changes
 

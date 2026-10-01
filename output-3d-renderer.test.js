@@ -66,7 +66,7 @@ test('scene combines Start, Straight, Slope and cumulative Bank20 without geomet
   assert.equal(scene.catalogVersion, CATALOG.PART_DIMENSIONS_MM.version);
 });
 
-test('3D scene distinguishes photo-derived Lane Change from still-unmeasured special-part verticals', () => {
+test('3D scene distinguishes provisional Lane Change and LC Jump verticals from unresolved Burning LC height', () => {
   const scene = RENDERER.buildScene(modelWith([
     { id:'lc', type:'lanechange', x:100, y:100, rotation:0, zMm:0 },
     { id:'jump', type:'lcjump', x:300, y:100, rotation:0, zMm:0 },
@@ -75,7 +75,7 @@ test('3D scene distinguishes photo-derived Lane Change from still-unmeasured spe
   assert.equal(scene.invalidParts.length, 0);
   const warnings = scene.warnings.map(item => item.warning);
   assert.ok(warnings.includes('lanechange-vertical-profile-photo-derived-provisional'));
-  assert.ok(warnings.includes('vertical-detail-not-yet-measured'));
+  assert.ok(warnings.includes('lcjump-vertical-profile-lanechange-approach-provisional'));
   assert.ok(warnings.includes('burning-bridge-vertical-detail-not-yet-measured'));
 });
 

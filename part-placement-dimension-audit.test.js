@@ -37,7 +37,7 @@ function assertDeepFrozen(value, path = 'root') {
 }
 
 test('molded-fit part dimension master is the project placement authority and is immutable at runtime', () => {
-  assert.equal(DIM.version, '2026-10-01-lanechange-photo-fit-v3');
+  assert.equal(DIM.version, '2026-10-01-lcjump-approach-fit-v4');
   assert.equal(DIM.basis, 'project-owner-real-measurement-and-approved-runtime-geometry-plus-explicit-provisional-photo-derived-verticals');
   assertDeepFrozen(DIM, 'PART_DIMENSIONS_MM');
   assert.equal(CATALOG.TRACK_WIDTH_CM * 10, DIM.common.runtimeTrackWidthMm);
@@ -98,6 +98,10 @@ test('lane change, wave, slope, Bank20 and LC Jump runtime placement comes from 
 
   close(connectorSpanMm('lcjump'), DIM.lcjump.lengthMm, 'LC Jump span');
   close(PARTS.lcjump.h * 10, DIM.lcjump.depthMm, 'LC Jump depth');
+  assert.equal(DIM.lcjump.approach.sourceProfile, 'lanechange-rising-prefix-by-length-ratio');
+  assert.equal(DIM.lcjump.approach.status, 'provisional-photo-derived');
+  assert.equal(PARTS.lcjump.dimensionAudit.verticalProfile.status, 'provisional-photo-derived');
+  assert.equal(PARTS.lcjump.dimensionAudit.verticalProfile.usage, '3d-visual-approximation');
 
   for (const type of ['lanechange', 'wave', 'slope', 'bank20', 'lcjump']) {
     const audit = PARTS[type].dimensionAudit;

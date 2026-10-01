@@ -138,13 +138,36 @@ test('Lane Change uses the adopted 2D plan plus a documented photo-derived provi
   assert.equal(model.sourceDimensions.bridge.uncertaintyMm, 10);
 });
 
-test('LC jump preserves verified 2D footprint without inventing vertical dimensions', () => {
+test('LC Jump inherits the Lane Change rising approach without a separate guessed height', () => {
+  const d = CATALOG.PART_DIMENSIONS_MM;
   const model = GEOMETRY.buildPart3D('lcjump', {}, CATALOG, DEPS);
-  assert.equal(model.fidelity, 'planar-dimensions-verified');
+  assert.equal(model.fidelity, 'photo-derived-provisional-3d');
   assert.equal(model.audit.valid, true);
-  assert.ok(model.audit.warnings.includes('vertical-detail-not-yet-measured'));
-  const zValues = model.paths[0].samples.map(point => point.z);
-  assert.ok(zValues.every(z => z === 0));
+  assert.ok(model.audit.warnings.includes('lcjump-vertical-profile-lanechange-approach-provisional'));
+  assert.equal(model.paths.length, 2);
+
+  const base = model.paths.find(path => path.id === 'main');
+  const approach = model.paths.find(path => path.id === 'jump-approach');
+  assert.ok(base);
+  assert.ok(approach);
+  assert.equal(approach.auxiliary, true);
+  assert.equal(approach.provisionalVertical, true);
+  assert.equal(approach.verticalProfile, 'lanechange-rising-prefix-by-length-ratio');
+  assert.equal(approach.verticalProfileStatus, 'provisional-photo-derived');
+  assert.equal(approach.widthMm, d.common.runtimeTrackWidthMm / 3);
+  assert.ok(base.samples.every(point => point.z === 0));
+
+  const expectedFraction = d.lcjump.lengthMm / d.lanechange.lengthMm;
+  assert.ok(Math.abs(approach.sourceLaneChangeFraction - expectedFraction) < 1e-12);
+  assert.ok(Math.abs(approach.samples[0].z) < 1e-9);
+  assert.ok(Math.abs(approach.samples[0].y - d.lcjump.depthMm / 3) < 1e-9);
+  assert.ok(Math.abs(approach.samples.at(-1).y - d.lcjump.depthMm / 3) < 1e-9);
+
+  const expectedRise = d.lanechange.bridge.riseMm * Math.sin(Math.PI * expectedFraction) ** 2;
+  assert.ok(Math.abs(approach.samples.at(-1).z - expectedRise) < 1e-9);
+  assert.ok(Math.abs(model.sourceDimensions.derivedLaunchRiseMm - expectedRise) < 1e-9);
+  assert.ok(approach.samples.at(-1).z > 0);
+  assert.ok(approach.samples.at(-2).z < approach.samples.at(-1).z);
 });
 
 test('Burning LC keeps 2D endpoints and flags unmeasured bridge height instead of inventing it', () => {

@@ -20,7 +20,7 @@
   // derived from it so placement, connector geometry, visual bounds and current
   // 2D occupancy stay synchronized.
   const PART_DIMENSIONS_MM = deepFreeze({
-    version: '2026-10-01-lanechange-photo-fit-v3',
+    version: '2026-10-01-lcjump-approach-fit-v4',
     basis: 'project-owner-real-measurement-and-approved-runtime-geometry-plus-explicit-provisional-photo-derived-verticals',
     common: {
       runtimeTrackWidthMm: 360,
@@ -81,7 +81,13 @@
     },
     lcjump: {
       lengthMm: 540,
-      depthMm: 360
+      depthMm: 360,
+      approach: {
+        sourceProfile: 'lanechange-rising-prefix-by-length-ratio',
+        status: 'provisional-photo-derived',
+        source: 'tamiya-2015-station-championship-report+tamiya-69579-bridge-approach-component',
+        note: 'LC Jump is modeled from the rising approach portion of the Lane Change. No independent jump height is stored; 3D height is derived from the current Lane Change profile and the adopted 540/1620 length ratio.'
+      }
     },
     burning: {
       displayWidthMm: 1800,
@@ -357,7 +363,14 @@
       visual: { file: 'assets/templates/lc-jump.svg', canvasWidth: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm), canvasHeight: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm), originX: mmToCm(PART_DIMENSIONS_MM.lcjump.lengthMm) / 2, originY: mmToCm(PART_DIMENSIONS_MM.lcjump.depthMm) / 2 },
       dimensionAudit: {
         runtimeFootprintMm: { width: PART_DIMENSIONS_MM.lcjump.lengthMm, depth: PART_DIMENSIONS_MM.lcjump.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
-        constructionReference: { value: null, status: 'verified', usage: 'reference-only', source: 'tamiya-2015-station-championship-report', note: 'Tamiya describes LC Jump as using only the lane-change approach portion; the adopted placement dimensions remain the current project values.' }
+        constructionReference: { value: null, status: 'verified', usage: 'reference-only', source: 'tamiya-2015-station-championship-report', note: 'Tamiya describes LC Jump as using only the lane-change approach portion; the adopted placement dimensions remain the current project values.' },
+        verticalProfile: {
+          value: PART_DIMENSIONS_MM.lcjump.approach,
+          status: 'provisional-photo-derived',
+          usage: '3d-visual-approximation',
+          source: 'tamiya-2015-station-championship-report+tamiya-69579-bridge-approach-component',
+          note: 'The LC Jump vertical shape inherits the current Lane Change rising profile by physical length ratio instead of introducing a separate guessed height.'
+        }
       },
       ...palette
     },

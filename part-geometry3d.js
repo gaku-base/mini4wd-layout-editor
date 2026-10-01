@@ -107,7 +107,16 @@
     if (type === 'wave') return Object.freeze({ lengthMm:d.wave.lengthMm, visualDepthMm:d.wave.visualDepthMm, trackWidthMm:d.wave.trackWidthMm, amplitudeMm:d.wave.amplitudeMm, connectorYMm:d.wave.connectorYMm });
     if (type === 'slope') return Object.freeze({ horizontalSpanMm:d.slope.horizontalSpanMm, depthMm:d.slope.depthMm, heightDeltaMm:d.slope.heightDeltaMm, trackWidthMm:common.runtimeTrackWidthMm });
     if (type === 'bank20') return Object.freeze({ connectorSpanMm:d.bank20.connectorSpanMm, depthMm:d.bank20.depthMm, bankAngleDeg:d.bank20.bankAngleDeg, trackWidthMm:common.runtimeTrackWidthMm });
-    if (type === 'lcjump') return Object.freeze({ lengthMm:d.lcjump.lengthMm, depthMm:d.lcjump.depthMm, trackWidthMm:common.runtimeTrackWidthMm });
+    if (type === 'lcjump') return Object.freeze({
+      lengthMm:d.lcjump.lengthMm,
+      depthMm:d.lcjump.depthMm,
+      trackWidthMm:common.runtimeTrackWidthMm,
+      approach:Object.freeze({ ...d.lcjump.approach }),
+      derivedLaunchRiseMm:laneChangeBridgeHeightAtT(
+        clamp(finite(d.lcjump.lengthMm) / Math.max(EPS, finite(d.lanechange.lengthMm)), 0, 1),
+        d.lanechange
+      )
+    });
     if (type === 'burning') {
       return Object.freeze({
         displayWidthMm:d.burning.displayWidthMm,
@@ -234,6 +243,45 @@
     const u = clamp(finite(t), 0, 1);
     const rise = finite(dimensions?.bridge?.riseMm);
     return rise * Math.sin(Math.PI * u) ** 2;
+  }
+
+  function lcJumpPaths(part, catalog) {
+    const d = catalogDimensions(catalog);
+    const jump = d.lcjump;
+    const laneChange = d.lanechange;
+    const length = finite(jump.lengthMm);
+    const depth = finite(jump.depthMm);
+    const trackWidth = runtimeTrackWidthMm(catalog, 'lcjump');
+    const laneWidth = trackWidth / 3;
+    const bank = finite(part?.bankAngleDeg);
+    const sourceFraction = clamp(length / Math.max(EPS, finite(laneChange.lengthMm)), 0, 1);
+    const laneY = depth / 3;
+
+    const base = {
+      id:'main',
+      samples:straightPath(length, () => 0, () => bank),
+      widthMm:trackWidth,
+      laneCount:3
+    };
+
+    const approach = {
+      id:'jump-approach',
+      samples:straightPath(
+        length,
+        t => laneChangeBridgeHeightAtT(sourceFraction * t, laneChange),
+        () => bank,
+        30
+      ).map(sample => ({ ...sample, y:laneY })),
+      widthMm:laneWidth,
+      laneCount:1,
+      auxiliary:true,
+      provisionalVertical:true,
+      verticalProfile:'lanechange-rising-prefix-by-length-ratio',
+      verticalProfileStatus:jump.approach?.status || 'provisional-photo-derived',
+      sourceLaneChangeFraction:sourceFraction
+    };
+
+    return [base, approach];
   }
 
   function laneChangePaths(part, catalog) {
@@ -371,7 +419,7 @@
     if (type === 'straight') return [{ id:'main', samples:straightPath(d.straight.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
     if (type === 'start') return [{ id:'main', samples:straightPath(d.start.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
     if (type === 'lanechange') return laneChangePaths(part, catalog);
-    if (type === 'lcjump') return [{ id:'main', samples:straightPath(d.lcjump.lengthMm, () => 0, () => bank), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3, simplifiedVertical:true }];
+    if (type === 'lcjump') return lcJumpPaths(part, catalog);
     if (type === 'wave') return [{ id:'main', samples:wavePath(type, part, catalog), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
     if (type === 'slope') return [{ id:'main', samples:slopePath(part, catalog, dependencies), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
     if (type === 'bank20') return [{ id:'main', samples:bankPath(part, catalog), widthMm:runtimeTrackWidthMm(catalog, type), laneCount:3 }];
@@ -624,7 +672,7 @@
     errors.push(...integrity.errors);
     warnings.push(...integrity.warnings);
     if (type === 'lanechange') warnings.push('lanechange-vertical-profile-photo-derived-provisional');
-    if (type === 'lcjump') warnings.push('vertical-detail-not-yet-measured');
+    if (type === 'lcjump') warnings.push('lcjump-vertical-profile-lanechange-approach-provisional');
     if (type === 'burning') warnings.push('burning-bridge-vertical-detail-not-yet-measured');
 
     return Object.freeze({
@@ -648,9 +696,9 @@
     const model={
       version:VERSION,
       type,
-      fidelity:type==='lanechange'
+      fidelity:(type==='lanechange'||type==='lcjump')
         ? 'photo-derived-provisional-3d'
-        : (type==='lcjump'||type==='burning') ? 'planar-dimensions-verified' : 'dimensional-3d',
+        : type==='burning' ? 'planar-dimensions-verified' : 'dimensional-3d',
       sourceCatalogVersion:catalog?.PART_DIMENSIONS_MM?.version || null,
       sourceDimensions:sourceDimensionSnapshot(type,catalog),
       physicalTrackWidthMm:runtimeTrackWidthMm(catalog,type),
