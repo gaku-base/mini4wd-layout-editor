@@ -66,7 +66,7 @@ test('scene combines Start, Straight, Slope and cumulative Bank20 without geomet
   assert.equal(scene.catalogVersion, CATALOG.PART_DIMENSIONS_MM.version);
 });
 
-test('3D scene reports simplified special-part fidelity instead of fabricating vertical measurements', () => {
+test('3D scene distinguishes photo-derived Lane Change from still-unmeasured special-part verticals', () => {
   const scene = RENDERER.buildScene(modelWith([
     { id:'lc', type:'lanechange', x:100, y:100, rotation:0, zMm:0 },
     { id:'jump', type:'lcjump', x:300, y:100, rotation:0, zMm:0 },
@@ -74,6 +74,7 @@ test('3D scene reports simplified special-part fidelity instead of fabricating v
   ]), OPTIONS);
   assert.equal(scene.invalidParts.length, 0);
   const warnings = scene.warnings.map(item => item.warning);
+  assert.ok(warnings.includes('lanechange-vertical-profile-photo-derived-provisional'));
   assert.ok(warnings.includes('vertical-detail-not-yet-measured'));
   assert.ok(warnings.includes('burning-bridge-vertical-detail-not-yet-measured'));
 });

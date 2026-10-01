@@ -20,8 +20,8 @@
   // derived from it so placement, connector geometry, visual bounds and current
   // 2D occupancy stay synchronized.
   const PART_DIMENSIONS_MM = deepFreeze({
-    version: '2026-09-27-owner-measured-fit-v2',
-    basis: 'project-owner-real-measurement-and-approved-runtime-geometry',
+    version: '2026-10-01-lanechange-photo-fit-v3',
+    basis: 'project-owner-real-measurement-and-approved-runtime-geometry-plus-explicit-provisional-photo-derived-verticals',
     common: {
       runtimeTrackWidthMm: 360,
       connectionFaceOuterWidthMm: 370
@@ -49,7 +49,17 @@
     },
     lanechange: {
       lengthMm: 1620,
-      depthMm: 360
+      depthMm: 360,
+      bridge: {
+        riseMm: 95,
+        uncertaintyMm: 10,
+        supportPanelSpanMm: 93,
+        supportOverallHeightMm: 108,
+        profile: 'symmetric-sine-squared',
+        status: 'provisional-photo-derived',
+        source: 'tamiya-69579-official-photo+69506-instruction+secondary-bridge-support-93x108',
+        note: 'Bridge running-surface rise is a photo/instruction-derived approximation, not a Tamiya-published nominal height.'
+      }
     },
     wave: {
       lengthMm: 540,
@@ -208,7 +218,14 @@
       },
       dimensionAudit: {
         placementSpanMm: { value: PART_DIMENSIONS_MM.lanechange.lengthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
-        runtimeFootprintDepthMm: { value: PART_DIMENSIONS_MM.lanechange.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' }
+        runtimeFootprintDepthMm: { value: PART_DIMENSIONS_MM.lanechange.depthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
+        bridgeVerticalProfile: {
+          value: PART_DIMENSIONS_MM.lanechange.bridge,
+          status: 'provisional-photo-derived',
+          usage: '3d-visual-approximation',
+          source: 'tamiya-69579-official-photo+69506-instruction+secondary-bridge-support-93x108',
+          note: '95mm peak running-surface rise with ±10mm uncertainty; replace with measured geometry when available.'
+        }
       },
       ...palette
     },
