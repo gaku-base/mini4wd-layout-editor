@@ -67,6 +67,8 @@ jobs:
           test -f browser-workspace-tabs-smoke.js
           test -f browser-output-3d-smoke.js
           test -f browser-part-color-independence-smoke.js
+          test -f browser-pimentoso-extract.js
+          test -f browser-tpb7w4-rebuild.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -172,6 +174,8 @@ jobs:
           node browser-workspace-tabs-smoke.js
           node browser-output-3d-smoke.js
           node browser-part-color-independence-smoke.js
+          node browser-pimentoso-extract.js
+          node browser-tpb7w4-rebuild.js
           node browser-slope-underpass-smoke.js
           node browser-bank20-projection-smoke.js
           node browser-cumulative-bank-visual-smoke.js
