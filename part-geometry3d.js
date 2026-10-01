@@ -263,7 +263,7 @@
       end:{ x:bridgeApproachX, y:bridgeBottomY }
     };
     const bridge = [{ x:leftX, y:bridgeTopY, z:0, bankDeg:bank, t:0 }];
-    for (let index = 0; index <= 6; index += 1) {
+    for (let index = 1; index <= 6; index += 1) {
       const t = index / 6;
       bridge.push({ x:leftX + (curve.start.x - leftX) * t, y:bridgeTopY, z:0, bankDeg:bank, t:.15 * t });
     }
