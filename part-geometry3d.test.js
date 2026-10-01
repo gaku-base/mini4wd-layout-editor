@@ -101,15 +101,37 @@ test('Bank20 3D uses measured 2D span and cumulative bank angles', () => {
   assert.equal(base60.sourceDimensions.connectorSpanMm, d.connectorSpanMm);
 });
 
-test('lane change and LC jump preserve verified 2D footprint without inventing vertical dimensions', () => {
-  for (const type of ['lanechange','lcjump']) {
-    const model = GEOMETRY.buildPart3D(type, {}, CATALOG, DEPS);
-    assert.equal(model.fidelity, 'planar-dimensions-verified');
-    assert.equal(model.audit.valid, true);
-    assert.ok(model.audit.warnings.includes('vertical-detail-not-yet-measured'));
-    const zValues = model.paths[0].samples.map(point => point.z);
-    assert.ok(zValues.every(z => z === 0));
-  }
+test('Lane Change mirrors the adopted 2D bridge plan without inventing bridge height', () => {
+  const d = CATALOG.PART_DIMENSIONS_MM.lanechange;
+  const model = GEOMETRY.buildPart3D('lanechange', {}, CATALOG, DEPS);
+  assert.equal(model.fidelity, 'planar-dimensions-verified');
+  assert.equal(model.audit.valid, true);
+  assert.ok(model.audit.warnings.includes('vertical-detail-not-yet-measured'));
+  assert.equal(model.paths.length, 2);
+
+  const base = model.paths.find(path => path.id === 'main');
+  const bridge = model.paths.find(path => path.id === 'bridge-planar');
+  assert.ok(base);
+  assert.ok(bridge);
+  assert.equal(bridge.auxiliary, true);
+  assert.equal(bridge.planSource, 'assets/templates/lane-change.svg');
+  assert.equal(bridge.widthMm, CATALOG.PART_DIMENSIONS_MM.common.runtimeTrackWidthMm / 3);
+
+  assert.equal(bridge.samples[0].x, -d.lengthMm / 2);
+  assert.equal(bridge.samples[0].y, d.depthMm / 3);
+  assert.equal(bridge.samples.at(-1).x, d.lengthMm / 2);
+  assert.equal(bridge.samples.at(-1).y, -d.depthMm / 3);
+  assert.ok(bridge.samples.every(point => point.z === 0));
+  assert.ok(base.samples.every(point => point.z === 0));
+});
+
+test('LC jump preserves verified 2D footprint without inventing vertical dimensions', () => {
+  const model = GEOMETRY.buildPart3D('lcjump', {}, CATALOG, DEPS);
+  assert.equal(model.fidelity, 'planar-dimensions-verified');
+  assert.equal(model.audit.valid, true);
+  assert.ok(model.audit.warnings.includes('vertical-detail-not-yet-measured'));
+  const zValues = model.paths[0].samples.map(point => point.z);
+  assert.ok(zValues.every(z => z === 0));
 });
 
 test('Burning LC keeps 2D endpoints and flags unmeasured bridge height instead of inventing it', () => {
