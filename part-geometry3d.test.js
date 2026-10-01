@@ -170,16 +170,39 @@ test('LC Jump inherits the Lane Change rising approach without a separate guesse
   assert.ok(approach.samples.at(-2).z < approach.samples.at(-1).z);
 });
 
-test('Burning LC keeps 2D endpoints and flags unmeasured bridge height instead of inventing it', () => {
+test('Burning LC preserves adopted 2D endpoints and adds a documented photo-derived 20-degree bridge profile', () => {
   const d = CATALOG.PART_DIMENSIONS_MM.burning;
   const model = GEOMETRY.buildPart3D('burning', {}, CATALOG, DEPS);
-  const base = model.paths[0].samples;
-  assert.equal(base[0].x, d.endpointXMm);
-  assert.equal(base[0].y, -d.endpointYMm);
-  assert.equal(base.at(-1).x, d.endpointXMm);
-  assert.equal(base.at(-1).y, d.endpointYMm);
+  const base = model.paths.find(path => path.id === 'base');
+  const bridge = model.paths.find(path => path.id === 'bridge-elevated');
+
+  assert.equal(model.fidelity, 'photo-derived-provisional-3d');
   assert.equal(model.audit.valid, true);
-  assert.ok(model.audit.warnings.includes('burning-bridge-vertical-detail-not-yet-measured'));
+  assert.ok(model.audit.warnings.includes('burning-vertical-profile-photo-derived-provisional'));
+  assert.ok(base);
+  assert.ok(bridge);
+
+  assert.equal(base.samples[0].x, d.endpointXMm);
+  assert.equal(base.samples[0].y, -d.endpointYMm);
+  assert.equal(base.samples.at(-1).x, d.endpointXMm);
+  assert.equal(base.samples.at(-1).y, d.endpointYMm);
+  assert.ok(base.samples.every(point => point.z === 0));
+
+  assert.equal(bridge.provisionalVertical, true);
+  assert.equal(bridge.verticalProfileStatus, 'provisional-photo-derived');
+  assert.equal(bridge.officialTypeDeg, 20);
+  assert.ok(Math.abs(bridge.samples[0].z) < 1e-9);
+  assert.ok(Math.abs(bridge.samples.at(-1).z) < 1e-9);
+  assert.ok(Math.abs(bridge.samples[0].bankDeg) < 1e-9);
+  assert.ok(Math.abs(bridge.samples.at(-1).bankDeg) < 1e-9);
+
+  const peak = bridge.samples.reduce((best, sample) => sample.z > best.z ? sample : best, bridge.samples[0]);
+  assert.ok(Math.abs(peak.t - .5) < 1e-12);
+  assert.ok(Math.abs(peak.z - d.bridge.riseMm) < 1e-9);
+  assert.ok(Math.abs(peak.bankDeg - d.bridge.bankAngleDeg) < 1e-9);
+  assert.equal(model.sourceDimensions.bridge.riseMm, 120);
+  assert.equal(model.sourceDimensions.bridge.uncertaintyMm, 25);
+  assert.equal(model.sourceDimensions.bridge.bankAngleDeg, 20);
 });
 
 test('changing the 2D dimension master automatically changes generated 3D geometry', () => {

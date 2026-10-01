@@ -37,7 +37,7 @@ function assertDeepFrozen(value, path = 'root') {
 }
 
 test('molded-fit part dimension master is the project placement authority and is immutable at runtime', () => {
-  assert.equal(DIM.version, '2026-10-01-lcjump-approach-fit-v4');
+  assert.equal(DIM.version, '2026-10-01-burning-photo-fit-v5');
   assert.equal(DIM.basis, 'project-owner-real-measurement-and-approved-runtime-geometry-plus-explicit-provisional-photo-derived-verticals');
   assertDeepFrozen(DIM, 'PART_DIMENSIONS_MM');
   assert.equal(CATALOG.TRACK_WIDTH_CM * 10, DIM.common.runtimeTrackWidthMm);
@@ -148,6 +148,14 @@ test('Burning Lane Change display and connector geometry comes from the adopted 
   close(part.geometry.endpointY * 10, DIM.burning.endpointYMm, 'Burning endpoint y');
   close(part.geometry.arcCenterX * 10, DIM.burning.arcCenterXMm, 'Burning arc center');
   assert.equal(part.dimensionAudit.runtimeDisplayBoundsMm.status, 'verified');
+  assert.equal(part.dimensionAudit.officialTypeReference.value, 20);
+  assert.equal(part.dimensionAudit.officialTypeReference.unit, 'deg');
+  assert.equal(DIM.burning.bridge.riseMm, 120);
+  assert.equal(DIM.burning.bridge.uncertaintyMm, 25);
+  assert.equal(DIM.burning.bridge.bankAngleDeg, 20);
+  assert.equal(DIM.burning.bridge.status, 'provisional-photo-derived');
+  assert.equal(part.dimensionAudit.bridgeVerticalProfile.status, 'provisional-photo-derived');
+  assert.equal(part.dimensionAudit.bridgeVerticalProfile.usage, '3d-visual-approximation');
 });
 
 test('renderer reads per-part catalog dimensions instead of freezing the current 360mm body size into each drawing', () => {

@@ -20,7 +20,7 @@
   // derived from it so placement, connector geometry, visual bounds and current
   // 2D occupancy stay synchronized.
   const PART_DIMENSIONS_MM = deepFreeze({
-    version: '2026-10-01-lcjump-approach-fit-v4',
+    version: '2026-10-01-burning-photo-fit-v5',
     basis: 'project-owner-real-measurement-and-approved-runtime-geometry-plus-explicit-provisional-photo-derived-verticals',
     common: {
       runtimeTrackWidthMm: 360,
@@ -100,7 +100,17 @@
       outerRadiusMm: 720,
       endpointXMm: -930,
       endpointYMm: 540,
-      arcCenterXMm: 150
+      arcCenterXMm: 150,
+      bridge: {
+        riseMm: 120,
+        uncertaintyMm: 25,
+        bankAngleDeg: 20,
+        profile: 'symmetric-sine-squared',
+        bankProfile: 'symmetric-sine-squared',
+        status: 'provisional-photo-derived',
+        source: 'tamiya-2016-burning-changer20-official-photo+3lane-custom-burning-photo+third-party-3lane-envelope-sanity-check',
+        note: 'Tamiya documents the 20° Burning Changer type. The 120mm running-surface peak is a photo-derived 3-lane approximation (about one JCJC lane width) with ±25mm uncertainty; it is not a Tamiya-published dimension.'
+      }
     }
   });
 
@@ -392,7 +402,14 @@
       },
       dimensionAudit: {
         runtimeDisplayBoundsMm: { width: PART_DIMENSIONS_MM.burning.displayWidthMm, depth: PART_DIMENSIONS_MM.burning.displayDepthMm, status: 'verified', source: 'project-owner-approved-2026-09-16-molded-fit' },
-        officialTypeReference: { value: 20, unit: 'deg', status: 'verified', usage: 'reference-only', source: 'tamiya-2016-spring-report' }
+        officialTypeReference: { value: 20, unit: 'deg', status: 'verified', usage: 'reference-only', source: 'tamiya-2016-spring-report' },
+        bridgeVerticalProfile: {
+          value: PART_DIMENSIONS_MM.burning.bridge,
+          status: 'provisional-photo-derived',
+          usage: '3d-visual-approximation',
+          source: 'tamiya-2016-burning-changer20-official-photo+3lane-custom-burning-photo+third-party-3lane-envelope-sanity-check',
+          note: 'Official Tamiya sources establish the 20° Burning Changer type. The 3-lane app geometry keeps its adopted plan dimensions; 120mm ±25mm peak rise is a photo-scale approximation rather than an official physical dimension.'
+        }
       },
       ...palette
     }
