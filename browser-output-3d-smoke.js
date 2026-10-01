@@ -53,7 +53,8 @@ async function main() {
     { id:'corner-a', type:'corner-45-right', x:330, y:290, rotation:45, routeIndex:0, entryConnectorId:'a', colorKey:'white', zMm:230, zOrder:12 },
     { id:'wave-a', type:'wave', x:430, y:300, rotation:90, routeIndex:0, entryConnectorId:'a', colorKey:'red', zMm:115, zOrder:13 },
     { id:'lanechange-a', type:'lanechange', x:180, y:355, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'white', zMm:0, zOrder:14 },
-    { id:'lcjump-a', type:'lcjump', x:330, y:355, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'white', zMm:0, zOrder:15 }
+    { id:'lcjump-a', type:'lcjump', x:330, y:355, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'white', zMm:0, zOrder:15 },
+    { id:'burning-a', type:'burning', x:400, y:280, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'white', zMm:0, zOrder:16 }
   ];
   const connections = [
     ['start','b','up-1','a'],
@@ -146,8 +147,8 @@ async function main() {
     assert.equal(diagnostics.outputView,'3d');
     assert.equal(diagnostics.render.viewMode,'3d');
     assert.equal(diagnostics.render.course3d.invalidParts.length,0);
-    assert.equal(diagnostics.render.course3d.partCount,16);
-    assert.equal(diagnostics.render.course3d.catalogVersion,'2026-10-01-lcjump-approach-fit-v4');
+    assert.equal(diagnostics.render.course3d.partCount,17);
+    assert.equal(diagnostics.render.course3d.catalogVersion,'2026-10-01-burning-photo-fit-v5');
     assert.ok(diagnostics.render.course3d.sceneBounds.maxZ >= 230);
 
     const bankAudit = await page.evaluate(() => {
@@ -245,6 +246,35 @@ async function main() {
     assert.ok(Math.abs(lcJumpAudit.endZ-71.25)<1e-9);
     assert.ok(Math.abs(lcJumpAudit.derivedLaunchRiseMm-71.25)<1e-9);
 
+    const burningAudit = await page.evaluate(() => {
+      const model=window.M4WD_PART_GEOMETRY_3D.buildPart3D(
+        'burning',
+        {type:'burning',bankAngleDeg:0,colorKey:'white'},
+        window.M4WD_PART_CATALOG,
+        {slopeProfile:window.M4WD_SLOPE_LONGITUDINAL_PROFILE}
+      );
+      const bridge=model.paths.find(path=>path.id==='bridge-elevated');
+      const peak=bridge?.samples?.reduce((best,sample)=>sample.z>best.z?sample:best,bridge.samples[0]);
+      return {
+        valid:model.audit.valid,
+        warning:model.audit.warnings.includes('burning-vertical-profile-photo-derived-provisional'),
+        fidelity:model.fidelity,
+        startZ:bridge?.samples?.[0]?.z ?? null,
+        endZ:bridge?.samples?.at(-1)?.z ?? null,
+        peakZ:peak?.z ?? null,
+        peakBankDeg:peak?.bankDeg ?? null,
+        officialTypeDeg:bridge?.officialTypeDeg ?? null
+      };
+    });
+    assert.equal(burningAudit.valid,true);
+    assert.equal(burningAudit.warning,true);
+    assert.equal(burningAudit.fidelity,'photo-derived-provisional-3d');
+    assert.ok(Math.abs(burningAudit.startZ)<1e-9);
+    assert.ok(Math.abs(burningAudit.endZ)<1e-9);
+    assert.ok(Math.abs(burningAudit.peakZ-120)<1e-9);
+    assert.ok(Math.abs(burningAudit.peakBankDeg-20)<1e-9);
+    assert.equal(burningAudit.officialTypeDeg,20);
+
     const beforeDrag = await page.evaluate(() => window.M4WD_PRESENTATION.get3dCamera());
     const canvas = page.locator('#presentationCanvas');
     const box = await canvas.boundingBox();
@@ -297,6 +327,7 @@ async function main() {
     console.log('✓ Slope is 540mm/115mm and Bank20 60→80° uses the measured 220mm span');
     console.log('✓ Lane Change renders a 95mm ±10mm photo-derived provisional bridge rise with two center supports');
     console.log('✓ LC Jump inherits the first 1/3 of the Lane Change vertical profile and launches at 71.25mm');
+    console.log('✓ Burning LC renders a provisional 120mm ±25mm bridge rise and smooth 20° peak bank');
     console.log('✓ 3D drag orbit, wheel zoom, TOP and ISO controls work');
     console.log('✓ returning to LAYOUT preserves parts and connections');
     console.log('Browser OUTPUT 3D rehearsal passed.');
