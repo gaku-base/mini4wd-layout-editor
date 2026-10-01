@@ -271,6 +271,36 @@ body.presentation-mode-open > #app { display: none !important; }
   text-overflow: ellipsis;
 }
 
+.presentation-view-mode-group {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+.presentation-3d-camera-group {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+}
+.presentation-3d-camera-group[hidden] {
+  display: none !important;
+}
+.presentation-3d-help {
+  grid-column: 1 / -1;
+  color: var(--pr-muted);
+  font-size: 9px;
+  line-height: 1.35;
+  letter-spacing: .02em;
+  text-align: center;
+}
+.presentation-choice:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+  transform: none !important;
+}
+.presentation-canvas.is-3d {
+  cursor: grab;
+  touch-action: none;
+}
+.presentation-canvas.is-3d.is-orbiting {
+  cursor: grabbing;
+}
+
 .presentation-status {
   min-width: 0;
   color: var(--pr-muted);
