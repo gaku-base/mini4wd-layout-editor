@@ -278,7 +278,7 @@
       context.moveTo(item.points[0].x,item.points[0].y);
       for(let i=1;i<item.points.length;i+=1)context.lineTo(item.points[i].x,item.points[i].y);
       context.strokeStyle=item.line.color;
-      context.globalAlpha=item.line.auxiliary?.8:1;
+      context.globalAlpha = item.line.auxiliary ? .8 : 1;
       context.lineWidth=item.line.kind==='lane'?Math.max(.8,projection.scale*1.3):Math.max(1,projection.scale*1.8);
       context.stroke();
       context.globalAlpha=1;
