@@ -259,7 +259,8 @@ async function main() {
 
     console.log('✓ OUTPUT switches between real 2D and 3D rendered previews');
     console.log('✓ 3D scene has no invalid part geometry and uses the current dimension-master version');
-    console.log('✓ Slope is 540mm/115mm and Bank20 60→80° uses the measured 220mm span');\n    console.log('✓ Lane Change renders its 2D-derived planar bridge path without invented vertical height');
+    console.log('✓ Slope is 540mm/115mm and Bank20 60→80° uses the measured 220mm span');
+    console.log('✓ Lane Change renders its 2D-derived planar bridge path without invented vertical height');
     console.log('✓ 3D drag orbit, wheel zoom, TOP and ISO controls work');
     console.log('✓ returning to LAYOUT preserves parts and connections');
     console.log('Browser OUTPUT 3D rehearsal passed.');
