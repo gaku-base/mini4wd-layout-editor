@@ -101,28 +101,41 @@ test('Bank20 3D uses measured 2D span and cumulative bank angles', () => {
   assert.equal(base60.sourceDimensions.connectorSpanMm, d.connectorSpanMm);
 });
 
-test('Lane Change mirrors the adopted 2D bridge plan without inventing bridge height', () => {
+test('Lane Change uses the adopted 2D plan plus a documented photo-derived provisional bridge profile', () => {
   const d = CATALOG.PART_DIMENSIONS_MM.lanechange;
   const model = GEOMETRY.buildPart3D('lanechange', {}, CATALOG, DEPS);
-  assert.equal(model.fidelity, 'planar-dimensions-verified');
+  assert.equal(model.fidelity, 'photo-derived-provisional-3d');
   assert.equal(model.audit.valid, true);
-  assert.ok(model.audit.warnings.includes('vertical-detail-not-yet-measured'));
+  assert.ok(model.audit.warnings.includes('lanechange-vertical-profile-photo-derived-provisional'));
   assert.equal(model.paths.length, 2);
 
   const base = model.paths.find(path => path.id === 'main');
-  const bridge = model.paths.find(path => path.id === 'bridge-planar');
+  const bridge = model.paths.find(path => path.id === 'bridge-elevated');
   assert.ok(base);
   assert.ok(bridge);
   assert.equal(bridge.auxiliary, true);
+  assert.equal(bridge.provisionalVertical, true);
   assert.equal(bridge.planSource, 'assets/templates/lane-change.svg');
+  assert.equal(bridge.verticalProfileStatus, 'provisional-photo-derived');
   assert.equal(bridge.widthMm, CATALOG.PART_DIMENSIONS_MM.common.runtimeTrackWidthMm / 3);
 
   assert.equal(bridge.samples[0].x, -d.lengthMm / 2);
   assert.ok(Math.abs(bridge.samples[0].y - d.depthMm / 3) < 1e-9);
   assert.equal(bridge.samples.at(-1).x, d.lengthMm / 2);
   assert.ok(Math.abs(bridge.samples.at(-1).y + d.depthMm / 3) < 1e-9);
-  assert.ok(bridge.samples.every(point => point.z === 0));
+  assert.ok(Math.abs(bridge.samples[0].z) < 1e-9);
+  assert.ok(Math.abs(bridge.samples.at(-1).z) < 1e-9);
+
+  const peak = bridge.samples.reduce((best, sample) => sample.z > best.z ? sample : best, bridge.samples[0]);
+  assert.ok(Math.abs(peak.t - .5) < .03);
+  assert.ok(Math.abs(peak.z - d.bridge.riseMm) < .2);
+  assert.ok(bridge.samples.every(point => point.z >= -1e-9 && point.z <= d.bridge.riseMm + 1e-9));
   assert.ok(base.samples.every(point => point.z === 0));
+
+  const supportFaces = model.faces.filter(face => String(face.pathId).startsWith('lanechange-support-'));
+  assert.equal(supportFaces.length, 2);
+  assert.equal(model.sourceDimensions.bridge.riseMm, 95);
+  assert.equal(model.sourceDimensions.bridge.uncertaintyMm, 10);
 });
 
 test('LC jump preserves verified 2D footprint without inventing vertical dimensions', () => {
