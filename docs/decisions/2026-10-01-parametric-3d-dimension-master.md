@@ -39,15 +39,21 @@ Parts with verified vertical data may use dimensional 3D geometry.
 
 Parts whose special vertical detail has not been verified must keep their verified 2D plan dimensions and use an explicitly identified simplified vertical model. Unverified heights must not be invented.
 
-Current simplified vertical-detail cases:
+Current non-final vertical-detail cases:
 
-- Lane Change
-- LC Jump
-- Burning Lane Change bridge height
+- Lane Change: photo/instruction-derived provisional 3D profile
+- LC Jump: vertical launch profile still unmeasured
+- Burning Lane Change: bridge height/profile still unmeasured
 
-Lane Change now mirrors the adopted 2D SVG bridge path in plan view using normalized coordinates scaled from the current dimension master, but every bridge sample remains at z=0 until a verified bridge-height/profile measurement exists. Burning Lane Change already follows its adopted 2D plan path with the same rule. LC Jump remains footprint-only because its vertical launch profile is not yet verified.
+Lane Change mirrors the adopted 2D SVG bridge path in plan view using normalized coordinates scaled from the current dimension master. Its vertical profile is now explicitly provisional rather than flat: both connectors remain z=0, the bridge rises smoothly and symmetrically to approximately 95mm at the center, then returns to z=0. The approximation carries ±10mm uncertainty and must not be treated as a Tamiya-published nominal dimension.
 
-These remain eligible for later refinement when verified physical dimensions are available.
+The 95mm value is based on cross-checking the official Tamiya 69579 assembled product photo, the Tamiya assembly instruction drawing for the two over-bridge halves and two supports, the official 50mm fence height, and a secondary listing of the genuine bridge-support part at 93×108mm. The 108mm support overall height includes attachment/post geometry, so the running-surface rise is modeled slightly lower at 95mm. The longitudinal shape uses a smooth symmetric sine-squared profile because the instruction drawing shows two curved bridge halves meeting at the center; this avoids inventing unverified individual curve radii or station lengths.
+
+Two simplified support panels are rendered at the center for visual fidelity. Their longitudinal span uses 93mm from the support-part envelope, while their rendered vertical extent stops at the modeled running-surface rise. They are visual approximations only.
+
+Burning Lane Change already follows its adopted 2D plan path while its bridge height stays unresolved. LC Jump remains footprint-only because its launch profile is not yet verified.
+
+All provisional Lane Change vertical values must be replaced if direct physical measurements become available.
 
 ## Regression requirement for future 2D changes
 
