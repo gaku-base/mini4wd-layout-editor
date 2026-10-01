@@ -50,6 +50,8 @@ jobs:
           test -f presentation-data.js
           test -f presentation-renderer.js
           test -f presentation-export.js
+          test -f part-geometry3d.js
+          test -f output-3d-renderer.js
           test -f presentation-mode.js
           test -f browser-presentation-rehearsal.js
           test -f ui-controls-cleanup.js
