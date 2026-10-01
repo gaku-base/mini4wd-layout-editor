@@ -121,7 +121,7 @@
     button.id = 'presentationBtn';
     button.type = 'button';
     button.className = 'secondary presentation-entry-btn';
-    button.textContent = '出力';
+    button.textContent = 'OUTPUT';
     button.title = '出力画面を表示';
     if (exportButton?.nextSibling) host.insertBefore(button, exportButton.nextSibling);
     else host.appendChild(button);
@@ -182,7 +182,7 @@
     layoutTab.type = 'button';
     layoutTab.className = 'presentation-workspace-tab';
     layoutTab.setAttribute('role', 'tab');
-    layoutTab.textContent = 'レイアウト作成';
+    layoutTab.textContent = 'LAYOUT';
     layoutTab.addEventListener('click', close);
 
     const outputTab = root.document.createElement('button');
@@ -190,7 +190,7 @@
     outputTab.type = 'button';
     outputTab.className = 'presentation-workspace-tab active';
     outputTab.setAttribute('role', 'tab');
-    outputTab.textContent = '出力';
+    outputTab.textContent = 'OUTPUT';
     outputTab.addEventListener('click', () => {
       syncWorkspaceTabs('output');
       schedulePreview();
