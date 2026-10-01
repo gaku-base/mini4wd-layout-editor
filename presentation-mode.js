@@ -81,7 +81,38 @@
     }
   }
 
+  function syncWorkspaceTabs(mode) {
+    const outputActive = mode === 'output';
+    const pairs = [
+      [root.document.getElementById('layoutTabBtn'), !outputActive],
+      [root.document.getElementById('outputTabBtn'), outputActive],
+      [root.document.getElementById('presentationLayoutTabBtn'), !outputActive],
+      [root.document.getElementById('presentationOutputTabBtn'), outputActive]
+    ];
+    for (const [button, active] of pairs) {
+      if (!button) continue;
+      button.classList.toggle('active', active);
+      button.setAttribute('aria-selected', active ? 'true' : 'false');
+      button.tabIndex = active ? 0 : -1;
+    }
+  }
+
   function ensureEntryButton() {
+    const outputTab = root.document.getElementById('outputTabBtn');
+    const layoutTab = root.document.getElementById('layoutTabBtn');
+    if (outputTab) {
+      if (outputTab.dataset.presentationBound !== '1') {
+        outputTab.dataset.presentationBound = '1';
+        outputTab.addEventListener('click', open);
+      }
+      if (layoutTab && layoutTab.dataset.presentationBound !== '1') {
+        layoutTab.dataset.presentationBound = '1';
+        layoutTab.addEventListener('click', close);
+      }
+      syncWorkspaceTabs('layout');
+      return outputTab;
+    }
+
     let button = root.document.getElementById('presentationBtn');
     if (button) return button;
     const exportButton = root.document.getElementById('exportBtn');
@@ -90,8 +121,8 @@
     button.id = 'presentationBtn';
     button.type = 'button';
     button.className = 'secondary presentation-entry-btn';
-    button.textContent = '発表';
-    button.title = '発表用レイアウトを表示';
+    button.textContent = '出力';
+    button.title = '出力画面を表示';
     if (exportButton?.nextSibling) host.insertBefore(button, exportButton.nextSibling);
     else host.appendChild(button);
     button.addEventListener('click', open);
@@ -133,6 +164,40 @@
     view.className = 'presentation-view';
     view.hidden = true;
     view.setAttribute('aria-label', '発表用レイアウト');
+
+    const windowHeader = root.document.createElement('div');
+    windowHeader.className = 'presentation-window-header';
+
+    const title = root.document.createElement('strong');
+    title.className = 'presentation-window-title';
+    title.textContent = 'COURSE LAYOUT';
+
+    const tabs = root.document.createElement('div');
+    tabs.className = 'presentation-workspace-tabs';
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', '画面切替');
+
+    const layoutTab = root.document.createElement('button');
+    layoutTab.id = 'presentationLayoutTabBtn';
+    layoutTab.type = 'button';
+    layoutTab.className = 'presentation-workspace-tab';
+    layoutTab.setAttribute('role', 'tab');
+    layoutTab.textContent = 'レイアウト作成';
+    layoutTab.addEventListener('click', close);
+
+    const outputTab = root.document.createElement('button');
+    outputTab.id = 'presentationOutputTabBtn';
+    outputTab.type = 'button';
+    outputTab.className = 'presentation-workspace-tab active';
+    outputTab.setAttribute('role', 'tab');
+    outputTab.textContent = '出力';
+    outputTab.addEventListener('click', () => {
+      syncWorkspaceTabs('output');
+      schedulePreview();
+    });
+
+    tabs.append(layoutTab, outputTab);
+    windowHeader.append(title, tabs);
 
     const toolbar = root.document.createElement('div');
     toolbar.className = 'presentation-toolbar';
@@ -208,10 +273,12 @@
     printImage.alt = '';
     printSheet.appendChild(printImage);
 
-    view.append(toolbar, stage, printSheet);
+    view.append(windowHeader, toolbar, stage, printSheet);
     root.document.body.appendChild(view);
+    view.classList.add('has-workspace-tabs');
     syncMetadataInputs();
     syncChoiceButtons();
+    syncWorkspaceTabs('layout');
     return view;
   }
 
@@ -318,6 +385,7 @@
     syncMetadataInputs();
     view.hidden = false;
     root.document.body.classList.add('presentation-mode-open');
+    syncWorkspaceTabs('output');
     schedulePreview();
     return true;
   }
@@ -326,6 +394,11 @@
     const view = root.document.getElementById('presentationView');
     if (view) view.hidden = true;
     root.document.body.classList.remove('presentation-mode-open');
+    syncWorkspaceTabs('layout');
+    root.requestAnimationFrame(() => {
+      root.dispatchEvent(new Event('resize'));
+      root.document.getElementById('courseCanvas')?.focus?.({ preventScroll: true });
+    });
     return true;
   }
 
