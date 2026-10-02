@@ -13,7 +13,7 @@
     "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part08.b64",
     "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part09.b64"
   ],
-  "sha256": "e1e2c7ae959c63f2c303c0960f815018ad0627f12067b9751b5c298e00b32f4e",
-  "publishedAt": "2026-10-01T20:45:00+09:00",
-  "notes": "v0.1.64 hardens Windows UI interaction: delegated core navigation fallback, saved-state normalization and render/bind recovery. It also enables automatic update checks and moves Electron to a shared LOCALAPPDATA cache with curl-first quiet resumable downloads."
+  "sha256": "a862fdcf76b1d6fa57c9a4f4507d937a60576f74c26bede6bbef7fb93533ee13",
+  "publishedAt": "2026-10-02T13:55:00+09:00",
+  "notes": "v0.1.64 fixes settings actions that could appear unresponsive when the Electron preload bridge was unavailable. It adds visible bridge diagnostics, real OAuth-button click regression coverage, explicit preload hardening, visible disabled states, and shared curl-first resumable Electron/FFmpeg caches to reduce first-launch wait on future versions."
 }
