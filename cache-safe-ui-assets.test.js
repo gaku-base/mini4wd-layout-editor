@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const HEALTH_CACHE = 'v1.1-rc7-bankends1';
+const HEALTH_CACHE = 'v1.1-rc7-1-bankedcorner1';
 
 test('critical overlap fix stays static while all mutable UI entry assets share the current cache key', () => {
   const index = fs.readFileSync('index.html', 'utf8');
