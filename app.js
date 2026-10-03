@@ -1845,9 +1845,12 @@
     for (const seam of seams) {
       const style = PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams, selected: !!options.selected && isSelected(owner.id), exportMode: !!options.exportMode });
       if (!style) continue;
-      const halfWidth = ((Number(seam.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM)
-        * LAYOUT_GRAPH.bankProjectionScale(Number(seam.bankAngleDeg) || 0)) / 20 - style.edgeInset;
-      c.save(); c.translate(seam.point.x, seam.point.y); c.rotate(seam.heading * Math.PI / 180);
+      const projection = bankFaceProjection(owner, resolvePartDef(owner), seam.bankAngleDeg, seam.connectionWidthMm);
+      const halfWidth = projection.projectedWidthMm / 20 - style.edgeInset;
+      c.save();
+      c.translate(seam.point.x, seam.point.y);
+      c.rotate(seam.heading * Math.PI / 180);
+      c.translate(0, projection.centerOffsetCm);
       c.strokeStyle = style.color; c.lineWidth = style.lineWidth; c.lineCap = 'butt';
       c.beginPath(); c.moveTo(0, -halfWidth); c.lineTo(0, halfWidth); c.stroke(); c.restore();
     }
@@ -2678,10 +2681,34 @@
     return Number.isFinite(angle) ? angle : 0;
   }
 
+  function bankVisualPivotSign(part, def = PARTS[part?.type]) {
+    if (!part || !def) return 1;
+    if (def.bank20) {
+      if (part.bankRole === 'exit') return -1;
+      if (part.bankRole === 'entry') return 1;
+    }
+    const connectors = LAYOUT_GRAPH.connectorsForDefinition(def);
+    const entryId = part.entryConnectorId == null ? '' : String(part.entryConnectorId);
+    if (entryId && connectors[1]?.id != null && String(connectors[1].id) === entryId) return -1;
+    return 1;
+  }
+
+  function bankFaceProjection(part, def, angleDeg, connectionWidthMm) {
+    const widthMm = Number(connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM;
+    const scale = LAYOUT_GRAPH.bankProjectionScale(Number(angleDeg) || 0);
+    const pivotSign = bankVisualPivotSign(part, def);
+    return {
+      scale,
+      pivotSign,
+      projectedWidthMm: widthMm * scale,
+      centerOffsetCm: pivotSign * (widthMm / 20) * (1 - scale)
+    };
+  }
+
   function applyBankVisualProjection(c, part, def) {
     const angle = partBankVisualAngle(part, def);
     if (Math.abs(angle) <= LAYOUT_GRAPH.ANGLE_EPSILON_DEG) return null;
-    const transform = LAYOUT_GRAPH.bankProjectionTransform(def, angle);
+    const transform = LAYOUT_GRAPH.bankProjectionTransform(def, angle, bankVisualPivotSign(part, def));
     c.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
     return transform;
   }
@@ -2816,9 +2843,18 @@
     if (!style) return;
     for (const endpoint of partEndpoints(part)) {
       if (hidden.has(endpoint.connectorId)) continue;
-      const projectedWidthMm = (Number(endpoint.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM)
-        * LAYOUT_GRAPH.bankProjectionScale(Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0);
-      const face = PART_SEAMS.connectorFace({ ...endpoint, connectionWidthMm: projectedWidthMm }, { edgeInsetCm: style.edgeInset });
+      const angle = Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0;
+      const projection = bankFaceProjection(part, resolvePartDef(part), angle, endpoint.connectionWidthMm);
+      const headingRad = (Number(endpoint.heading) || 0) * Math.PI / 180;
+      const normalX = -Math.sin(headingRad);
+      const normalY = Math.cos(headingRad);
+      const projectedEndpoint = {
+        ...endpoint,
+        x: endpoint.x + normalX * projection.centerOffsetCm,
+        y: endpoint.y + normalY * projection.centerOffsetCm,
+        connectionWidthMm: projection.projectedWidthMm
+      };
+      const face = PART_SEAMS.connectorFace(projectedEndpoint, { edgeInsetCm: style.edgeInset });
       c.save();
       c.strokeStyle = style.color;
       c.lineWidth = style.lineWidth;
@@ -2981,6 +3017,13 @@
     const half = trackWidth / 2;
     const x0 = -def.w / 2;
     const x1 = def.w / 2;
+    const pivotSign = bankVisualPivotSign(part, def);
+    const pivotY = half * pivotSign;
+    const projectY = (y, scale) => pivotY + (y - pivotY) * scale;
+    const leftTop = projectY(-half, leftScale);
+    const leftBottom = projectY(half, leftScale);
+    const rightTop = projectY(-half, rightScale);
+    const rightBottom = projectY(half, rightScale);
     const palette = bankTransitionPalette(part, def);
     const risingToRight = Math.abs(rightAngle) >= Math.abs(leftAngle);
     const grad = c.createLinearGradient(x0, 0, x1, 0);
@@ -2988,11 +3031,14 @@
     grad.addColorStop(.52, palette.mid);
     grad.addColorStop(1, risingToRight ? palette.high : palette.low);
 
+    // One edge is the visual pivot.  The opposite edge folds inward as the
+    // roll grows, so connected Bank20 pieces read as one continuous slanted
+    // surface instead of a sequence of symmetrically squeezed rectangles.
     c.beginPath();
-    c.moveTo(x0, -half * leftScale);
-    c.lineTo(x1, -half * rightScale);
-    c.lineTo(x1, half * rightScale);
-    c.lineTo(x0, half * leftScale);
+    c.moveTo(x0, leftTop);
+    c.lineTo(x1, rightTop);
+    c.lineTo(x1, rightBottom);
+    c.lineTo(x0, leftBottom);
     c.closePath();
     c.fillStyle = grad;
     c.fill();
@@ -3003,17 +3049,19 @@
     c.strokeStyle = palette.lane;
     c.lineWidth = .8;
     for (const laneFraction of [-1 / 6, 1 / 6]) {
+      const laneY = trackWidth * laneFraction;
       c.beginPath();
-      c.moveTo(x0, trackWidth * laneFraction * leftScale);
-      c.lineTo(x1, trackWidth * laneFraction * rightScale);
+      c.moveTo(x0, projectY(laneY, leftScale));
+      c.lineTo(x1, projectY(laneY, rightScale));
       c.stroke();
     }
 
+    const labelY = (projectY(0, leftScale) + projectY(0, rightScale)) / 2;
     c.fillStyle = 'rgba(40,52,46,.72)';
     c.font = '700 3.8px sans-serif';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillText(`${Math.round(leftAngle)}→${Math.round(rightAngle)}°`, 0, 0);
+    c.fillText(`${Math.round(leftAngle)}→${Math.round(rightAngle)}°`, 0, labelY);
     c.restore();
   }
 
