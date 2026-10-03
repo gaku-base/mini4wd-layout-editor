@@ -180,7 +180,7 @@ test('明示的logStateは完全state取得ではなく指定した簡易state�
 test('診断モジュールと折りたたみUIはapp.jsより前に読み込まれる', () => {
   const html = fs.readFileSync('index.html', 'utf8');
   assert.match(html, /<details class="panel diagnostic-panel">[\s\S]*id="exportDiagnosticLogBtn"[\s\S]*id="clearDiagnosticLogBtn"/);
-  assert.ok(html.indexOf('<script src="diagnostic-logger.js"></script>') < html.indexOf('<script src="app.js?v=v1.1-rc7-bankends1"></script>'));
+  assert.ok(html.indexOf('<script src="diagnostic-logger.js"></script>') < html.indexOf('<script src="app.js?v=v1.1-rc7-1-bankedcorner1"></script>'));
 });
 
 test('アプリのwheel・Z・X回転入口がinputMethod付き診断ログへ接続される', () => {
