@@ -1,19 +1,20 @@
 {
   "channel": "stable",
-  "version": "0.1.64",
+  "version": "0.1.69",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part04.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part05.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part06.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part07.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part08.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.64/part09.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part05.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part06.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part07.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part08.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part09.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.69/part10.b64"
   ],
-  "sha256": "a862fdcf76b1d6fa57c9a4f4507d937a60576f74c26bede6bbef7fb93533ee13",
-  "publishedAt": "2026-10-02T13:55:00+09:00",
-  "notes": "v0.1.64 fixes settings actions that could appear unresponsive when the Electron preload bridge was unavailable. It adds visible bridge diagnostics, real OAuth-button click regression coverage, explicit preload hardening, visible disabled states, and shared curl-first resumable Electron/FFmpeg caches to reduce first-launch wait on future versions."
+  "sha256": "1f26e84013fd5d3eada95cfc8376fac955ddddddbc22a0056b9c8a6f3f55c2ff",
+  "publishedAt": "2026-10-03T22:17:33+09:00",
+  "notes": "v0.1.69 is the stable DROWSEWAVE Studio update. It includes the account connection center and Google/Sheets/YouTube/Lyria connection fixes from v0.1.65-v0.1.68, plus the required 'チャピと曲相談' workflow: generated-audio DSP analysis, persistent consultation history, quick questions, Lyria prompt revision, one-click prompt apply and 30-second regeneration, and audio-version-aware consultation history. v0.1.69 passed the full 60/60 rehearsal and the 10-minute extended render rehearsal."
 }
