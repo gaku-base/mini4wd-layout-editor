@@ -1,21 +1,21 @@
 {
   "channel": "stable",
-  "version": "0.1.72",
+  "version": "0.1.73",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part04.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part05.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part06.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part07.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part08.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part09.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part10.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part11.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part05.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part06.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part07.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part08.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part09.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part10.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.73/part11.b64"
   ],
-  "sha256": "4b23b5029ba6d1338918ed875491e5bf5a6002e0259ff2f3a8ed25fea2ca9a79",
-  "publishedAt": "2026-10-03T23:18:14+09:00",
-  "notes": "v0.1.72 adds one-click Windows app installation. From Settings, DROWSEWAVE Studio can install per-user without admin rights, create Desktop and Start-menu shortcuts, register in Windows Installed Apps, launch without a black CMD window, preserve existing projects/credentials/caches, and continue using the current in-app stable updater. Full standard rehearsal passed 59/59 and the 10-minute extended render rehearsal passed 1/1."
+  "sha256": "9a83dfdec46d24cb1e2c5f1e648963ddcf89c1b25ca6a35c8502bde496b4ff02",
+  "publishedAt": "2026-10-03T23:41:00+09:00",
+  "notes": "v0.1.73 fixes two music-workflow problems. Paid in-app Chapi music planning is removed from the normal music screen and replaced with no-cost local planning, so an OpenAI key with zero credits no longer stops music drafting. Browser-ChatGPT-created Lyria prompts are now authoritative: pasting a full prompt into the world/theme box auto-syncs it to the Lyria Prompt field, and the exact prompt visible at click time is sent to Lyria for both 30-second and 184-second generation. Regression tests assert that a stale prior prompt is never sent. Standard rehearsal passed 61/61 and the 10-minute extended render rehearsal passed 1/1."
 }
