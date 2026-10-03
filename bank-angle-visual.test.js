@@ -41,3 +41,24 @@ test('banked seams use the projected width and the same one-edge visual offset',
   assert.match(app, /centerOffsetCm/);
   assert.match(app, /seam\.bankAngleDeg[\s\S]*bankFaceProjection/);
 });
+
+
+test('banked 45-degree corners use a local curved roll projection instead of one global affine squeeze', () => {
+  assert.match(app, /const usesLocalCurvedBankProjection = !!def\.corner45/);
+  assert.match(app, /mode: 'curved-local'/);
+  assert.match(app, /function drawBankedCorner45\(c, def, part, g\)/);
+  assert.match(app, /const projectedTrackWidth = fullTrackWidth \* scale/);
+  assert.match(app, /const innerRadius = pivotSign >= 0[\s\S]*g\.ri[\s\S]*g\.ro - projectedTrackWidth/);
+  assert.match(app, /const outerRadius = pivotSign >= 0[\s\S]*g\.ri \+ projectedTrackWidth[\s\S]*g\.ro/);
+  assert.match(app, /drawCorner45\(c, def, exportMode, part\)/);
+});
+
+test('banked corner rendering keeps logical connectors untouched while emphasizing curved high and low edges', () => {
+  const start = app.indexOf('function drawBankedCorner45');
+  const end = app.indexOf('function drawCorner45', start);
+  const block = app.slice(start, end);
+  assert.doesNotMatch(block, /part\.x\s*=|part\.y\s*=|connector/);
+  assert.match(block, /rgba\(255,255,255,\.62\)/);
+  assert.match(block, /shadeColor\(def\.edge, -\.18\)/);
+  assert.match(block, /for \(const t of \[1 \/ 3, 2 \/ 3\]\)/);
+});
