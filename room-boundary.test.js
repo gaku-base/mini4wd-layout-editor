@@ -121,8 +121,8 @@ test('CAD model is loaded before app code and persisted field names remain addit
   const index = fs.readFileSync('index.html', 'utf8');
   const persistence = fs.readFileSync('persistence.js', 'utf8');
   const app = fs.readFileSync('app.js', 'utf8');
-  assert.ok(index.indexOf('src="room-boundary.js"') < index.indexOf('src="app.js"'));
-  assert.ok(index.indexOf('src="render-scheduler.js"') < index.indexOf('src="app.js"'));
+  assert.ok(index.indexOf('src="room-boundary.js"') < index.indexOf('src="app.js?v=v1.1-rc7-bankends1"'));
+  assert.ok(index.indexOf('src="render-scheduler.js"') < index.indexOf('src="app.js?v=v1.1-rc7-bankends1"'));
   assert.match(persistence, /'siteBoundary', 'roomCutouts'/);
   assert.match(app, /visibleCutoutIntersections\(state\.siteBoundary, state\.roomCutouts\)/);
   assert.match(app, /c\.rect\(box\.x, box\.y, box\.w, box\.h\); c\.closePath\(\);/);
@@ -144,7 +144,7 @@ test('canvas wheel keeps Ctrl zoom while reserving plain wheel rotation for cour
   const index = fs.readFileSync('index.html', 'utf8');
   const wheel = app.slice(app.indexOf('function onWheel'), app.indexOf('function onKeyDown'));
   assert.match(app, /addEventListener\('wheel', onWheel, \{ passive: false \}\)/);
-  assert.match(index, /<script src="wheel-rotation\.js\?v=v1\.1-rc6-health1"><\/script>\s*<script src="app\.js"><\/script>/);
+  assert.match(index, /<script src="wheel-rotation\.js\?v=v1\.1-rc7-bankends1"><\/script>\s*<script src="app\.js\?v=v1\.1-rc7-bankends1"><\/script>/);
   assert.match(wheel, /if \(e\.ctrlKey\) \{\s*e\.preventDefault\(\);\s*wheelRotation\.reset\(\);/);
   assert.match(wheel, /if \(e\.shiftKey \|\| e\.metaKey \|\| !hasWheelRotatableTarget\(\)\) \{ wheelRotation\.reset\(\); return; \}/);
   assert.match(wheel, /const direction = wheelRotation\.push\(e\);/);
