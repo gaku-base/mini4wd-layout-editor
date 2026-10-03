@@ -95,8 +95,9 @@ async function main() {
       for (const baseAngle of [0, 20, 40, 60]) {
         bank[baseAngle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, baseAngle));
       }
+      const bankExit60 = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60));
 
-      return { straight, bank };
+      return { straight, bank, bankExit60 };
     });
 
     const baseHeight = result.straight[0].full.height;
@@ -113,6 +114,18 @@ async function main() {
       assert.ok(Math.abs(actual - expected) <= tolerance, `straight ${angle}° height ${actual} should be near ${expected.toFixed(1)} ± ${tolerance.toFixed(1)}`);
     }
 
+    // A visible bank must not merely shrink symmetrically.  With the one-edge
+    // projection the low edge remains visually fixed while the high edge folds
+    // toward it, which makes a connected bank read as a slanted surface.
+    const flatBounds = result.straight[0].full;
+    for (const angle of [20, 40, 60, 80]) {
+      const bounds = result.straight[angle].full;
+      assert.ok(Math.abs(bounds.maxY - flatBounds.maxY) <= 3,
+        `straight ${angle}° low edge must stay fixed: ${bounds.maxY} vs ${flatBounds.maxY}`);
+      assert.ok(bounds.minY > flatBounds.minY,
+        `straight ${angle}° high edge must fold inward: ${bounds.minY} > ${flatBounds.minY}`);
+    }
+
     const bankStages = [0, 20, 40, 60].map(baseAngle => ({
       baseAngle,
       left: result.bank[baseAngle].left.height,
@@ -121,7 +134,19 @@ async function main() {
     for (const stage of bankStages) {
       assert.ok(stage.left > stage.right,
         `Bank20 ${stage.baseAngle}→${stage.baseAngle + 20}° must taper: ${stage.left} > ${stage.right}`);
+      const detail = result.bank[stage.baseAngle];
+      assert.ok(Math.abs(detail.left.maxY - detail.right.maxY) <= 3,
+        `Bank20 entry low edge must stay fixed across the transition: ${detail.left.maxY} vs ${detail.right.maxY}`);
+      assert.ok(detail.right.minY > detail.left.minY,
+        `Bank20 entry high edge must slope inward: ${detail.right.minY} > ${detail.left.minY}`);
     }
+
+    const exit = result.bankExit60;
+    assert.ok(Math.abs(exit.left.minY - exit.right.minY) <= 3,
+      `Bank20 exit opposite pivot edge must stay fixed: ${exit.left.minY} vs ${exit.right.minY}`);
+    assert.ok(exit.right.maxY < exit.left.maxY,
+      `Bank20 exit moving edge must fold inward: ${exit.right.maxY} < ${exit.left.maxY}`);
+
     for (let index = 1; index < bankStages.length; index++) {
       assert.ok(bankStages[index].left < bankStages[index - 1].left,
         `Bank20 incoming edge must shrink by stage: ${bankStages.map(stage => stage.left).join(' > ')}`);
@@ -203,6 +228,8 @@ async function main() {
     console.log('✓ connected Bank20 chain propagates 0→20→40→60→80° and unwinds 80→60→40→20→0°');
     console.log(`✓ banked straight visual heights 0/20/40/60/80° = ${heights.join('/')}`);
     console.log('✓ Bank20 transitions taper correctly for 0→20, 20→40, 40→60 and 60→80 degrees');
+    console.log('✓ one bank edge stays fixed while the opposite edge folds inward, so LAYOUT reads as a slanted surface');
+    console.log('✓ entry/exit Bank20 pieces use opposite local pivots and remain visually continuous when reversed');
     console.log('✓ cumulative bank visual browser rehearsal passed');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/cumulative-bank-visual-failure.png`, fullPage: true }); } catch (_) {}
