@@ -154,6 +154,14 @@ test('46 同一bank角の標準パーツは20度区間を継続', () => {
   assert.equal(candidates[0].pose.zMm, 0);
 });
 
+test('46b Cornerも20度バンク区間へ吸着すると同じbank角を継承', () => {
+  const bankTarget = { ...target(), bankAngleDeg: 20 };
+  const candidates = G.snapCandidates(movingNear('corner45'), catalog, [bankTarget], { scale: 1 });
+  assert.equal(candidates[0].pose.bankAngleDeg, 20);
+  assert.equal(candidates[0].pose.zMm, 0);
+});
+
+
 test('47 同一XYの異高さ候補はマウス移動中も選択UIへ反映', () => {
   assert.match(appSource, /if \(state\.mode === 'place'\) \{[\s\S]*updateSnapCandidatePanel\(liveProposal\)/);
   assert.match(appSource, /state\.snapTargetChoiceConfirmed = true/);

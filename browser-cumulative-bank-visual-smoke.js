@@ -79,11 +79,13 @@ async function main() {
           };
         }
 
+        let visiblePixels = 0;
+        for (let i = 3; i < data.length; i += 4) if (data[i] > 24) visiblePixels += 1;
         const full = boundsForRange(0, canvas.width - 1);
         const edgeWindow = Math.max(3, Math.round(canvas.width * 0.10));
         const left = boundsForRange(0, edgeWindow);
         const right = boundsForRange(canvas.width - 1 - edgeWindow, canvas.width - 1);
-        return { canvasWidth: canvas.width, canvasHeight: canvas.height, full, left, right };
+        return { canvasWidth: canvas.width, canvasHeight: canvas.height, full, left, right, visiblePixels };
       }
 
       async function markerColours(dataUrl) {
@@ -139,8 +141,14 @@ async function main() {
       const bankExit60 = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60, true));
       const slopeMarkers = await markerColours(window.__mini4wdCourseDebug.renderPartDataUrl('slope', 'entry', 6, 0, false));
       const bankMarkers = await markerColours(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, 0, false));
+      const corner = {
+        right0: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, 0, true)),
+        right20: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, 20, true)),
+        right40: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, 40, true)),
+        left20: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-left', 'entry', 8, 20, true))
+      };
 
-      return { straight, bank, bankExit60, slopeMarkers, bankMarkers };
+      return { straight, bank, bankExit60, slopeMarkers, bankMarkers, corner };
     });
 
     const baseHeight = result.straight[0].full.height;
@@ -203,6 +211,19 @@ async function main() {
       assert.ok(markers.red.cx !== markers.blue.cx || markers.red.cy !== markers.blue.cy,
         `${name} red and blue end markers must occupy different endpoints`);
     }
+
+    const cornerArea = [
+      result.corner.right0.visiblePixels,
+      result.corner.right20.visiblePixels,
+      result.corner.right40.visiblePixels
+    ];
+    assert.ok(cornerArea[1] < cornerArea[0] * 0.985,
+      `20° banked corner must visibly narrow along the rotating lateral axis: ${cornerArea.join(' > ')}`);
+    assert.ok(cornerArea[2] < cornerArea[1] * 0.94,
+      `40° banked corner must narrow further than 20°: ${cornerArea.join(' > ')}`);
+    const mirrorRatio = result.corner.left20.visiblePixels / result.corner.right20.visiblePixels;
+    assert.ok(mirrorRatio > 0.96 && mirrorRatio < 1.04,
+      `left/right 20° banked corners must remain mirror-equivalent: ratio=${mirrorRatio}`);
 
     await page.evaluate(() => {
       const debug = window.__mini4wdCourseDebug;
@@ -281,6 +302,7 @@ async function main() {
     console.log('✓ one bank edge stays fixed while the opposite edge folds inward, so LAYOUT reads as a slanted surface');
     console.log('✓ entry/exit Bank20 pieces use opposite local pivots and remain visually continuous when reversed');
     console.log('✓ Slope and Bank20 render blue LOW-end and red HIGH-end lines with no LOW/HIGH text dependency');
+    console.log(`✓ banked corner visible pixels flat/20°/40° = ${cornerArea.join('/')}; left/right 20° stay mirror-equivalent`);
     console.log('✓ cumulative bank visual browser rehearsal passed');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/cumulative-bank-visual-failure.png`, fullPage: true }); } catch (_) {}
