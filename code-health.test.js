@@ -35,8 +35,8 @@ test('repository landing documentation describes the current RC7.1 architecture'
 test('static HTML shell no longer advertises RC4 or its cache key', () => {
   const index = fs.readFileSync('index.html', 'utf8');
   assert.match(index, /<span class="version">v1\.1 RC7\.1<\/span>/);
-  assert.match(index, /styles\.css\?v=v1\.1-rc7-bankends1/);
-  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc7-bankends1/);
+  assert.match(index, /styles\.css\?v=v1\.1-rc7-1-bankedcorner1/);
+  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc7-1-bankedcorner1/);
   assert.doesNotMatch(index, /v1\.1 RC4/);
   assert.doesNotMatch(index, /v1\.1-rc4-20260820-toolbar-trash1/);
 });
