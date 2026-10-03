@@ -1,21 +1,21 @@
 {
   "channel": "stable",
-  "version": "0.1.71",
+  "version": "0.1.72",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part04.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part05.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part06.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part07.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part08.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part09.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part10.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.71/part11.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part05.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part06.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part07.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part08.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part09.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part10.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.72/part11.b64"
   ],
-  "sha256": "40e94f3eafabffc5adec47bb612b6ed7f81bab1a83f581b0b14ec7c03b9eff3f",
-  "publishedAt": "2026-10-03T22:53:00+09:00",
-  "notes": "v0.1.71 fixes browser ChatGPT consultation pack export. ZIP creation no longer depends on PowerShell positional arguments; DROWSEWAVE now creates the ZIP inside Node/Electron, avoiding the Join-Path null failure and improving reliability for Japanese filenames and paths with spaces. A real ZIP-generation regression test was added. Full rehearsal passed 58/58 plus the 10-minute extended render rehearsal."
+  "sha256": "4b23b5029ba6d1338918ed875491e5bf5a6002e0259ff2f3a8ed25fea2ca9a79",
+  "publishedAt": "2026-10-03T23:18:14+09:00",
+  "notes": "v0.1.72 adds one-click Windows app installation. From Settings, DROWSEWAVE Studio can install per-user without admin rights, create Desktop and Start-menu shortcuts, register in Windows Installed Apps, launch without a black CMD window, preserve existing projects/credentials/caches, and continue using the current in-app stable updater. Full standard rehearsal passed 59/59 and the 10-minute extended render rehearsal passed 1/1."
 }
