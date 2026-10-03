@@ -9,14 +9,14 @@ const VERSION_FILE = fs.readFileSync('./VERSION.txt', 'utf8').trim();
 const WHEEL_SOURCE = fs.readFileSync('./wheel-rotation.js', 'utf8');
 const BOOTSTRAP_SOURCE = fs.readFileSync('./editor-extensions-bootstrap.js', 'utf8');
 
-test('formal version marker is v1.1 RC7', () => {
-  assert.equal(VERSION_FILE, 'v1.1 RC7');
+test('formal version marker is v1.1 RC7.1', () => {
+  assert.equal(VERSION_FILE, 'v1.1 RC7.1');
   assert.equal(UI.APP_VERSION, VERSION_FILE);
-  assert.equal(UI.APP_VERSION_SLUG, 'v1.1-rc7');
+  assert.equal(UI.APP_VERSION_SLUG, 'v1.1-rc7-1');
 });
 
-test('runtime version label is updated to v1.1 RC7', () => {
-  const version = { textContent: 'v1.1 RC6' };
+test('runtime version label is updated to v1.1 RC7.1', () => {
+  const version = { textContent: 'v1.1 RC7' };
   const documentRef = {
     title: 'Mini 4WD Course Layout',
     documentElement: { dataset: {} },
@@ -27,12 +27,12 @@ test('runtime version label is updated to v1.1 RC7', () => {
 
   UI.applyVersionLabel(documentRef);
 
-  assert.equal(version.textContent, 'v1.1 RC7');
-  assert.equal(documentRef.documentElement.dataset.appVersion, 'v1.1-rc7');
-  assert.equal(documentRef.title, 'Mini 4WD Course Layout — v1.1 RC7');
+  assert.equal(version.textContent, 'v1.1 RC7.1');
+  assert.equal(documentRef.documentElement.dataset.appVersion, 'v1.1-rc7-1');
+  assert.equal(documentRef.title, 'Mini 4WD Course Layout — v1.1 RC7.1');
 });
 
-test('editor extensions use one RC7 bank-end cache key', () => {
+test('editor extensions use one RC7.1 banked-corner cache key', () => {
   assert.match(WHEEL_SOURCE, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-bankends1/);
   assert.match(BOOTSTRAP_SOURCE, /const CACHE_KEY = 'v1\.1-rc7-bankends1'/);
   assert.match(BOOTSTRAP_SOURCE, /ui-controls-cleanup\.js\?v=\$\{CACHE_KEY\}/);
