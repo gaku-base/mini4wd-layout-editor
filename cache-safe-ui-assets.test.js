@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
-const HEALTH_CACHE = 'v1.1-rc6-health1';
+const HEALTH_CACHE = 'v1.1-rc7-bankends1';
 
 test('critical overlap fix stays static while all mutable UI entry assets share the current cache key', () => {
   const index = fs.readFileSync('index.html', 'utf8');
@@ -14,7 +14,9 @@ test('critical overlap fix stays static while all mutable UI entry assets share 
     /<style id="criticalUiOverlapFix">[\s\S]*#subEditModeBar:not\(\[hidden\]\) ~ \.instruction-card \{ display: none !important; \}[\s\S]*<\/style>/
   );
   assert.match(index, new RegExp(`styles\\.css\\?v=${HEALTH_CACHE}`));
-  assert.match(index, new RegExp(`wheel-rotation\\.js\\?v=${HEALTH_CACHE}`));
+  assert.match(index, new RegExp(`layout-graph\\\\.js\\\\?v=${HEALTH_CACHE}`));
+  assert.match(index, new RegExp(`wheel-rotation\\\\.js\\\\?v=${HEALTH_CACHE}`));
+  assert.match(index, new RegExp(`app\\\\.js\\\\?v=${HEALTH_CACHE}`));
   assert.doesNotMatch(index, /v1\.1-rc4-20260820-toolbar-trash1/);
 
   assert.match(wheel, new RegExp(`editor-extensions-bootstrap\\.js\\?v=${HEALTH_CACHE}`));
