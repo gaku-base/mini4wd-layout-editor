@@ -21,19 +21,23 @@ test('bank recalculation updates physical connector bankAngleDeg for downstream 
   assert.match(app, /part\.bankAngleDeg = value\.bankAngle - \(Number\(attachedConnector\?\.bankAngleDeg\) \|\| 0\)/);
 });
 
-test('ordinary banked parts are visually projected before SVG or Canvas rendering', () => {
+test('ordinary banked parts are visually projected from one course edge before rendering', () => {
   assert.match(app, /const bankProjection = applyBankVisualProjection\(c, part, def\)/);
-  assert.match(app, /bankProjectionTransform\(def, angle\)/);
+  assert.match(app, /bankProjectionTransform\(def, angle, bankVisualPivotSign\(part, def\)\)/);
+  assert.match(app, /function bankVisualPivotSign\(part, def/);
 });
 
-test('Bank20 uses a tapered transition that matches the bank angle at each connector', () => {
+test('Bank20 uses a one-edge-pivot tapered transition that matches each connector angle', () => {
   assert.match(app, /const leftScale = LAYOUT_GRAPH\.bankProjectionScale\(leftAngle\)/);
   assert.match(app, /const rightScale = LAYOUT_GRAPH\.bankProjectionScale\(rightAngle\)/);
-  assert.match(app, /c\.moveTo\(x0, -half \* leftScale\)/);
-  assert.match(app, /c\.lineTo\(x1, -half \* rightScale\)/);
+  assert.match(app, /const pivotY = half \* pivotSign/);
+  assert.match(app, /const projectY = \(y, scale\) => pivotY \+ \(y - pivotY\) \* scale/);
+  assert.match(app, /c\.moveTo\(x0, leftTop\)/);
+  assert.match(app, /c\.lineTo\(x1, rightTop\)/);
 });
 
-test('banked seam widths use the same projected width as the visible course', () => {
+test('banked seams use the projected width and the same one-edge visual offset', () => {
   assert.match(app, /projectedWidthMm[\s\S]*bankProjectionScale/);
-  assert.match(app, /seam\.bankAngleDeg[\s\S]*bankProjectionScale/);
+  assert.match(app, /centerOffsetCm/);
+  assert.match(app, /seam\.bankAngleDeg[\s\S]*bankFaceProjection/);
 });

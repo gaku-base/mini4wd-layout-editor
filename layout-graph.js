@@ -262,11 +262,11 @@
     };
   }
 
-  function bankProjectionTransform(definition, angleDeg = 0) {
+  function bankProjectionTransform(definition, angleDeg = 0, pivotSign = 0) {
     const connectors = connectorsForDefinition(definition);
     const scale = bankProjectionScale(angleDeg);
     if (connectors.length < 2) {
-      return { a: 1, b: 0, c: 0, d: scale, e: 0, f: 0, scale, angleDeg: finite(angleDeg) };
+      return { a: 1, b: 0, c: 0, d: scale, e: 0, f: 0, scale, angleDeg: finite(angleDeg), pivotSign: 0 };
     }
     const left = connectors[0];
     const right = connectors[1];
@@ -274,7 +274,7 @@
     const dy = right.localY - left.localY;
     const length = Math.hypot(dx, dy);
     if (length <= 1e-9) {
-      return { a: 1, b: 0, c: 0, d: scale, e: 0, f: 0, scale, angleDeg: finite(angleDeg) };
+      return { a: 1, b: 0, c: 0, d: scale, e: 0, f: 0, scale, angleDeg: finite(angleDeg), pivotSign: 0 };
     }
     const ux = dx / length;
     const uy = dy / length;
@@ -286,9 +286,33 @@
     const d = uy * uy + scale * ny * ny;
     const cx = (left.localX + right.localX) / 2;
     const cy = (left.localY + right.localY) / 2;
-    const e = cx - (a * cx + c * cy);
-    const f = cy - (b * cx + d * cy);
-    return { a, b, c, d, e, f, scale, angleDeg: finite(angleDeg), centerX: cx, centerY: cy };
+
+    // pivotSign=0 keeps the historical centre-line projection.  +/-1 is used
+    // only by the LAYOUT visual renderer to make a bank read as an actual
+    // one-sided roll: one course edge stays put while the opposite edge folds
+    // inward.  Placement/snapping geometry remains untouched.
+    const normalizedPivotSign = Math.max(-1, Math.min(1, finite(pivotSign)));
+    const trackWidth = finite(
+      definition?.geometry?.trackWidth
+      ?? definition?.trackWidth
+      ?? definition?.geometry?.height
+      ?? definition?.h
+    );
+    const pivotOffset = normalizedPivotSign && trackWidth > 0
+      ? normalizedPivotSign * trackWidth / 2
+      : 0;
+    const px = cx + nx * pivotOffset;
+    const py = cy + ny * pivotOffset;
+    const e = px - (a * px + c * py);
+    const f = py - (b * px + d * py);
+    return {
+      a, b, c, d, e, f, scale,
+      angleDeg: finite(angleDeg),
+      centerX: cx,
+      centerY: cy,
+      pivotSign: normalizedPivotSign,
+      pivotOffset
+    };
   }
 
   function solveSnapPose(partValue, localConnectorValue, target) {
