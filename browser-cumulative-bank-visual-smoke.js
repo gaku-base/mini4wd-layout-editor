@@ -88,14 +88,14 @@ async function main() {
 
       const straight = {};
       for (const angle of [0, 20, 40, 60, 80]) {
-        straight[angle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('straight', 'entry', 6, angle));
+        straight[angle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('straight', 'entry', 6, angle, true));
       }
 
       const bank = {};
       for (const baseAngle of [0, 20, 40, 60]) {
-        bank[baseAngle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, baseAngle));
+        bank[baseAngle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, baseAngle, true));
       }
-      const bankExit60 = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60));
+      const bankExit60 = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60, true));
 
       return { straight, bank, bankExit60 };
     });
