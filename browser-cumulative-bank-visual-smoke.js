@@ -86,6 +86,47 @@ async function main() {
         return { canvasWidth: canvas.width, canvasHeight: canvas.height, full, left, right };
       }
 
+      async function markerColours(dataUrl) {
+        const image = new Image();
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = reject;
+          image.src = dataUrl;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(image, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const result = {
+          red: { count:0, sumX:0, sumY:0 },
+          blue: { count:0, sumX:0, sumY:0 }
+        };
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const index = (y * canvas.width + x) * 4;
+            const r = data[index];
+            const g = data[index + 1];
+            const b = data[index + 2];
+            const a = data[index + 3];
+            if (a < 100) continue;
+            if (r > 200 && g < 110 && b < 110) {
+              result.red.count += 1; result.red.sumX += x; result.red.sumY += y;
+            }
+            if (b > 200 && r < 90 && g < 175) {
+              result.blue.count += 1; result.blue.sumX += x; result.blue.sumY += y;
+            }
+          }
+        }
+        for (const key of ['red','blue']) {
+          const item = result[key];
+          item.cx = item.count ? item.sumX / item.count : null;
+          item.cy = item.count ? item.sumY / item.count : null;
+        }
+        return result;
+      }
+
       const straight = {};
       for (const angle of [0, 20, 40, 60, 80]) {
         straight[angle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('straight', 'entry', 6, angle, true));
@@ -96,8 +137,10 @@ async function main() {
         bank[baseAngle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, baseAngle, true));
       }
       const bankExit60 = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60, true));
+      const slopeMarkers = await markerColours(window.__mini4wdCourseDebug.renderPartDataUrl('slope', 'entry', 6, 0, false));
+      const bankMarkers = await markerColours(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, 0, false));
 
-      return { straight, bank, bankExit60 };
+      return { straight, bank, bankExit60, slopeMarkers, bankMarkers };
     });
 
     const baseHeight = result.straight[0].full.height;
@@ -152,6 +195,13 @@ async function main() {
         `Bank20 incoming edge must shrink by stage: ${bankStages.map(stage => stage.left).join(' > ')}`);
       assert.ok(bankStages[index].right < bankStages[index - 1].right,
         `Bank20 outgoing edge must shrink by stage: ${bankStages.map(stage => stage.right).join(' > ')}`);
+    }
+
+    for (const [name, markers] of [['Slope', result.slopeMarkers], ['Bank20', result.bankMarkers]]) {
+      assert.ok(markers.red.count > 100, `${name} must render a visible red HIGH-end line; pixels=${markers.red.count}`);
+      assert.ok(markers.blue.count > 100, `${name} must render a visible blue LOW-end line; pixels=${markers.blue.count}`);
+      assert.ok(markers.red.cx !== markers.blue.cx || markers.red.cy !== markers.blue.cy,
+        `${name} red and blue end markers must occupy different endpoints`);
     }
 
     await page.evaluate(() => {
@@ -230,6 +280,7 @@ async function main() {
     console.log('✓ Bank20 transitions taper correctly for 0→20, 20→40, 40→60 and 60→80 degrees');
     console.log('✓ one bank edge stays fixed while the opposite edge folds inward, so LAYOUT reads as a slanted surface');
     console.log('✓ entry/exit Bank20 pieces use opposite local pivots and remain visually continuous when reversed');
+    console.log('✓ Slope and Bank20 render blue LOW-end and red HIGH-end lines with no LOW/HIGH text dependency');
     console.log('✓ cumulative bank visual browser rehearsal passed');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/cumulative-bank-visual-failure.png`, fullPage: true }); } catch (_) {}

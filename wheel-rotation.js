@@ -132,7 +132,7 @@
     });
   }
 
-  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc6-health1';
+  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc7-bankends1';
   const canonicalScriptKey = src => {
     const raw = String(src || '').trim();
     if (!raw) return '';

@@ -532,7 +532,7 @@
       pctx.scale(scale, scale);
       pctx.translate(-(bounds.minX + bounds.maxX) / 2, -(bounds.minY + bounds.maxY) / 2);
       if (type === 'start') drawStartLane(pctx, { x: 0, y: 0, rotation: 0 }, true, false);
-      else drawPart(pctx, { id: 'preview', type, x: 0, y: 0, rotation: 0, colorKey: 'default', bankRole: 'entry' }, { exportMode: true, suppressElevationLabels: true });
+      else drawPart(pctx, { id: 'preview', type, x: 0, y: 0, rotation: 0, colorKey: 'default', bankRole: 'entry' }, { exportMode: true, suppressElevationMarkers: true });
       pctx.restore();
     });
   }
@@ -2741,7 +2741,12 @@
     };
   }
 
-  function elevationEndLabelEntries(part, def) {
+  const ELEVATION_END_MARKER_COLORS = Object.freeze({
+    low: '#1976ff',
+    high: '#ff3131'
+  });
+
+  function elevationEndMarkerEntries(part, def) {
     if (!part || !def || (!def.slope && !def.bank20)) return [];
     const endpoints = partEndpoints(part);
     if (endpoints.length < 2) return [];
@@ -2765,45 +2770,59 @@
     }
 
     return [
-      { text: 'LOW', endpoint: endpoints[lowIndex], kind: 'low' },
-      { text: 'HIGH', endpoint: endpoints[highIndex], kind: 'high' }
+      { endpoint: endpoints[lowIndex], kind: 'low', color: ELEVATION_END_MARKER_COLORS.low },
+      { endpoint: endpoints[highIndex], kind: 'high', color: ELEVATION_END_MARKER_COLORS.high }
     ];
   }
 
-  function drawElevationEndLabels(c, part, def, opts = {}) {
-    if (opts.suppressElevationLabels) return;
-    const entries = elevationEndLabelEntries(part, def);
+  function drawElevationEndMarkers(c, part, def, opts = {}) {
+    if (opts.suppressElevationMarkers) return;
+    const entries = elevationEndMarkerEntries(part, def);
     if (!entries.length) return;
 
-    const inwardCm = def.bank20 ? 3.6 : 4.8;
     for (const entry of entries) {
       const endpoint = entry.endpoint;
-      const dx = part.x - endpoint.x;
-      const dy = part.y - endpoint.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const x = endpoint.x + dx / length * inwardCm;
-      const y = endpoint.y + dy / length * inwardCm;
-      const width = entry.kind === 'high' ? 7.8 : 6.8;
-      const height = 4.6;
+      let x = Number(endpoint.x) || 0;
+      let y = Number(endpoint.y) || 0;
+      let widthMm = Number(endpoint.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM;
 
+      // Bank20 is visually projected from one edge. Place the end marker on
+      // that projected face as well so the red/blue cue never floats away from
+      // the visible trapezoid.
+      if (def.bank20) {
+        const angle = Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0;
+        const projection = bankFaceProjection(part, def, angle, widthMm);
+        const headingRad = (Number(endpoint.heading) || 0) * Math.PI / 180;
+        x += -Math.sin(headingRad) * projection.centerOffsetCm;
+        y += Math.cos(headingRad) * projection.centerOffsetCm;
+        widthMm = projection.projectedWidthMm;
+      }
+
+      const halfWidthCm = Math.max(1.2, widthMm / 20);
       c.save();
       c.translate(x, y);
-      c.fillStyle = 'rgba(24, 30, 28, .88)';
-      c.strokeStyle = 'rgba(255, 255, 255, .92)';
-      c.lineWidth = .45;
+      c.rotate((Number(endpoint.heading) || 0) * Math.PI / 180);
+      c.lineCap = 'butt';
+
+      // A thin white under-stroke keeps both colours readable over the green
+      // bank graphic, the slope texture and user-selected part colours.
+      c.strokeStyle = 'rgba(255,255,255,.94)';
+      c.lineWidth = 2.8;
       c.beginPath();
-      c.roundRect(-width / 2, -height / 2, width, height, 1.1);
-      c.fill();
+      c.moveTo(0, -halfWidthCm);
+      c.lineTo(0, halfWidthCm);
       c.stroke();
 
-      c.fillStyle = '#ffffff';
-      c.font = '800 2.9px sans-serif';
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillText(entry.text, 0, .1);
+      c.strokeStyle = entry.color;
+      c.lineWidth = 1.8;
+      c.beginPath();
+      c.moveTo(0, -halfWidthCm);
+      c.lineTo(0, halfWidthCm);
+      c.stroke();
       c.restore();
     }
   }
+
 
   function drawPart(c, part, opts = {}) {
     const def = resolvePartDef(part);
@@ -2827,7 +2846,7 @@
     if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
     if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
-    drawElevationEndLabels(c, part, def, opts);
+    drawElevationEndMarkers(c, part, def, opts);
     drawPartConnectionFaces(c, part, opts);
   }
 
@@ -3056,12 +3075,45 @@
       c.stroke();
     }
 
-    const labelY = (projectY(0, leftScale) + projectY(0, rightScale)) / 2;
-    c.fillStyle = 'rgba(40,52,46,.72)';
-    c.font = '700 3.8px sans-serif';
-    c.textAlign = 'center';
-    c.textBaseline = 'middle';
-    c.fillText(`${Math.round(leftAngle)}→${Math.round(rightAngle)}°`, 0, labelY);
+    // Make the changing roll obvious even on this short 220mm part. Two
+    // cross-section guides plus asymmetric edge emphasis create a clear wedge
+    // without changing any logical connector position or physical dimension.
+    c.strokeStyle = 'rgba(255,255,255,.30)';
+    c.lineWidth = .55;
+    for (const t of [1 / 3, 2 / 3]) {
+      const x = x0 + (x1 - x0) * t;
+      const top = leftTop + (rightTop - leftTop) * t;
+      const bottom = leftBottom + (rightBottom - leftBottom) * t;
+      c.beginPath();
+      c.moveTo(x, top);
+      c.lineTo(x, bottom);
+      c.stroke();
+    }
+
+    c.lineWidth = 1.45;
+    c.strokeStyle = palette.edge;
+    c.beginPath();
+    if (pivotSign > 0) {
+      c.moveTo(x0, leftBottom);
+      c.lineTo(x1, rightBottom);
+    } else {
+      c.moveTo(x0, leftTop);
+      c.lineTo(x1, rightTop);
+    }
+    c.stroke();
+
+    c.strokeStyle = 'rgba(255,255,255,.62)';
+    c.lineWidth = 1.25;
+    c.beginPath();
+    if (pivotSign > 0) {
+      c.moveTo(x0, leftTop);
+      c.lineTo(x1, rightTop);
+    } else {
+      c.moveTo(x0, leftBottom);
+      c.lineTo(x1, rightBottom);
+    }
+    c.stroke();
+
     c.restore();
   }
 
@@ -7154,7 +7206,7 @@
             : [];
           drawPart(c, qaPart, {
             exportMode:true,
-            suppressElevationLabels:!!visualOnly,
+            suppressElevationMarkers:!!visualOnly,
             connectedConnectorIds
           });
         }
