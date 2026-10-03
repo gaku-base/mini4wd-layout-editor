@@ -223,3 +223,31 @@ test('53 bank visual projection keeps both connector centres fixed', () => {
     assert.ok(Math.abs(point.y - connector.localY) < 1e-9);
   }
 });
+
+
+test('54 bank one-edge visual projection keeps the pivot edge fixed and shifts the visual center toward it', () => {
+  const def = {
+    geometry: {
+      height: 36,
+      connectors: [
+        { id:'a', x:-20, y:0, heading:180, bankAngleDeg:0 },
+        { id:'b', x:20, y:0, heading:0, bankAngleDeg:0 }
+      ]
+    }
+  };
+  const transform = G.bankProjectionTransform(def, 60, 1);
+  const apply = point => ({
+    x: transform.a * point.x + transform.c * point.y + transform.e,
+    y: transform.b * point.x + transform.d * point.y + transform.f
+  });
+
+  const lowEdge = apply({ x:0, y:18 });
+  const highEdge = apply({ x:0, y:-18 });
+  const center = apply({ x:0, y:0 });
+
+  assert.ok(Math.abs(lowEdge.y - 18) < 1e-9, 'low edge is the pivot and must stay fixed');
+  assert.ok(Math.abs(highEdge.y - 0) < 1e-9, 'high edge folds inward at 60 degrees');
+  assert.ok(Math.abs(center.y - 9) < 1e-9, 'visual center shifts toward the pivot edge');
+  assert.equal(transform.pivotSign, 1);
+  assert.equal(transform.pivotOffset, 18);
+});
