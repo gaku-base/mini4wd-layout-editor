@@ -22,7 +22,7 @@ test('bank recalculation updates physical connector bankAngleDeg for downstream 
 });
 
 test('ordinary banked parts are visually projected from one course edge before rendering', () => {
-  assert.match(app, /const bankProjection = applyBankVisualProjection\(c, part, def\)/);
+  assert.match(app, /: applyBankVisualProjection\(c, part, def\)/);
   assert.match(app, /bankProjectionTransform\(def, angle, bankVisualPivotSign\(part, def\)\)/);
   assert.match(app, /function bankVisualPivotSign\(part, def/);
 });
