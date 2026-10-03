@@ -2833,11 +2833,23 @@
     c.save();
     c.translate(part.x, part.y);
     c.rotate(pose.rotation * Math.PI / 180);
-    const bankProjection = applyBankVisualProjection(c, part, def);
+    const bankAngle = partBankVisualAngle(part, def);
+    const usesLocalCurvedBankProjection = !!def.corner45
+      && Math.abs(bankAngle) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG;
+    const bankProjection = usesLocalCurvedBankProjection
+      ? {
+          mode: 'curved-local',
+          angleDeg: bankAngle,
+          scale: LAYOUT_GRAPH.bankProjectionScale(bankAngle),
+          pivotSign: bankVisualPivotSign(part, def)
+        }
+      : applyBankVisualProjection(c, part, def);
     recordCornerDiagnostic('resolved-pose', part, { poseSource: 'resolvePartPose' });
-    const usedAsset = def.bank20 ? false : drawPartAsset(c, def, part.colorKey || 'default', part);
+    const usedAsset = (def.bank20 || usesLocalCurvedBankProjection)
+      ? false
+      : drawPartAsset(c, def, part.colorKey || 'default', part);
     if (!usedAsset) {
-      if (def.corner45) drawCorner45(c, def, exportMode);
+      if (def.corner45) drawCorner45(c, def, exportMode, part);
       else if (def.wave) drawWave(c, def, exportMode);
       else if (def.burning) drawBurningGraphic(c, def);
       else drawStraightLike(c, def, exportMode, part);
@@ -3259,11 +3271,116 @@
 
 
 
-  function drawCorner45(c, def, exportMode) {
+  function drawBankedCorner45(c, def, part, g) {
+    const bankAngle = partBankVisualAngle(part, def);
+    const scale = LAYOUT_GRAPH.bankProjectionScale(bankAngle);
+    const pivotSign = bankVisualPivotSign(part, def);
+    const fullTrackWidth = g.ro - g.ri;
+    const projectedTrackWidth = fullTrackWidth * scale;
+
+    // A curved bank cannot be represented correctly by one affine squeeze:
+    // its lateral axis rotates continuously through the arc.  Project every
+    // radial cross-section instead.  Positive pivot keeps the inner/low rail
+    // fixed and folds the outer/high rail inward; reversed travel does the
+    // opposite so both connection faces remain continuous with Bank20.
+    const innerRadius = pivotSign >= 0
+      ? g.ri
+      : g.ro - projectedTrackWidth;
+    const outerRadius = pivotSign >= 0
+      ? g.ri + projectedTrackWidth
+      : g.ro;
+    const lowRadius = pivotSign >= 0 ? innerRadius : outerRadius;
+    const highRadius = pivotSign >= 0 ? outerRadius : innerRadius;
+    const laneRadii = [
+      innerRadius + projectedTrackWidth / 3,
+      innerRadius + projectedTrackWidth * 2 / 3
+    ];
+
+    const lowShade = shadeColor(def.base, -.18);
+    const highShade = shadeColor(def.base, .18);
+    const gradient = c.createRadialGradient(0, 0, innerRadius, 0, 0, outerRadius);
+    if (pivotSign >= 0) {
+      gradient.addColorStop(0, lowShade);
+      gradient.addColorStop(.52, def.base);
+      gradient.addColorStop(1, highShade);
+    } else {
+      gradient.addColorStop(0, highShade);
+      gradient.addColorStop(.48, def.base);
+      gradient.addColorStop(1, lowShade);
+    }
+
+    c.beginPath();
+    c.arc(0, 0, outerRadius, g.startAngle, g.endAngle, false);
+    c.arc(0, 0, innerRadius, g.endAngle, g.startAngle, true);
+    c.closePath();
+    c.fillStyle = gradient;
+    c.fill();
+
+    c.strokeStyle = def.lane;
+    c.lineWidth = .8;
+    for (const radius of laneRadii) {
+      c.beginPath();
+      c.arc(0, 0, radius, g.startAngle, g.endAngle, false);
+      c.stroke();
+    }
+
+    // Radial section guides make the roll readable at normal LAYOUT zoom while
+    // keeping logical 2D geometry untouched.
+    c.strokeStyle = 'rgba(255,255,255,.28)';
+    c.lineWidth = .55;
+    for (const t of [1 / 3, 2 / 3]) {
+      const angle = g.startAngle + (g.endAngle - g.startAngle) * t;
+      c.beginPath();
+      c.moveTo(innerRadius * Math.cos(angle), innerRadius * Math.sin(angle));
+      c.lineTo(outerRadius * Math.cos(angle), outerRadius * Math.sin(angle));
+      c.stroke();
+    }
+
+    // Keep the physical outline visible, then emphasize which curved edge is
+    // visually high/low without adding more text to the layout.
+    c.strokeStyle = def.edge;
+    c.lineWidth = 1.05;
+    for (const radius of [innerRadius, outerRadius]) {
+      c.beginPath();
+      c.arc(0, 0, radius, g.startAngle, g.endAngle, false);
+      c.stroke();
+    }
+
+    c.strokeStyle = 'rgba(255,255,255,.62)';
+    c.lineWidth = 1.35;
+    c.beginPath();
+    c.arc(0, 0, highRadius, g.startAngle, g.endAngle, false);
+    c.stroke();
+
+    c.strokeStyle = shadeColor(def.edge, -.18);
+    c.lineWidth = 1.35;
+    c.beginPath();
+    c.arc(0, 0, lowRadius, g.startAngle, g.endAngle, false);
+    c.stroke();
+
+    for (const angle of [g.startAngle, g.endAngle]) {
+      c.strokeStyle = def.edge;
+      c.lineWidth = 1.05;
+      c.beginPath();
+      c.moveTo(innerRadius * Math.cos(angle), innerRadius * Math.sin(angle));
+      c.lineTo(outerRadius * Math.cos(angle), outerRadius * Math.sin(angle));
+      c.stroke();
+    }
+  }
+
+  function drawCorner45(c, def, exportMode, part = {}) {
     const g = corner45Geometry(def);
     c.save();
     if (def.geometry?.pathOrientation === 'left') c.scale(1, -1);
     c.translate(g.center.x, g.center.y);
+
+    const bankAngle = partBankVisualAngle(part, def);
+    if (Math.abs(bankAngle) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG) {
+      drawBankedCorner45(c, def, part, g);
+      c.restore();
+      return;
+    }
+
     const trackWidth = g.ro - g.ri;
     c.strokeStyle = def.base;
     c.lineWidth = trackWidth;
