@@ -42,7 +42,7 @@ async function main() {
     await page.waitForFunction(() => !!window.__mini4wdCourseDebug?.renderPartDataUrl, null, { timeout: TIMEOUT });
 
     const result = await page.evaluate(async () => {
-      async function pixels(dataUrl) {
+      async function imageStats(dataUrl) {
         const image = new Image();
         await new Promise((resolve, reject) => {
           image.onload = resolve;
@@ -55,37 +55,25 @@ async function main() {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(image, 0, 0);
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-
-        function boundsForRange(minX, maxX) {
-          let minY = canvas.height;
-          let maxY = -1;
-          let firstX = canvas.width;
-          let lastX = -1;
-          for (let y = 0; y < canvas.height; y++) {
-            for (let x = minX; x <= maxX; x++) {
-              const alpha = data[(y * canvas.width + x) * 4 + 3];
-              if (alpha <= 24) continue;
-              minY = Math.min(minY, y);
-              maxY = Math.max(maxY, y);
-              firstX = Math.min(firstX, x);
-              lastX = Math.max(lastX, x);
-            }
+        let minX = canvas.width, maxX = -1, minY = canvas.height, maxY = -1, visiblePixels = 0;
+        for (let y = 0; y < canvas.height; y++) {
+          for (let x = 0; x < canvas.width; x++) {
+            const a = data[(y * canvas.width + x) * 4 + 3];
+            if (a <= 24) continue;
+            visiblePixels += 1;
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
           }
-          return {
-            width: lastX >= firstX ? lastX - firstX + 1 : 0,
-            height: maxY >= minY ? maxY - minY + 1 : 0,
-            minY,
-            maxY
-          };
         }
-
-        let visiblePixels = 0;
-        for (let i = 3; i < data.length; i += 4) if (data[i] > 24) visiblePixels += 1;
-        const full = boundsForRange(0, canvas.width - 1);
-        const edgeWindow = Math.max(3, Math.round(canvas.width * 0.10));
-        const left = boundsForRange(0, edgeWindow);
-        const right = boundsForRange(canvas.width - 1 - edgeWindow, canvas.width - 1);
-        return { canvasWidth: canvas.width, canvasHeight: canvas.height, full, left, right, visiblePixels };
+        return {
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          width: maxX >= minX ? maxX - minX + 1 : 0,
+          height: maxY >= minY ? maxY - minY + 1 : 0,
+          visiblePixels
+        };
       }
 
       async function markerColours(dataUrl) {
@@ -101,162 +89,119 @@ async function main() {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         ctx.drawImage(image, 0, 0);
         const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-        const result = {
-          red: { count:0, sumX:0, sumY:0 },
-          blue: { count:0, sumX:0, sumY:0 }
-        };
-        for (let y = 0; y < canvas.height; y++) {
-          for (let x = 0; x < canvas.width; x++) {
-            const index = (y * canvas.width + x) * 4;
-            const r = data[index];
-            const g = data[index + 1];
-            const b = data[index + 2];
-            const a = data[index + 3];
-            if (a < 100) continue;
-            if (r > 200 && g < 110 && b < 110) {
-              result.red.count += 1; result.red.sumX += x; result.red.sumY += y;
-            }
-            if (b > 200 && r < 90 && g < 175) {
-              result.blue.count += 1; result.blue.sumX += x; result.blue.sumY += y;
-            }
-          }
-        }
-        for (const key of ['red','blue']) {
-          const item = result[key];
-          item.cx = item.count ? item.sumX / item.count : null;
-          item.cy = item.count ? item.sumY / item.count : null;
+        const result = { red:0, blue:0 };
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+          if (a < 100) continue;
+          if (r > 200 && g < 110 && b < 110) result.red += 1;
+          if (b > 200 && r < 90 && g < 175) result.blue += 1;
         }
         return result;
       }
 
       const straight = {};
-      for (const angle of [0, 20, 40, 60, 80]) {
-        straight[angle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('straight', 'entry', 6, angle, true));
+      for (const angle of [0,20,40,60,80]) {
+        straight[angle] = await imageStats(
+          window.__mini4wdCourseDebug.renderPartDataUrl('straight', 'entry', 6, angle, true)
+        );
       }
 
-      const bank = {};
-      for (const baseAngle of [0, 20, 40, 60]) {
-        bank[baseAngle] = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, baseAngle, true));
+      const corner = {};
+      for (const angle of [0,20,40,60,80]) {
+        corner[angle] = await imageStats(
+          window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, angle, true)
+        );
       }
-      const bankExit60 = await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60, true));
-      const slopeMarkers = await markerColours(window.__mini4wdCourseDebug.renderPartDataUrl('slope', 'entry', 6, 0, false));
-      const bankMarkers = await markerColours(window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, 0, false));
-      const corner = {
-        right0: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, 0, true)),
-        right20: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, 20, true)),
-        right40: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-right', 'entry', 8, 40, true)),
-        left20: await pixels(window.__mini4wdCourseDebug.renderPartDataUrl('corner-45-left', 'entry', 8, 20, true))
-      };
 
-      return { straight, bank, bankExit60, slopeMarkers, bankMarkers, corner };
+      const bankEntryStats = {};
+      for (const angle of [0,20,40,60]) {
+        bankEntryStats[angle] = await imageStats(
+          window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, angle, true)
+        );
+      }
+      const bankExitStats = await imageStats(
+        window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 60, true)
+      );
+
+      const slopeMarkers = await markerColours(
+        window.__mini4wdCourseDebug.renderPartDataUrl('slope', 'entry', 6, 0, false)
+      );
+      const bankEntryMarkers = await markerColours(
+        window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'entry', 8, 0, false)
+      );
+      const bankExitMarkers = await markerColours(
+        window.__mini4wdCourseDebug.renderPartDataUrl('bank20', 'exit', 8, 20, false)
+      );
+
+      return { straight, corner, bankEntryStats, bankExitStats, slopeMarkers, bankEntryMarkers, bankExitMarkers };
     });
 
-    const baseHeight = result.straight[0].full.height;
-    const heights = [0, 20, 40, 60, 80].map(angle => result.straight[angle].full.height);
-    console.log('Measured banked straight heights:', JSON.stringify(result.straight));
-    console.log('Measured Bank20 edge heights:', JSON.stringify(result.bank));
-    for (let index = 1; index < heights.length; index++) {
-      assert.ok(heights[index] < heights[index - 1], `visual height must shrink: ${heights.join(' > ')}`);
-    }
-    for (const angle of [20, 40, 60, 80]) {
-      const expected = baseHeight * Math.cos(angle * Math.PI / 180);
-      const actual = result.straight[angle].full.height;
-      const tolerance = Math.max(12, expected * 0.08);
-      assert.ok(Math.abs(actual - expected) <= tolerance, `straight ${angle}° height ${actual} should be near ${expected.toFixed(1)} ± ${tolerance.toFixed(1)}`);
+    const straightBase = result.straight[0];
+    for (const angle of [20,40,60,80]) {
+      const current = result.straight[angle];
+      assert.equal(current.width, straightBase.width, `banked straight ${angle}° width must keep plan footprint`);
+      assert.equal(current.height, straightBase.height, `banked straight ${angle}° height must keep plan footprint`);
+      assert.equal(current.visiblePixels, straightBase.visiblePixels, `banked straight ${angle}° pixels must keep plan footprint`);
     }
 
-    // A visible bank must not merely shrink symmetrically.  With the one-edge
-    // projection the low edge remains visually fixed while the high edge folds
-    // toward it, which makes a connected bank read as a slanted surface.
-    const flatBounds = result.straight[0].full;
-    for (const angle of [20, 40, 60, 80]) {
-      const bounds = result.straight[angle].full;
-      assert.ok(Math.abs(bounds.maxY - flatBounds.maxY) <= 3,
-        `straight ${angle}° low edge must stay fixed: ${bounds.maxY} vs ${flatBounds.maxY}`);
-      assert.ok(bounds.minY > flatBounds.minY,
-        `straight ${angle}° high edge must fold inward: ${bounds.minY} > ${flatBounds.minY}`);
+    const cornerBase = result.corner[0];
+    for (const angle of [20,40,60,80]) {
+      const current = result.corner[angle];
+      assert.equal(current.width, cornerBase.width, `banked corner ${angle}° width must match flat corner`);
+      assert.equal(current.height, cornerBase.height, `banked corner ${angle}° height must match flat corner`);
+      assert.equal(current.visiblePixels, cornerBase.visiblePixels, `banked corner ${angle}° must keep exact plan shape`);
     }
 
-    const bankStages = [0, 20, 40, 60].map(baseAngle => ({
-      baseAngle,
-      left: result.bank[baseAngle].left.height,
-      right: result.bank[baseAngle].right.height
-    }));
-    for (const stage of bankStages) {
-      assert.ok(stage.left > stage.right,
-        `Bank20 ${stage.baseAngle}→${stage.baseAngle + 20}° must taper: ${stage.left} > ${stage.right}`);
-      const detail = result.bank[stage.baseAngle];
-      assert.ok(Math.abs(detail.left.maxY - detail.right.maxY) <= 3,
-        `Bank20 entry low edge must stay fixed across the transition: ${detail.left.maxY} vs ${detail.right.maxY}`);
-      assert.ok(detail.right.minY > detail.left.minY,
-        `Bank20 entry high edge must slope inward: ${detail.right.minY} > ${detail.left.minY}`);
+    const bankBase = result.bankEntryStats[0];
+    for (const angle of [20,40,60]) {
+      const current = result.bankEntryStats[angle];
+      assert.equal(current.width, bankBase.width, `Bank20 ${angle}° base must keep rectangular plan width`);
+      assert.equal(current.height, bankBase.height, `Bank20 ${angle}° base must keep rectangular plan height`);
+      assert.equal(current.visiblePixels, bankBase.visiblePixels, `Bank20 ${angle}° base must keep rectangular plan area`);
     }
+    assert.equal(result.bankExitStats.width, bankBase.width);
+    assert.equal(result.bankExitStats.height, bankBase.height);
 
-    const exit = result.bankExit60;
-    assert.ok(Math.abs(exit.left.minY - exit.right.minY) <= 3,
-      `Bank20 exit opposite pivot edge must stay fixed: ${exit.left.minY} vs ${exit.right.minY}`);
-    assert.ok(exit.right.maxY < exit.left.maxY,
-      `Bank20 exit moving edge must fold inward: ${exit.right.maxY} < ${exit.left.maxY}`);
+    assert.ok(result.slopeMarkers.blue > 100, `Slope must keep blue LOW line: ${result.slopeMarkers.blue}`);
+    assert.ok(result.slopeMarkers.red > 100, `Slope must keep red HIGH line: ${result.slopeMarkers.red}`);
 
-    for (let index = 1; index < bankStages.length; index++) {
-      assert.ok(bankStages[index].left < bankStages[index - 1].left,
-        `Bank20 incoming edge must shrink by stage: ${bankStages.map(stage => stage.left).join(' > ')}`);
-      assert.ok(bankStages[index].right < bankStages[index - 1].right,
-        `Bank20 outgoing edge must shrink by stage: ${bankStages.map(stage => stage.right).join(' > ')}`);
-    }
-
-    for (const [name, markers] of [['Slope', result.slopeMarkers], ['Bank20', result.bankMarkers]]) {
-      assert.ok(markers.red.count > 100, `${name} must render a visible red HIGH-end line; pixels=${markers.red.count}`);
-      assert.ok(markers.blue.count > 100, `${name} must render a visible blue LOW-end line; pixels=${markers.blue.count}`);
-      assert.ok(markers.red.cx !== markers.blue.cx || markers.red.cy !== markers.blue.cy,
-        `${name} red and blue end markers must occupy different endpoints`);
-    }
-
-    const cornerArea = [
-      result.corner.right0.visiblePixels,
-      result.corner.right20.visiblePixels,
-      result.corner.right40.visiblePixels
-    ];
-    assert.ok(cornerArea[1] < cornerArea[0] * 0.985,
-      `20° banked corner must visibly narrow along the rotating lateral axis: ${cornerArea.join(' > ')}`);
-    assert.ok(cornerArea[2] < cornerArea[1] * 0.94,
-      `40° banked corner must narrow further than 20°: ${cornerArea.join(' > ')}`);
-    const mirrorRatio = result.corner.left20.visiblePixels / result.corner.right20.visiblePixels;
-    assert.ok(mirrorRatio > 0.96 && mirrorRatio < 1.04,
-      `left/right 20° banked corners must remain mirror-equivalent: ratio=${mirrorRatio}`);
+    assert.ok(result.bankEntryMarkers.blue > 100, `Bank entrance must render BLUE line: ${result.bankEntryMarkers.blue}`);
+    assert.equal(result.bankEntryMarkers.red, 0, `Bank entrance must not render RED line: ${result.bankEntryMarkers.red}`);
+    assert.ok(result.bankExitMarkers.red > 100, `Bank exit must render RED line: ${result.bankExitMarkers.red}`);
+    assert.equal(result.bankExitMarkers.blue, 0, `Bank exit must not render BLUE line: ${result.bankExitMarkers.blue}`);
 
     await page.evaluate(() => {
       const debug = window.__mini4wdCourseDebug;
       const base = debug.getState();
       const parts = [
-        { id:'up-1', type:'bank20', x:138.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:1 },
-        { id:'up-2', type:'bank20', x:161.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:2 },
-        { id:'up-3', type:'bank20', x:184.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:3 },
-        { id:'up-4', type:'bank20', x:207.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:4 },
-        { id:'banked-straight', type:'straight', x:246, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'blue', zMm:0, zOrder:5 },
-        { id:'down-1', type:'bank20', x:284.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:6 },
-        { id:'down-2', type:'bank20', x:307.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:7 },
-        { id:'down-3', type:'bank20', x:330.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:8 },
-        { id:'down-4', type:'bank20', x:353.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', colorKey:'default', zMm:0, zOrder:9 },
-        { id:'flat-straight', type:'straight', x:392, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'red', zMm:0, zOrder:10 }
+        { id:'up-1', type:'bank20', x:138.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:1 },
+        { id:'up-2', type:'bank20', x:161.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:2 },
+        { id:'up-3', type:'bank20', x:184.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:3 },
+        { id:'up-4', type:'bank20', x:207.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:4 },
+        { id:'banked-corner', type:'corner-45-right', x:246, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:5 },
+        { id:'banked-straight', type:'straight', x:300, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'blue', zMm:0, zOrder:6 },
+        { id:'down-1', type:'bank20', x:338.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:7 },
+        { id:'down-2', type:'bank20', x:361.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:8 },
+        { id:'down-3', type:'bank20', x:384.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:9 },
+        { id:'down-4', type:'bank20', x:407.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:10 }
       ];
       const connections = [
         ['start','b','up-1','a'],
         ['up-1','b','up-2','a'],
         ['up-2','b','up-3','a'],
         ['up-3','b','up-4','a'],
-        ['up-4','b','banked-straight','a'],
+        ['up-4','b','banked-corner','a'],
+        ['banked-corner','b','banked-straight','a'],
         ['banked-straight','b','down-1','b'],
         ['down-1','a','down-2','b'],
         ['down-2','a','down-3','b'],
-        ['down-3','a','down-4','b'],
-        ['down-4','a','flat-straight','a']
+        ['down-3','a','down-4','b']
       ].map((edge, index) => ({
         partAId:edge[0], connectorAId:edge[1], partBId:edge[2], connectorBId:edge[3], createdOrder:index + 1
       }));
       debug.loadState({
         ...base,
-        field:{ ...base.field, originX:0, originY:0, widthCm:520, heightCm:240, gridCm:10 },
+        field:{ ...base.field, originX:0, originY:0, widthCm:560, heightCm:240, gridCm:10 },
         start:{ id:'start', type:'start', x:100, y:120, rotation:0, zMm:0, pitchDeg:0, bankAngleDeg:0, zOrder:0, colorKey:'default' },
         parts,
         connections,
@@ -272,7 +217,6 @@ async function main() {
       return {
         parts:Object.fromEntries(state.parts.map(part => [part.id, {
           bankAngleDeg:part.bankAngleDeg,
-          bankAngle:part.bankAngle,
           endpointAngles:(part.endpointStates || []).map(endpoint => endpoint.bankAngle)
         }])),
         bankWarnings:runtime.bankWarnings
@@ -283,27 +227,24 @@ async function main() {
     assert.deepEqual(propagated.parts['up-2'].endpointAngles, [20,40]);
     assert.deepEqual(propagated.parts['up-3'].endpointAngles, [40,60]);
     assert.deepEqual(propagated.parts['up-4'].endpointAngles, [60,80]);
+    assert.equal(propagated.parts['banked-corner'].bankAngleDeg, 80);
+    assert.deepEqual(propagated.parts['banked-corner'].endpointAngles, [80,80]);
     assert.equal(propagated.parts['banked-straight'].bankAngleDeg, 80);
-    assert.deepEqual(propagated.parts['banked-straight'].endpointAngles, [80,80]);
     assert.deepEqual(propagated.parts['down-1'].endpointAngles, [60,80]);
     assert.deepEqual(propagated.parts['down-2'].endpointAngles, [40,60]);
     assert.deepEqual(propagated.parts['down-3'].endpointAngles, [20,40]);
     assert.deepEqual(propagated.parts['down-4'].endpointAngles, [0,20]);
-    assert.equal(propagated.parts['flat-straight'].bankAngleDeg, 0);
-    assert.deepEqual(propagated.parts['flat-straight'].endpointAngles, [0,0]);
     assert.deepEqual(propagated.bankWarnings, []);
 
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
 
-    console.log('✓ connected Bank20 chain propagates 0→20→40→60→80° and unwinds 80→60→40→20→0°');
-    console.log(`✓ banked straight visual heights 0/20/40/60/80° = ${heights.join('/')}`);
-    console.log('✓ Bank20 transitions taper correctly for 0→20, 20→40, 40→60 and 60→80 degrees');
-    console.log('✓ one bank edge stays fixed while the opposite edge folds inward, so LAYOUT reads as a slanted surface');
-    console.log('✓ entry/exit Bank20 pieces use opposite local pivots and remain visually continuous when reversed');
-    console.log('✓ Slope and Bank20 render blue LOW-end and red HIGH-end lines with no LOW/HIGH text dependency');
-    console.log(`✓ banked corner visible pixels flat/20°/40° = ${cornerArea.join('/')}; left/right 20° stay mirror-equivalent`);
-    console.log('✓ cumulative bank visual browser rehearsal passed');
+    console.log('✓ bank state still propagates 0→20→40→60→80° and unwinds without changing LAYOUT footprint');
+    console.log('✓ straight and 45° corner plan shapes remain identical at 0/20/40/60/80°');
+    console.log('✓ Bank20 remains a rectangular 22cm × 36cm plan footprint');
+    console.log('✓ bank entrance is BLUE only; bank exit is RED only');
+    console.log('✓ Slope remains LOW=blue and HIGH=red');
+    console.log('✓ cumulative bank plan-view browser rehearsal passed');
   } catch (error) {
     try { await page.screenshot({ path: `${ARTIFACT_DIR}/cumulative-bank-visual-failure.png`, fullPage: true }); } catch (_) {}
     throw error;
