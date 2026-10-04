@@ -1845,12 +1845,10 @@
     for (const seam of seams) {
       const style = PART_SEAMS.resolveStyle({ enabled: RENDER_FEATURES.partSeams, selected: !!options.selected && isSelected(owner.id), exportMode: !!options.exportMode });
       if (!style) continue;
-      const projection = bankFaceProjection(owner, resolvePartDef(owner), seam.bankAngleDeg, seam.connectionWidthMm);
-      const halfWidth = projection.projectedWidthMm / 20 - style.edgeInset;
+      const halfWidth = (Number(seam.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM) / 20 - style.edgeInset;
       c.save();
       c.translate(seam.point.x, seam.point.y);
       c.rotate(seam.heading * Math.PI / 180);
-      c.translate(0, projection.centerOffsetCm);
       c.strokeStyle = style.color; c.lineWidth = style.lineWidth; c.lineCap = 'butt';
       c.beginPath(); c.moveTo(0, -halfWidth); c.lineTo(0, halfWidth); c.stroke(); c.restore();
     }
@@ -2681,38 +2679,6 @@
     return Number.isFinite(angle) ? angle : 0;
   }
 
-  function bankVisualPivotSign(part, def = PARTS[part?.type]) {
-    if (!part || !def) return 1;
-    if (def.bank20) {
-      if (part.bankRole === 'exit') return -1;
-      if (part.bankRole === 'entry') return 1;
-    }
-    const connectors = LAYOUT_GRAPH.connectorsForDefinition(def);
-    const entryId = part.entryConnectorId == null ? '' : String(part.entryConnectorId);
-    if (entryId && connectors[1]?.id != null && String(connectors[1].id) === entryId) return -1;
-    return 1;
-  }
-
-  function bankFaceProjection(part, def, angleDeg, connectionWidthMm) {
-    const widthMm = Number(connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM;
-    const scale = LAYOUT_GRAPH.bankProjectionScale(Number(angleDeg) || 0);
-    const pivotSign = bankVisualPivotSign(part, def);
-    return {
-      scale,
-      pivotSign,
-      projectedWidthMm: widthMm * scale,
-      centerOffsetCm: pivotSign * (widthMm / 20) * (1 - scale)
-    };
-  }
-
-  function applyBankVisualProjection(c, part, def) {
-    const angle = partBankVisualAngle(part, def);
-    if (Math.abs(angle) <= LAYOUT_GRAPH.ANGLE_EPSILON_DEG) return null;
-    const transform = LAYOUT_GRAPH.bankProjectionTransform(def, angle, bankVisualPivotSign(part, def));
-    c.transform(transform.a, transform.b, transform.c, transform.d, transform.e, transform.f);
-    return transform;
-  }
-
   function bankEndpointAngles(part, def) {
     const connectors = LAYOUT_GRAPH.connectorsForDefinition(def);
     return connectors.map((connector, index) => {
@@ -2746,33 +2712,46 @@
     high: '#ff3131'
   });
 
+  const BANK_SECTION_MARKER_COLORS = Object.freeze({
+    entry: '#1976ff',
+    exit: '#ff3131'
+  });
+
   function elevationEndMarkerEntries(part, def) {
     if (!part || !def || (!def.slope && !def.bank20)) return [];
     const endpoints = partEndpoints(part);
     if (endpoints.length < 2) return [];
 
-    let lowIndex = 0;
-    let highIndex = 1;
     if (def.slope) {
       const z0 = Number(endpoints[0]?.zMm) || 0;
       const z1 = Number(endpoints[1]?.zMm) || 0;
-      if (z0 > z1) {
-        lowIndex = 1;
-        highIndex = 0;
-      }
-    } else {
-      const a0 = Math.abs(Number(endpoints[0]?.connectionState?.bankAngle ?? endpoints[0]?.bankAngleDeg) || 0);
-      const a1 = Math.abs(Number(endpoints[1]?.connectionState?.bankAngle ?? endpoints[1]?.bankAngleDeg) || 0);
-      if (a0 > a1) {
-        lowIndex = 1;
-        highIndex = 0;
-      }
+      const lowIndex = z0 <= z1 ? 0 : 1;
+      const highIndex = lowIndex === 0 ? 1 : 0;
+      return [
+        { endpoint: endpoints[lowIndex], kind: 'low', color: ELEVATION_END_MARKER_COLORS.low },
+        { endpoint: endpoints[highIndex], kind: 'high', color: ELEVATION_END_MARKER_COLORS.high }
+      ];
     }
 
-    return [
-      { endpoint: endpoints[lowIndex], kind: 'low', color: ELEVATION_END_MARKER_COLORS.low },
-      { endpoint: endpoints[highIndex], kind: 'high', color: ELEVATION_END_MARKER_COLORS.high }
-    ];
+    // Bank markers are semantic, not height labels:
+    //   bank entrance = BLUE
+    //   bank exit     = RED
+    // The marker sits on the flatter end of the transition piece. This keeps
+    // the definition stable even when the part is rotated or connected in the
+    // opposite screen direction.
+    const angles = endpoints.map(endpoint =>
+      Math.abs(Number(endpoint?.connectionState?.bankAngle ?? endpoint?.bankAngleDeg) || 0)
+    );
+    const boundaryIndex = angles[0] <= angles[1] ? 0 : 1;
+    let role = part.bankRole;
+    if (role !== 'entry' && role !== 'exit') {
+      role = angles[1] >= angles[0] ? 'entry' : 'exit';
+    }
+    return [{
+      endpoint: endpoints[boundaryIndex],
+      kind: role,
+      color: BANK_SECTION_MARKER_COLORS[role]
+    }];
   }
 
   function drawElevationEndMarkers(c, part, def, opts = {}) {
@@ -2782,30 +2761,20 @@
 
     for (const entry of entries) {
       const endpoint = entry.endpoint;
-      let x = Number(endpoint.x) || 0;
-      let y = Number(endpoint.y) || 0;
-      let widthMm = Number(endpoint.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM;
-
-      // Bank20 is visually projected from one edge. Place the end marker on
-      // that projected face as well so the red/blue cue never floats away from
-      // the visible trapezoid.
-      if (def.bank20) {
-        const angle = Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0;
-        const projection = bankFaceProjection(part, def, angle, widthMm);
-        const headingRad = (Number(endpoint.heading) || 0) * Math.PI / 180;
-        x += -Math.sin(headingRad) * projection.centerOffsetCm;
-        y += Math.cos(headingRad) * projection.centerOffsetCm;
-        widthMm = projection.projectedWidthMm;
-      }
-
+      const x = Number(endpoint.x) || 0;
+      const y = Number(endpoint.y) || 0;
+      const widthMm = def.bank20
+        ? (Number(def.geometry?.height) || Number(def.h) || TRACK_WIDTH_CM) * 10
+        : Number(endpoint.connectionWidthMm) || CATALOG.STRAIGHT_CONNECTION_WIDTH_MM;
       const halfWidthCm = Math.max(1.2, widthMm / 20);
+
       c.save();
       c.translate(x, y);
       c.rotate((Number(endpoint.heading) || 0) * Math.PI / 180);
       c.lineCap = 'butt';
 
-      // A thin white under-stroke keeps both colours readable over the green
-      // bank graphic, the slope texture and user-selected part colours.
+      // A thin white under-stroke keeps the definition visible over any part
+      // colour while the actual semantic cue remains only blue or red.
       c.strokeStyle = 'rgba(255,255,255,.94)';
       c.lineWidth = 2.8;
       c.beginPath();
@@ -2833,21 +2802,12 @@
     c.save();
     c.translate(part.x, part.y);
     c.rotate(pose.rotation * Math.PI / 180);
-    const bankAngle = partBankVisualAngle(part, def);
-    const usesLocalCurvedBankProjection = !!def.corner45
-      && Math.abs(bankAngle) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG;
-    const bankProjection = usesLocalCurvedBankProjection
-      ? {
-          mode: 'curved-local',
-          angleDeg: bankAngle,
-          scale: LAYOUT_GRAPH.bankProjectionScale(bankAngle),
-          pivotSign: bankVisualPivotSign(part, def)
-        }
-      : applyBankVisualProjection(c, part, def);
+
+    // LAYOUT is a true plan view. Bank angle is retained in connection state
+    // and OUTPUT 3D, but never distorts a part's 2D footprint.
+    const bankProjection = null;
     recordCornerDiagnostic('resolved-pose', part, { poseSource: 'resolvePartPose' });
-    const usedAsset = (def.bank20 || usesLocalCurvedBankProjection)
-      ? false
-      : drawPartAsset(c, def, part.colorKey || 'default', part);
+    const usedAsset = drawPartAsset(c, def, part.colorKey || 'default', part);
     if (!usedAsset) {
       if (def.corner45) drawCorner45(c, def, exportMode, part);
       else if (def.wave) drawWave(c, def, exportMode);
@@ -2874,18 +2834,7 @@
     if (!style) return;
     for (const endpoint of partEndpoints(part)) {
       if (hidden.has(endpoint.connectorId)) continue;
-      const angle = Number(endpoint.bankAngleDeg ?? endpoint.connectionState?.bankAngle) || 0;
-      const projection = bankFaceProjection(part, resolvePartDef(part), angle, endpoint.connectionWidthMm);
-      const headingRad = (Number(endpoint.heading) || 0) * Math.PI / 180;
-      const normalX = -Math.sin(headingRad);
-      const normalY = Math.cos(headingRad);
-      const projectedEndpoint = {
-        ...endpoint,
-        x: endpoint.x + normalX * projection.centerOffsetCm,
-        y: endpoint.y + normalY * projection.centerOffsetCm,
-        connectionWidthMm: projection.projectedWidthMm
-      };
-      const face = PART_SEAMS.connectorFace(projectedEndpoint, { edgeInsetCm: style.edgeInset });
+      const face = PART_SEAMS.connectorFace(endpoint, { edgeInsetCm: style.edgeInset });
       c.save();
       c.strokeStyle = style.color;
       c.lineWidth = style.lineWidth;
@@ -3039,96 +2988,32 @@
 
   function drawBankGraphic(c, def, part = {}) {
     c.save();
-    const angles = bankEndpointAngles(part, def);
-    const leftAngle = Number(angles[0]) || 0;
-    const rightAngle = Number(angles[1]) || 0;
-    const leftScale = LAYOUT_GRAPH.bankProjectionScale(leftAngle);
-    const rightScale = LAYOUT_GRAPH.bankProjectionScale(rightAngle);
-    const trackWidth = Number(def.geometry?.height) || Number(def.h) || TRACK_WIDTH_CM;
-    const half = trackWidth / 2;
-    const x0 = -def.w / 2;
-    const x1 = def.w / 2;
-    const pivotSign = bankVisualPivotSign(part, def);
-    const pivotY = half * pivotSign;
-    const projectY = (y, scale) => pivotY + (y - pivotY) * scale;
-    const leftTop = projectY(-half, leftScale);
-    const leftBottom = projectY(half, leftScale);
-    const rightTop = projectY(-half, rightScale);
-    const rightBottom = projectY(half, rightScale);
+    const vx = -def.w / 2;
+    const vy = -def.h / 2;
     const palette = bankTransitionPalette(part, def);
-    const risingToRight = Math.abs(rightAngle) >= Math.abs(leftAngle);
-    const grad = c.createLinearGradient(x0, 0, x1, 0);
-    grad.addColorStop(0, risingToRight ? palette.low : palette.high);
+    const grad = c.createLinearGradient(vx, 0, vx + def.w, 0);
+    const entryToBank = part.bankRole !== 'exit';
+    grad.addColorStop(0, entryToBank ? palette.low : palette.high);
     grad.addColorStop(.52, palette.mid);
-    grad.addColorStop(1, risingToRight ? palette.high : palette.low);
+    grad.addColorStop(1, entryToBank ? palette.high : palette.low);
 
-    // One edge is the visual pivot.  The opposite edge folds inward as the
-    // roll grows, so connected Bank20 pieces read as one continuous slanted
-    // surface instead of a sequence of symmetrically squeezed rectangles.
-    c.beginPath();
-    c.moveTo(x0, leftTop);
-    c.lineTo(x1, rightTop);
-    c.lineTo(x1, rightBottom);
-    c.lineTo(x0, leftBottom);
-    c.closePath();
     c.fillStyle = grad;
-    c.fill();
+    c.fillRect(vx, vy, def.w, def.h);
     c.strokeStyle = palette.edge;
     c.lineWidth = 1.05;
-    c.stroke();
+    c.strokeRect(vx, vy, def.w, def.h);
 
     c.strokeStyle = palette.lane;
     c.lineWidth = .8;
-    for (const laneFraction of [-1 / 6, 1 / 6]) {
-      const laneY = trackWidth * laneFraction;
+    for (let i = 1; i < 3; i++) {
+      const y = vy + def.h * i / 3;
       c.beginPath();
-      c.moveTo(x0, projectY(laneY, leftScale));
-      c.lineTo(x1, projectY(laneY, rightScale));
+      c.moveTo(vx, y);
+      c.lineTo(vx + def.w, y);
       c.stroke();
     }
-
-    // Make the changing roll obvious even on this short 220mm part. Two
-    // cross-section guides plus asymmetric edge emphasis create a clear wedge
-    // without changing any logical connector position or physical dimension.
-    c.strokeStyle = 'rgba(255,255,255,.30)';
-    c.lineWidth = .55;
-    for (const t of [1 / 3, 2 / 3]) {
-      const x = x0 + (x1 - x0) * t;
-      const top = leftTop + (rightTop - leftTop) * t;
-      const bottom = leftBottom + (rightBottom - leftBottom) * t;
-      c.beginPath();
-      c.moveTo(x, top);
-      c.lineTo(x, bottom);
-      c.stroke();
-    }
-
-    c.lineWidth = 1.45;
-    c.strokeStyle = palette.edge;
-    c.beginPath();
-    if (pivotSign > 0) {
-      c.moveTo(x0, leftBottom);
-      c.lineTo(x1, rightBottom);
-    } else {
-      c.moveTo(x0, leftTop);
-      c.lineTo(x1, rightTop);
-    }
-    c.stroke();
-
-    c.strokeStyle = 'rgba(255,255,255,.62)';
-    c.lineWidth = 1.25;
-    c.beginPath();
-    if (pivotSign > 0) {
-      c.moveTo(x0, leftTop);
-      c.lineTo(x1, rightTop);
-    } else {
-      c.moveTo(x0, leftBottom);
-      c.lineTo(x1, rightBottom);
-    }
-    c.stroke();
-
     c.restore();
   }
-
 
 
   function drawJumpGraphic(c, def) {
@@ -3271,116 +3156,11 @@
 
 
 
-  function drawBankedCorner45(c, def, part, g) {
-    const bankAngle = partBankVisualAngle(part, def);
-    const scale = LAYOUT_GRAPH.bankProjectionScale(bankAngle);
-    const pivotSign = bankVisualPivotSign(part, def);
-    const fullTrackWidth = g.ro - g.ri;
-    const projectedTrackWidth = fullTrackWidth * scale;
-
-    // A curved bank cannot be represented correctly by one affine squeeze:
-    // its lateral axis rotates continuously through the arc.  Project every
-    // radial cross-section instead.  Positive pivot keeps the inner/low rail
-    // fixed and folds the outer/high rail inward; reversed travel does the
-    // opposite so both connection faces remain continuous with Bank20.
-    const innerRadius = pivotSign >= 0
-      ? g.ri
-      : g.ro - projectedTrackWidth;
-    const outerRadius = pivotSign >= 0
-      ? g.ri + projectedTrackWidth
-      : g.ro;
-    const lowRadius = pivotSign >= 0 ? innerRadius : outerRadius;
-    const highRadius = pivotSign >= 0 ? outerRadius : innerRadius;
-    const laneRadii = [
-      innerRadius + projectedTrackWidth / 3,
-      innerRadius + projectedTrackWidth * 2 / 3
-    ];
-
-    const lowShade = shadeColor(def.base, -.18);
-    const highShade = shadeColor(def.base, .18);
-    const gradient = c.createRadialGradient(0, 0, innerRadius, 0, 0, outerRadius);
-    if (pivotSign >= 0) {
-      gradient.addColorStop(0, lowShade);
-      gradient.addColorStop(.52, def.base);
-      gradient.addColorStop(1, highShade);
-    } else {
-      gradient.addColorStop(0, highShade);
-      gradient.addColorStop(.48, def.base);
-      gradient.addColorStop(1, lowShade);
-    }
-
-    c.beginPath();
-    c.arc(0, 0, outerRadius, g.startAngle, g.endAngle, false);
-    c.arc(0, 0, innerRadius, g.endAngle, g.startAngle, true);
-    c.closePath();
-    c.fillStyle = gradient;
-    c.fill();
-
-    c.strokeStyle = def.lane;
-    c.lineWidth = .8;
-    for (const radius of laneRadii) {
-      c.beginPath();
-      c.arc(0, 0, radius, g.startAngle, g.endAngle, false);
-      c.stroke();
-    }
-
-    // Radial section guides make the roll readable at normal LAYOUT zoom while
-    // keeping logical 2D geometry untouched.
-    c.strokeStyle = 'rgba(255,255,255,.28)';
-    c.lineWidth = .55;
-    for (const t of [1 / 3, 2 / 3]) {
-      const angle = g.startAngle + (g.endAngle - g.startAngle) * t;
-      c.beginPath();
-      c.moveTo(innerRadius * Math.cos(angle), innerRadius * Math.sin(angle));
-      c.lineTo(outerRadius * Math.cos(angle), outerRadius * Math.sin(angle));
-      c.stroke();
-    }
-
-    // Keep the physical outline visible, then emphasize which curved edge is
-    // visually high/low without adding more text to the layout.
-    c.strokeStyle = def.edge;
-    c.lineWidth = 1.05;
-    for (const radius of [innerRadius, outerRadius]) {
-      c.beginPath();
-      c.arc(0, 0, radius, g.startAngle, g.endAngle, false);
-      c.stroke();
-    }
-
-    c.strokeStyle = 'rgba(255,255,255,.62)';
-    c.lineWidth = 1.35;
-    c.beginPath();
-    c.arc(0, 0, highRadius, g.startAngle, g.endAngle, false);
-    c.stroke();
-
-    c.strokeStyle = shadeColor(def.edge, -.18);
-    c.lineWidth = 1.35;
-    c.beginPath();
-    c.arc(0, 0, lowRadius, g.startAngle, g.endAngle, false);
-    c.stroke();
-
-    for (const angle of [g.startAngle, g.endAngle]) {
-      c.strokeStyle = def.edge;
-      c.lineWidth = 1.05;
-      c.beginPath();
-      c.moveTo(innerRadius * Math.cos(angle), innerRadius * Math.sin(angle));
-      c.lineTo(outerRadius * Math.cos(angle), outerRadius * Math.sin(angle));
-      c.stroke();
-    }
-  }
-
   function drawCorner45(c, def, exportMode, part = {}) {
     const g = corner45Geometry(def);
     c.save();
     if (def.geometry?.pathOrientation === 'left') c.scale(1, -1);
     c.translate(g.center.x, g.center.y);
-
-    const bankAngle = partBankVisualAngle(part, def);
-    if (Math.abs(bankAngle) > LAYOUT_GRAPH.ANGLE_EPSILON_DEG) {
-      drawBankedCorner45(c, def, part, g);
-      c.restore();
-      return;
-    }
-
     const trackWidth = g.ro - g.ri;
     c.strokeStyle = def.base;
     c.lineWidth = trackWidth;
@@ -3397,7 +3177,6 @@
     }
     c.restore();
   }
-
 
   function tracePartShapePath(c, type) {
     const def = PARTS[type];
