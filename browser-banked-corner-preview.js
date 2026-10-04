@@ -19,16 +19,28 @@ async function main() {
   const context = await browser.newContext({ viewport: { width: 1800, height: 1120 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
 
+  // The production bootstrap intentionally removes the temporary debug bridge
+  // after startup. Capture its object reference during that short window so
+  // this QA-only screenshot script can build a deterministic real-app scene
+  // without changing production code.
+  await page.addInitScript(() => {
+    window.__bankedCornerPreviewCapture = setInterval(() => {
+      if (window.__mini4wdCourseDebug && !window.__bankedCornerPreviewDebug) {
+        window.__bankedCornerPreviewDebug = window.__mini4wdCourseDebug;
+      }
+    }, 0);
+  });
+
   try {
     await page.goto(BASE_URL, { waitUntil: 'networkidle', timeout: 20000 });
     await page.evaluate(() => {
       const setupDialog = document.querySelector('#setupDialog');
       if (setupDialog?.open) setupDialog.close();
     });
-    await page.waitForFunction(() => !!window.__mini4wdCourseDebug && !!window.M4WD_LAYOUT_GRAPH, { timeout: 12000 });
+    await page.waitForFunction(() => !!window.__bankedCornerPreviewDebug && !!window.M4WD_LAYOUT_GRAPH, { timeout: 12000 });
 
     const result = await page.evaluate(() => {
-      const debug = window.__mini4wdCourseDebug;
+      const debug = window.__bankedCornerPreviewDebug;
       const G = window.M4WD_LAYOUT_GRAPH;
       const PARTS = window.M4WD_PART_CATALOG.PARTS;
       const base = debug.getState();
