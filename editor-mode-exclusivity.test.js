@@ -85,6 +85,6 @@ test('resetting pointer interaction also clears pending obstacle placement', () 
 });
 
 test('the visible release candidate label is RC7.1', () => {
-  assert.match(html, /v1\.1 RC7\.1/);
+  assert.match(html, /v1\.1 RC7\.2/);
   assert.doesNotMatch(html, /v1\.1 RC2/);
 });
