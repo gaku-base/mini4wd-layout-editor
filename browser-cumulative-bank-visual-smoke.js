@@ -172,37 +172,66 @@ async function main() {
 
     await page.evaluate(() => {
       const debug = window.__mini4wdCourseDebug;
+      const G = window.M4WD_LAYOUT_GRAPH;
+      const PARTS = window.M4WD_PART_CATALOG.PARTS;
       const base = debug.getState();
-      const parts = [
-        { id:'up-1', type:'bank20', x:138.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:1 },
-        { id:'up-2', type:'bank20', x:161.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:2 },
-        { id:'up-3', type:'bank20', x:184.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:3 },
-        { id:'up-4', type:'bank20', x:207.5, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', bankRole:'entry', colorKey:'default', zMm:0, zOrder:4 },
-        { id:'banked-corner', type:'corner-45-right', x:246, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'default', zMm:0, zOrder:5 },
-        { id:'banked-straight', type:'straight', x:300, y:120, rotation:0, routeIndex:0, entryConnectorId:'a', colorKey:'blue', zMm:0, zOrder:6 },
-        { id:'down-1', type:'bank20', x:338.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:7 },
-        { id:'down-2', type:'bank20', x:361.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:8 },
-        { id:'down-3', type:'bank20', x:384.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:9 },
-        { id:'down-4', type:'bank20', x:407.5, y:120, rotation:180, routeIndex:1, entryConnectorId:'b', bankRole:'exit', colorKey:'default', zMm:0, zOrder:10 }
-      ];
-      const connections = [
-        ['start','b','up-1','a'],
-        ['up-1','b','up-2','a'],
-        ['up-2','b','up-3','a'],
-        ['up-3','b','up-4','a'],
-        ['up-4','b','banked-corner','a'],
-        ['banked-corner','b','banked-straight','a'],
-        ['banked-straight','b','down-1','b'],
-        ['down-1','a','down-2','b'],
-        ['down-2','a','down-3','b'],
-        ['down-3','a','down-4','b']
-      ].map((edge, index) => ({
-        partAId:edge[0], connectorAId:edge[1], partBId:edge[2], connectorBId:edge[3], createdOrder:index + 1
-      }));
+      const startPart = {
+        id:'start', type:'start', x:100, y:120, rotation:0, zMm:0,
+        pitchDeg:0, bankAngleDeg:0, zOrder:0, colorKey:'default'
+      };
+
+      const parts = [];
+      const connections = [];
+      let previous = { id:'start', connectorId:'b' };
+      let target = G.worldConnector(
+        startPart,
+        G.connectorsForDefinition(PARTS.start)[1],
+        1
+      );
+      let zOrder = 1;
+
+      function add(id, type, attachId, colorKey='default') {
+        const def = PARTS[type];
+        const connectors = G.connectorsForDefinition(def);
+        const attachedIndex = connectors.findIndex(connector => String(connector.id) === String(attachId));
+        if (attachedIndex < 0) throw new Error(`Missing connector ${attachId} for ${type}`);
+        const otherIndex = attachedIndex === 0 ? 1 : 0;
+        const seed = {
+          id, type, x:0, y:0, zMm:0, rotation:0, pitchDeg:0, bankAngleDeg:0,
+          colorKey, zOrder:zOrder++, entryConnectorId:connectors[attachedIndex].id
+        };
+        const solved = G.solveSnapPose(seed, connectors[attachedIndex], target);
+        solved.entryConnectorId = connectors[attachedIndex].id;
+        if (def.bank20) solved.bankRole = attachedIndex === 0 ? 'entry' : 'exit';
+        parts.push(solved);
+        connections.push({
+          partAId:previous.id,
+          connectorAId:previous.connectorId,
+          partBId:id,
+          connectorBId:connectors[attachedIndex].id,
+          createdOrder:connections.length + 1
+        });
+        previous = { id, connectorId:connectors[otherIndex].id };
+        target = G.worldConnector(solved, connectors[otherIndex], otherIndex);
+        return solved;
+      }
+
+      add('up-1', 'bank20', 'a');
+      add('up-2', 'bank20', 'a');
+      add('up-3', 'bank20', 'a');
+      add('up-4', 'bank20', 'a');
+      add('banked-corner', 'corner-45-right', 'a');
+      add('banked-straight', 'straight', 'a', 'blue');
+      add('down-1', 'bank20', 'b');
+      add('down-2', 'bank20', 'b');
+      add('down-3', 'bank20', 'b');
+      add('down-4', 'bank20', 'b');
+      add('flat-straight', 'straight', 'a', 'red');
+
       debug.loadState({
         ...base,
-        field:{ ...base.field, originX:0, originY:0, widthCm:560, heightCm:240, gridCm:10 },
-        start:{ id:'start', type:'start', x:100, y:120, rotation:0, zMm:0, pitchDeg:0, bankAngleDeg:0, zOrder:0, colorKey:'default' },
+        field:{ ...base.field, originX:0, originY:0, widthCm:720, heightCm:520, gridCm:10 },
+        start:startPart,
         parts,
         connections,
         activeConnection:null,
@@ -234,6 +263,8 @@ async function main() {
     assert.deepEqual(propagated.parts['down-2'].endpointAngles, [40,60]);
     assert.deepEqual(propagated.parts['down-3'].endpointAngles, [20,40]);
     assert.deepEqual(propagated.parts['down-4'].endpointAngles, [0,20]);
+    assert.equal(propagated.parts['flat-straight'].bankAngleDeg, 0);
+    assert.deepEqual(propagated.parts['flat-straight'].endpointAngles, [0,0]);
     assert.deepEqual(propagated.bankWarnings, []);
 
     assert.deepEqual(pageErrors, []);
