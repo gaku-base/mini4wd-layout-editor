@@ -175,14 +175,17 @@ jobs:
           node browser-slope-underpass-smoke.js
           node browser-bank20-projection-smoke.js
           node browser-cumulative-bank-visual-smoke.js
+          if [ -f browser-flat-bank-preview.js ]; then
+            node browser-flat-bank-preview.js
+          fi
           node browser-connector-target-lock-smoke.js
           node browser-start-boundary-snap-smoke.js
 
-      - name: Upload browser rehearsal failure screenshot
-        if: failure() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '' || hashFiles('.github/ui-smoke.trigger') != '')
+      - name: Upload browser rehearsal screenshots
+        if: always() && ((github.event_name == 'workflow_dispatch' && inputs.full_rehearsal) || hashFiles('.github/full-rehearsal.trigger') != '' || hashFiles('.github/ui-smoke.trigger') != '')
         uses: actions/upload-artifact@v4
         with:
-          name: browser-smoke-failure
+          name: browser-smoke-preview
           path: artifacts/browser-smoke/
           if-no-files-found: ignore
           retention-days: 7
