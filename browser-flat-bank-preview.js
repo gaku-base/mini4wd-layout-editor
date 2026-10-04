@@ -129,6 +129,9 @@ async function main() {
       };
     });
 
+    await page.evaluate(() => {
+      document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());
+    });
     await page.waitForTimeout(700);
     await page.screenshot({
       path: `${ARTIFACT_DIR}/rc7-2-flat-bank-app.png`,
