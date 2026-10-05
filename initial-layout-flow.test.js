@@ -7,7 +7,7 @@ const FLOW = require('./initial-layout-flow.js');
 
 test('the initial-layout flow model loads before the application runtime', () => {
   const html = fs.readFileSync('./index.html', 'utf8');
-  assert.ok(html.indexOf('src="initial-layout-flow.js"') < html.indexOf('src="app.js?v=v1.1-rc7-6-infoheader1"'));
+  assert.ok(html.indexOf('src="initial-layout-flow.js"') < html.indexOf('src="app.js?v=v1.1-rc7-7-camera1"'));
 });
 
 test('square or rectangle proceeds through unified venue setup and then Start', () => {
