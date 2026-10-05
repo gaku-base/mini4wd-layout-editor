@@ -87,6 +87,9 @@ async function main() {
       { id:'presentation3dSection', title:'3D確認' },
       { id:'presentationExportSection', title:'出力操作' }
     ]);
+    assert.equal(await page.locator('#presentationSummary').count(), 1);
+    assert.equal(await page.locator('#presentationSummaryEvent').textContent(), '未入力');
+    assert.equal(await page.locator('#presentationSummaryParts').textContent(), '2 個');
     assert.equal(await page.locator('#presentation2dSection').evaluate(el => el.classList.contains('is-current')), true);
     assert.equal(await page.locator('#presentation3dCameraGroup').evaluate(el => el.hidden), true);
     assert.equal(await page.locator('#presentationExportSection #presentationPngBtn').count(), 1);
