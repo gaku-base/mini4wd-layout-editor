@@ -119,7 +119,9 @@ async function main() {
     assert.deepEqual(consoleErrors, []);
 
     console.log('✓ LAYOUT and OUTPUT tabs are visible with the approved English labels');
-    console.log('✓ OUTPUT is grouped in 2D確認 / 3D確認 / 出力操作 order');\n    console.log('✓ 2D/3D switching exposes 3D camera controls only when needed');\n    console.log('✓ PNG and A4 controls stay inside the export section');
+    console.log('✓ OUTPUT is grouped in 2D確認 / 3D確認 / 出力操作 order');
+    console.log('✓ 2D/3D switching exposes 3D camera controls only when needed');
+    console.log('✓ PNG and A4 controls stay inside the export section');
     console.log('✓ returning to LAYOUT preserves the course and connection state');
     console.log('Browser workspace tab rehearsal passed.');
   } finally {
