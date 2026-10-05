@@ -364,9 +364,58 @@ body.presentation-mode-open > #app { display: none !important; }
 }
 .presentation-status.is-error { color: #ff6b78; font-weight: 800; }
 
-.presentation-stage {
+.presentation-main {
   grid-column: 2;
   grid-row: 2;
+  display: grid;
+  grid-template-rows: auto minmax(0,1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.presentation-summary-bar {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap: 1px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  background: #0b121a;
+  border-bottom: 1px solid var(--pr-line);
+}
+.presentation-summary-item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 12px;
+  border-left: 1px solid #273443;
+}
+.presentation-summary-item:first-child { border-left: 0; }
+.presentation-summary-label {
+  color: #7f8c9c;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+}
+.presentation-summary-value {
+  min-width: 0;
+  overflow: hidden;
+  color: #f4f7fb;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.presentation-summary-item:first-child .presentation-summary-value {
+  color: var(--pr-orange-bright);
+}
+
+.presentation-stage {
+  grid-column: auto;
+  grid-row: auto;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -409,6 +458,8 @@ body.presentation-mode-open > #app { display: none !important; }
     grid-template-columns: minmax(230px, 280px) minmax(0,1fr);
   }
   .presentation-toolbar { padding: 10px; }
+  .presentation-summary-value { font-size: 12px; }
+  .presentation-summary-item { padding-inline: 8px; }
   .presentation-stage { padding: 10px; }
 }
 
@@ -462,9 +513,25 @@ body.presentation-mode-open > #app { display: none !important; }
   .presentation-primary,
   .simple-course-only-export { width: 100%; min-width: 0; }
   .presentation-status { grid-column: 1 / -1; }
-  .presentation-stage {
+  .presentation-main {
     grid-column: 1;
     grid-row: 3;
+  }
+  .presentation-summary-bar {
+    grid-template-columns: repeat(2, minmax(0,1fr));
+    padding: 5px;
+  }
+  .presentation-summary-item {
+    padding: 5px 7px;
+    border-left: 0;
+    border-top: 1px solid #273443;
+  }
+  .presentation-summary-item:nth-child(-n+2) { border-top: 0; }
+  .presentation-summary-label { font-size: 8px; }
+  .presentation-summary-value { font-size: 11px; }
+  .presentation-stage {
+    grid-column: auto;
+    grid-row: auto;
     padding: 7px;
     overflow: hidden;
   }

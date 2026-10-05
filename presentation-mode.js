@@ -161,6 +161,20 @@
     return { label, input };
   }
 
+  function createSummaryItem(id, labelText) {
+    const item = root.document.createElement('div');
+    item.className = 'presentation-summary-item';
+    const label = root.document.createElement('span');
+    label.className = 'presentation-summary-label';
+    label.textContent = labelText;
+    const value = root.document.createElement('strong');
+    value.id = id;
+    value.className = 'presentation-summary-value';
+    value.textContent = '—';
+    item.append(label, value);
+    return item;
+  }
+
   function createSectionCard(id, titleText, descriptionText) {
     const section = root.document.createElement('section');
     section.id = id;
@@ -354,12 +368,27 @@
 
     toolbar.append(back, twoDSection.section, threeDSection.section, exportSection.section);
 
+    const main = root.document.createElement('div');
+    main.className = 'presentation-main';
+
+    const summary = root.document.createElement('div');
+    summary.id = 'presentationSummary';
+    summary.className = 'presentation-summary-bar';
+    summary.setAttribute('aria-label', '出力情報');
+    summary.append(
+      createSummaryItem('presentationSummaryEvent', '大会名'),
+      createSummaryItem('presentationSummaryLayouter', 'レイアウター'),
+      createSummaryItem('presentationSummaryLength', '総延長'),
+      createSummaryItem('presentationSummaryParts', 'パーツ数')
+    );
+
     const stage = root.document.createElement('div');
     stage.className = 'presentation-stage';
     const canvas = root.document.createElement('canvas');
     canvas.id = 'presentationCanvas';
     canvas.className = 'presentation-canvas';
     stage.appendChild(canvas);
+    main.append(summary, stage);
     canvas.addEventListener('pointerdown', on3dPointerDown);
     canvas.addEventListener('pointermove', on3dPointerMove);
     canvas.addEventListener('pointerup', on3dPointerUp);
@@ -375,7 +404,7 @@
     printImage.alt = '';
     printSheet.appendChild(printImage);
 
-    view.append(windowHeader, toolbar, stage, printSheet);
+    view.append(windowHeader, toolbar, main, printSheet);
     root.document.body.appendChild(view);
     view.classList.add('has-workspace-tabs');
     syncMetadataInputs();
@@ -392,6 +421,25 @@
     if (name1 && name1.value !== metadata.eventNameLine1) name1.value = metadata.eventNameLine1;
     if (name2 && name2.value !== metadata.eventNameLine2) name2.value = metadata.eventNameLine2;
     if (layouter && layouter.value !== metadata.layouterName) layouter.value = metadata.layouterName;
+  }
+
+  function syncSummary(model) {
+    if (!model) return;
+    const eventValue = root.document.getElementById('presentationSummaryEvent');
+    const layouterValue = root.document.getElementById('presentationSummaryLayouter');
+    const lengthValue = root.document.getElementById('presentationSummaryLength');
+    const partsValue = root.document.getElementById('presentationSummaryParts');
+    const eventName = [
+      model.metadata?.eventNameLine1,
+      model.metadata?.eventNameLine2
+    ].filter(Boolean).join(' / ');
+    const totalM = Number(model.length?.totalM);
+    if (eventValue) eventValue.textContent = eventName || '未入力';
+    if (layouterValue) layouterValue.textContent = model.metadata?.layouterName || '—';
+    if (lengthValue) lengthValue.textContent = model.length?.available && Number.isFinite(totalM)
+      ? `${totalM.toFixed(2)} m`
+      : '—';
+    if (partsValue) partsValue.textContent = `${Number(model.totalParts) || 0} 個`;
   }
 
   function onMetadataInput() {
@@ -549,6 +597,7 @@
     if (view.hidden) return null;
     const model = buildModel();
     const canvas = root.document.getElementById('presentationCanvas');
+    if (model) syncSummary(model);
     if (!model || !canvas) {
       setStatus('レイアウトを読み込めません', true);
       return null;
