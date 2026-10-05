@@ -70,8 +70,9 @@ test('OUTPUT controls are grouped in the approved 2D / 3D / export order', () =>
 });
 
 test('3D camera controls stay inside the 3D confirmation block', () => {
-  assert.match(source, /threeDSection\.body\.append\(threeDGroup, cameraGroup\)/);
+  assert.match(source, /threeDSection\.body\.append\(threeDGroup, cameraGroup, cameraAdjust\)/);
   assert.match(source, /cameraGroup\.hidden = !is3d/);
+  assert.match(source, /cameraAdjust\.hidden = !is3d/);
   assert.match(source, /threeDSection\.classList\.toggle\('is-current', is3d\)/);
 });
 
