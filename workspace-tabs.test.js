@@ -57,3 +57,20 @@ test('OUTPUT retains PNG and A4 controls', () => {
   assert.match(source, /print\.textContent = 'A4印刷'/);
   assert.match(presentationCss, /\.presentation-workspace-tabs/);
 });
+
+test('OUTPUT controls are grouped in the approved 2D / 3D / export order', () => {
+  assert.match(source, /createSectionCard\(\s*'presentation2dSection',\s*'2D確認'/);
+  assert.match(source, /createSectionCard\(\s*'presentation3dSection',\s*'3D確認'/);
+  assert.match(source, /createSectionCard\(\s*'presentationExportSection',\s*'出力操作'/);
+  const twoD = source.indexOf("'presentation2dSection'");
+  const threeD = source.indexOf("'presentation3dSection'");
+  const exportSection = source.indexOf("'presentationExportSection'");
+  assert.ok(twoD >= 0 && threeD > twoD && exportSection > threeD);
+  assert.match(source, /toolbar\.append\(back, twoDSection\.section, threeDSection\.section, exportSection\.section\)/);
+});
+
+test('3D camera controls stay inside the 3D confirmation block', () => {
+  assert.match(source, /threeDSection\.body\.append\(threeDGroup, cameraGroup\)/);
+  assert.match(source, /cameraGroup\.hidden = !is3d/);
+  assert.match(source, /threeDSection\.classList\.toggle\('is-current', is3d\)/);
+});

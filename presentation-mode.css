@@ -126,7 +126,7 @@ body.presentation-mode-open > #app { display: none !important; }
 }
 
 .presentation-toolbar::before {
-  content: "出力設定";
+  content: "OUTPUTメニュー";
   display: block;
   color: #fff;
   font-size: 16px;
@@ -135,6 +135,60 @@ body.presentation-mode-open > #app { display: none !important; }
   border-left: 4px solid var(--pr-orange);
   padding-left: 9px;
   margin-bottom: 1px;
+}
+
+.presentation-section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px;
+  box-sizing: border-box;
+  border: 1px solid #2d3a49;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(18,27,38,.96), rgba(12,19,27,.96));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+}
+.presentation-section-card.is-current {
+  border-color: #9b6426;
+  box-shadow: inset 3px 0 0 var(--pr-orange), 0 0 0 1px rgba(255,138,0,.08);
+}
+.presentation-section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.presentation-section-title {
+  color: #f2f6fb;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .04em;
+}
+.presentation-section-card.is-current .presentation-section-title { color: var(--pr-orange-bright); }
+.presentation-section-description {
+  color: #8391a2;
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 700;
+}
+.presentation-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.presentation-section-body .presentation-field,
+.presentation-section-body .presentation-control-group {
+  background: rgba(8,14,21,.72);
+}
+.presentation-single-choice-group {
+  grid-template-columns: minmax(0,1fr);
+}
+.presentation-export-actions {
+  display: grid;
+  grid-template-columns: minmax(0,1fr);
+  gap: 7px;
 }
 
 .presentation-toolbar button,
@@ -396,6 +450,8 @@ body.presentation-mode-open > #app { display: none !important; }
   }
   .presentation-toolbar::before { grid-column: 1 / -1; margin-bottom: 0; }
   .presentation-toolbar > * { min-width: 0; }
+  .presentation-section-card { grid-column: 1 / -1; padding: 8px; }
+  .presentation-section-body { gap: 7px; }
   .presentation-back { grid-column: 1 / -1; }
   .presentation-field { padding: 7px; }
   .presentation-control-group {

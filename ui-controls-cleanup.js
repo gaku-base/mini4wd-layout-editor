@@ -7,8 +7,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const APP_VERSION = 'v1.1 RC7.4';
-  const APP_VERSION_SLUG = 'v1.1-rc7-4';
+  const APP_VERSION = 'v1.1 RC7.5';
+  const APP_VERSION_SLUG = 'v1.1-rc7-5';
 
   const TOP_ACTION_LABELS = Object.freeze({
     newBtn: '＋ 新規作成',
@@ -299,8 +299,10 @@
       button.className = 'presentation-choice simple-course-only-export';
       button.title = '大会名などを付けず、コース図だけをPNG保存';
       button.addEventListener('click', () => legacy.click());
-      const status = documentRef.getElementById('presentationStatus');
-      toolbar.insertBefore(button, status || null);
+      const actions = documentRef.querySelector?.('.presentation-export-actions')
+        || documentRef.getElementById('presentationExportSection')?.querySelector?.('.presentation-section-body')
+        || toolbar;
+      actions.appendChild(button);
     }
     setText(button, PRESENTATION_ACTION_LABELS.courseOnly);
     return true;
