@@ -24,9 +24,9 @@ test('obsolete pre-release artifacts stay out of the runtime repository root', (
   }
 });
 
-test('repository landing documentation describes the current RC7.10 architecture', () => {
+test('repository landing documentation describes the current RC7.11 architecture', () => {
   const readme = fs.readFileSync('README.txt', 'utf8');
-  assert.match(readme, /^Mini 4WD Course Layout — v1\.1 RC7\.10/m);
+  assert.match(readme, /^Mini 4WD Course Layout — v1\.1 RC7\.11/m);
   assert.match(readme, /editor-extensions-bootstrap\.js/);
   assert.match(readme, /private runtime bridge/);
   assert.doesNotMatch(readme, /v1\.0\.0-RC1/);
@@ -34,16 +34,16 @@ test('repository landing documentation describes the current RC7.10 architecture
 
 test('static HTML shell no longer advertises RC4 or its cache key', () => {
   const index = fs.readFileSync('index.html', 'utf8');
-  assert.match(index, /<span class="version">v1\.1 RC7\.10<\/span>/);
-  assert.match(index, /styles\.css\?v=v1\.1-rc7-10-centerview1/);
-  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc7-10-centerview1/);
+  assert.match(index, /<span class="version">v1\.1 RC7\.11<\/span>/);
+  assert.match(index, /styles\.css\?v=v1\.1-rc7-11-phonecompact1/);
+  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc7-11-phonecompact1/);
   assert.doesNotMatch(index, /v1\.1 RC4/);
   assert.doesNotMatch(index, /v1\.1-rc4-20260820-toolbar-trash1/);
 });
 
-test('maintained human QA checklist starts from RC7.10 and covers presentation output', () => {
+test('maintained human QA checklist starts from RC7.11 and covers presentation output', () => {
   const checklist = fs.readFileSync('HUMAN_QA_CHECKLIST.csv', 'utf8');
-  assert.match(checklist, /QA-001,起動,[^\n]*v1\.1 RC7\.10/);
+  assert.match(checklist, /QA-001,起動,[^\n]*v1\.1 RC7\.11/);
   assert.match(checklist, /QA-030,発表,背景Grid/);
   assert.match(checklist, /QA-033,発表,PNG保存/);
   assert.match(checklist, /QA-035,印刷,A4横/);
