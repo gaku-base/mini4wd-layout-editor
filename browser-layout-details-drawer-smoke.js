@@ -28,7 +28,13 @@ async function main() {
       await page.waitForTimeout(120);
       if (await page.locator('#simpleEditorDrawer.simple-drawer-open').count()) await page.locator('.simple-drawer-close').click();
       await page.locator('#detailsToggleBtn').click();
-      await page.waitForTimeout(100);
+      await page.waitForFunction(() => {
+        const drawer = document.querySelector('.right-sidebar');
+        if (!drawer?.classList.contains('simple-drawer-open')) return false;
+        const transform = getComputedStyle(drawer).transform;
+        if (!transform || transform === 'none') return true;
+        return Math.abs(new DOMMatrix(transform).m41) < 1;
+      }, {timeout:TIMEOUT});
       const result=await page.evaluate(() => {
         const drawer=document.querySelector('.right-sidebar').getBoundingClientRect();
         const toolbar=document.querySelector('#canvasToolbar').getBoundingClientRect();
