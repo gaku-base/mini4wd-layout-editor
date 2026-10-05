@@ -47,6 +47,7 @@ async function main(){
   try{
     await page.goto(BASE_URL,{waitUntil:'networkidle',timeout:20000});
     await page.evaluate(()=>{const d=document.querySelector('#setupDialog'); if(d?.open)d.close();});
+    await page.locator('#simpleToolbarMoreBtn').click();
     await page.locator('#fitViewBtn').click();
     await page.waitForTimeout(120);
     const before=await fieldCenterDelta(page);
@@ -68,6 +69,8 @@ async function main(){
     console.log('✓ LAYOUT field remains centred when resizing 1920→1180');
 
     await page.setViewportSize({width:1600,height:900});
+    await page.waitForTimeout(120);
+    await page.locator('#simpleToolbarMoreBtn').click();
     await page.locator('#fitViewBtn').click();
     await page.waitForTimeout(160);
     const explicitFit=await fieldCenterDelta(page);
