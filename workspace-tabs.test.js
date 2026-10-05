@@ -87,3 +87,17 @@ test('OUTPUT exposes a live four-item information header above the preview', () 
   assert.match(presentationCss, /\.presentation-summary-bar/);
   assert.match(presentationCss, /grid-template-columns:\s*repeat\(4/);
 });
+
+test('OUTPUT finish checklist is live and does not become a fourth primary operation block', () => {
+  assert.match(source, /id = 'presentationReviewCard'/);
+  assert.match(source, /createReviewItem\('presentationReview2d', '2D表示'\)/);
+  assert.match(source, /createReviewItem\('presentationReview3d', '3D表示'\)/);
+  assert.match(source, /createReviewItem\('presentationReviewColor', '色整合'\)/);
+  assert.match(source, /createReviewItem\('presentationReviewText', '文字情報'\)/);
+  assert.match(source, /createReviewItem\('presentationReviewOutput', '出力結果'\)/);
+  assert.match(source, /function syncReview\(model, diagnostics = lastDiagnostics\)/);
+  assert.match(source, /function markOutputDirty\(\)/);
+  assert.match(source, /reviewState\.exported = true/);
+  assert.match(presentationCss, /\.presentation-review-card/);
+  assert.doesNotMatch(source, /reviewCard\.className = 'presentation-section-card'/);
+});
