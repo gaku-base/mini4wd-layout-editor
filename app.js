@@ -60,14 +60,8 @@
   // 表示は登録SVGを正本とし、geometryは接続・寸法・干渉判定専用に分離する。
   // SVGが未読込／読込失敗の瞬間だけ、従来Canvas描画を安全なフォールバックとして使う。
 
-  const COLORS = [
-    { key: 'default', name: '標準（グレー）', base: '#efede9', lane: '#8d8c89', edge: '#858480' },
-    { key: 'red', name: 'レッド', base: '#df252d', lane: '#98141b', edge: '#7d1016' },
-    { key: 'blue', name: 'ブルー', base: '#087fc2', lane: '#07557f', edge: '#06405f' },
-    { key: 'orange', name: 'オレンジ', base: '#f4b42b', lane: '#b67800', edge: '#865800' },
-    { key: 'green', name: 'グリーン', base: '#35bd8b', lane: '#1b8964', edge: '#156c4f' },
-    { key: 'white', name: '白', base: '#ffffff', lane: '#b5b5b2', edge: '#999995' }
-  ];
+  const COLORS = CATALOG.COURSE_COLORS;
+  if (!Array.isArray(COLORS) || !COLORS.length) throw new Error('コースカラー定義がありません');
 
   const MODE_LABELS = {
     start: 'スタート', place: 'パーツ配置', move: 'パーツ移動', delete: 'パーツ削除', color: 'カラー変更', boundary: '設置範囲設定', cutout: '設置不可エリア', 'unavailable-draw': '設置不可エリア作成', layoutMove: '全体移動'
@@ -1569,6 +1563,7 @@
     const loadedRotation = normalizeRotation(Number(data.start?.rotation) || 0);
     if (data.start) {
       const loadedStart = { id: 'start', type: 'start', x: Number(data.start.x) || 0, y: Number(data.start.y) || 0, rotation: loadedRotation,
+        colorKey: COLORS.some(c => c.key === data.start.colorKey) ? data.start.colorKey : 'default',
         zMm: Number(data.start.zMm) || 0, pitchDeg: Number(data.start.pitchDeg) || 0,
         bankAngleDeg: Number(data.start.bankAngleDeg) || 0, zOrder: Number.isFinite(Number(data.start.zOrder ?? data.start.zIndex)) ? Number(data.start.zOrder ?? data.start.zIndex) : 0 };
       const isLegacyStartPoint = !data.version || /^0\.[012](?:\.|$)/.test(String(data.version));
@@ -3489,7 +3484,7 @@
   }
 
   function placeStartLane(placementMeta = {}) {
-    const candidate = { id: 'start', type: 'start', x: state.cursor.x, y: state.cursor.y, zMm: selectedFreeHeightMm(), rotation: state.rotation, pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
+    const candidate = { id: 'start', type: 'start', x: state.cursor.x, y: state.cursor.y, zMm: selectedFreeHeightMm(), rotation: state.rotation, colorKey: 'default', pitchDeg: 0, bankAngleDeg: 0, zOrder: 0 };
     const validity = startPlacementValidity(candidate);
     if (!validity.valid) {
       logDiagnosticWarning('start-placement-blocked', {
