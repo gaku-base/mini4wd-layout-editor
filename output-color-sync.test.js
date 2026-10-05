@@ -18,7 +18,7 @@ const CATALOG = loadCatalog();
 
 test('LAYOUT and OUTPUT use one shared course color authority', () => {
   assert.deepEqual(
-    CATALOG.COURSE_COLORS.map(color => color.key),
+    Array.from(CATALOG.COURSE_COLORS, color => color.key),
     ['default','red','blue','orange','green','white']
   );
   const app = fs.readFileSync('app.js', 'utf8');
