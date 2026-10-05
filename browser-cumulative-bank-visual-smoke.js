@@ -221,12 +221,12 @@ async function main() {
       add('up-3', 'bank20', 'a');
       add('up-4', 'bank20', 'a');
       add('banked-corner', 'corner-45-right', 'a');
-      add('banked-straight', 'straight', 'a', 'blue');
+      add('banked-straight', 'straight', 'a');
       add('down-1', 'bank20', 'b');
       add('down-2', 'bank20', 'b');
       add('down-3', 'bank20', 'b');
       add('down-4', 'bank20', 'b');
-      add('flat-straight', 'straight', 'a', 'red');
+      add('flat-straight', 'straight', 'a');
 
       debug.loadState({
         ...base,
@@ -267,6 +267,51 @@ async function main() {
     assert.deepEqual(propagated.parts['flat-straight'].endpointAngles, [0,0]);
     assert.deepEqual(propagated.bankWarnings, []);
 
+    const connectedMarkerPixels = await page.evaluate(async () => {
+      const debug = window.__mini4wdCourseDebug;
+      const fullState = debug.getState();
+
+      async function colorCounts(dataUrl) {
+        const image = new Image();
+        await new Promise((resolve, reject) => {
+          image.onload = resolve;
+          image.onerror = reject;
+          image.src = dataUrl;
+        });
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const ctx = canvas.getContext('2d', { willReadFrequently:true });
+        ctx.drawImage(image, 0, 0);
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let blue = 0;
+        let red = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+          if (a < 100) continue;
+          if (b > 200 && r < 90 && g < 175) blue += 1;
+          if (r > 200 && g < 110 && b < 110) red += 1;
+        }
+        return { blue, red };
+      }
+
+      const full = await colorCounts(debug.renderExportDataUrl(2));
+      debug.loadState({ ...fullState, parts:[], connections:[] });
+      const baseline = await colorCounts(debug.renderExportDataUrl(2));
+      debug.loadState(fullState);
+      return {
+        blueAdded: full.blue - baseline.blue,
+        redAdded: full.red - baseline.red,
+        full,
+        baseline
+      };
+    });
+
+    assert.ok(connectedMarkerPixels.blueAdded > 100,
+      `connected bank entrance BLUE line must remain visible above seams; added=${connectedMarkerPixels.blueAdded}`);
+    assert.ok(connectedMarkerPixels.redAdded > 100,
+      `connected bank exit RED line must remain visible above seams; added=${connectedMarkerPixels.redAdded}`);
+
     assert.deepEqual(pageErrors, []);
     assert.deepEqual(consoleErrors, []);
 
@@ -274,6 +319,7 @@ async function main() {
     console.log('✓ straight and 45° corner plan shapes remain identical at 0/20/40/60/80°');
     console.log('✓ Bank20 remains a rectangular 22cm × 36cm plan footprint');
     console.log('✓ bank entrance is BLUE only; bank exit is RED only');
+    console.log(`✓ connected markers remain visible above seams: blue+${connectedMarkerPixels.blueAdded}, red+${connectedMarkerPixels.redAdded}`);
     console.log('✓ Slope remains LOW=blue and HIGH=red');
     console.log('✓ cumulative bank plan-view browser rehearsal passed');
   } catch (error) {
