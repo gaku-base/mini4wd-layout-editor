@@ -153,7 +153,7 @@ test('resizing the layout checks the validity flag returned for every existing u
   assert.match(advance, /INITIAL_LAYOUT_FLOW\.countInvalidUnavailableAreas\(state\.obstacles, obstaclePlacementValidity\)/);
 });
 
-test('Start placement clears venue-area transient state and the RC7.2 label remains', () => {
+test('Start placement clears venue-area transient state and the RC7.3 label remains', () => {
   const start = section('function beginStartPlacement', 'function applySetup');
   assert.match(start, /state\.subEditMode = null/);
   assert.match(start, /state\.obstaclePlacement = null/);
@@ -162,7 +162,7 @@ test('Start placement clears venue-area transient state and the RC7.2 label rema
   assert.match(start, /state\.pointer\.pendingObstaclePlacement = false/);
   assert.match(start, /state\.mode = 'start'/);
   assert.match(start, /toast\('スタートレーンを配置してください'\)/);
-  assert.match(html, /v1\.1 RC7\.2/);
+  assert.match(html, /v1\.1 RC7\.3/);
 });
 
 test('the unavailable-area screen exposes both creation methods, list, back, and direct layout start', () => {

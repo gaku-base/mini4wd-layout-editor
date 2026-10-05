@@ -1824,17 +1824,32 @@
 
   function drawPartsInLayerOrder(c, options = {}) {
     const earlier = [];
-    for (const part of partsByLayer()) {
+    const orderedParts = partsByLayer();
+    for (const part of orderedParts) {
       drawPart(c, part, {
         exportMode: !!options.exportMode,
         selected: options.selected ? isSelected(part.id) : false,
         hovered: options.selected && state.hoveredPartId === part.id,
-        connectedConnectorIds: connectedConnectorIdsForPart(part.id)
+        connectedConnectorIds: connectedConnectorIdsForPart(part.id),
+        deferElevationMarkers: true
       });
       drawCornerJointsForPart(c, part, earlier);
       drawOwnedConnectionSeams(c, part, options);
       earlier.push(part);
     }
+
+    // Bank/Slope semantic markers are a layout aid, so draw them last. This
+    // keeps BLUE bank-entry / RED bank-exit lines visible even after another
+    // part and its seam are connected on top of the same endpoint.
+    for (const part of orderedParts) {
+      const def = resolvePartDef(part);
+      if (!def) continue;
+      drawElevationEndMarkers(c, part, def, {
+        exportMode: !!options.exportMode,
+        suppressElevationMarkers: false
+      });
+    }
+
     if (!options.exportMode) drawOutOfBoundsWarnings(c);
     if (!options.exportMode) drawLayoutWarnings(c);
   }
@@ -2818,7 +2833,7 @@
     if (selected) drawPartSelectionEffect(c, part.type, '#46bfff', 'rgba(70,191,255,.10)', true, def);
     if (opts.hovered) drawPartHoverEffect(c, part.type, def);
     c.restore();
-    drawElevationEndMarkers(c, part, def, opts);
+    if (!opts.deferElevationMarkers) drawElevationEndMarkers(c, part, def, opts);
     drawPartConnectionFaces(c, part, opts);
   }
 
