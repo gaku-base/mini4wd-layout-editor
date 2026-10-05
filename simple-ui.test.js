@@ -156,3 +156,16 @@ test('selection identity is stored outside selectionInfo and observed directly',
   assert.match(SOURCE, /selectionIdentityMarker\?\.dataset\?\.selectedIds/);
   assert.match(SOURCE, /contextObserver\.observe\(selectionIdentityMarker, \{ attributes: true, attributeFilter: \['data-selected-ids'\] \}\)/);
 });
+
+test('Details drawer is viewport-fixed and positioned below the live LAYOUT toolbar', () => {
+  const block = SOURCE.match(/body\.simple-ui-enabled \.right-sidebar \{([\s\S]*?)\n\s*\}/)?.[1] || '';
+  assert.match(block, /position:\s*fixed !important;/);
+  assert.match(block, /right:\s*0;/);
+  assert.match(block, /bottom:\s*0;/);
+  assert.match(SOURCE, /function positionDrawerBelowToolbar\(\)/);
+  assert.match(SOURCE, /const toolbarRect = canvasToolbar\.getBoundingClientRect\(\)/);
+  assert.match(SOURCE, /drawer\.style\.top = `\$\{top\}px`/);
+  assert.match(SOURCE, /positionDrawerBelowToolbar\(\);[\s\S]*drawer\.classList\.toggle\('simple-drawer-open'/);
+  assert.match(SOURCE, /new rootRef\.ResizeObserver\(\(\) => positionDrawerBelowToolbar\(\)\)/);
+  assert.match(SOURCE, /if \(drawer\.parentElement !== body\) body\.appendChild\(drawer\)/);
+});
