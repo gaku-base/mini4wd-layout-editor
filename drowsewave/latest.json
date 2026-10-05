@@ -1,15 +1,15 @@
 {
   "channel": "stable",
-  "version": "0.1.86",
+  "version": "0.1.87",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part04.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part05.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part05.b64"
   ],
-  "sha256": "505a95ba350593241c31c389d22ab1edbd83dede0c7e1b9b6a2dd59d8828b807",
-  "publishedAt": "2026-10-05T11:15:00+09:00",
-  "notes": "v0.1.86 promotes UI reconstruction stages 3 and 4 to stable. Thumbnail creation/review is rebuilt for 1920x1080 no-scroll use with quality-gated approval. Video workflow is rebuilt into Materials, 5-minute Preview, and 2h05 Production stages. Browser ChatGPT handoff is integrated for background image and narration/subtitle generation, including persistent required-text conditions, prompt copy/open actions, clipboard/file/drag-and-drop import, validation, and automatic correction-request prompts. Existing Lyria ambience, local TTS, SRT, FFmpeg rendering, checkpoints, revisions, approval, recovery, and updater flows remain intact. Rehearsal 159/159 PASS; rendered-app interaction 31/31 PASS; 10-minute real FFmpeg render 1/1 PASS."
+  "sha256": "14e5a481ffb545416fb8b7a458f72aaf47b53ead16cfc2d020ccbfbca7063d23",
+  "publishedAt": "2026-10-05T11:35:00+09:00",
+  "notes": "v0.1.87 promotes the Publish / Upload workspace UI reconstruction to stable. The 1920x1080 no-scroll screen shows final assets and quality gates, YouTube metadata and visibility, connection state, upload action, video ID and custom thumbnail result in one place. Existing music, thumbnail, video, Browser ChatGPT handoff, updater, recovery and analytics logic remain intact. Rehearsal 162/162 PASS; rendered-app interaction 33/33 PASS; 10-minute real FFmpeg render 1/1 PASS."
 }
