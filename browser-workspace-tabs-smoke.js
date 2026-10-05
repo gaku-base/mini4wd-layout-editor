@@ -76,6 +76,32 @@ async function main() {
     await page.locator('#presentationPngBtn').waitFor({ state:'visible', timeout:TIMEOUT });
     await page.locator('#presentationPrintBtn').waitFor({ state:'visible', timeout:TIMEOUT });
 
+    const outputSections = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('.presentation-section-card')).map(section => ({
+        id: section.id,
+        title: section.querySelector('.presentation-section-title')?.textContent || ''
+      }))
+    );
+    assert.deepEqual(outputSections, [
+      { id:'presentation2dSection', title:'2D確認' },
+      { id:'presentation3dSection', title:'3D確認' },
+      { id:'presentationExportSection', title:'出力操作' }
+    ]);
+    assert.equal(await page.locator('#presentation2dSection').evaluate(el => el.classList.contains('is-current')), true);
+    assert.equal(await page.locator('#presentation3dCameraGroup').evaluate(el => el.hidden), true);
+    assert.equal(await page.locator('#presentationExportSection #presentationPngBtn').count(), 1);
+    assert.equal(await page.locator('#presentationExportSection #presentationPrintBtn').count(), 1);
+
+    await page.locator('#presentationView3d').click();
+    await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView() === '3d');
+    assert.equal(await page.locator('#presentation3dSection').evaluate(el => el.classList.contains('is-current')), true);
+    assert.equal(await page.locator('#presentation3dCameraGroup').evaluate(el => el.hidden), false);
+
+    await page.locator('#presentationView2d').click();
+    await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView() === '2d');
+    assert.equal(await page.locator('#presentation2dSection').evaluate(el => el.classList.contains('is-current')), true);
+    assert.equal(await page.locator('#presentation3dCameraGroup').evaluate(el => el.hidden), true);
+
     await page.locator('#presentationLayoutTabBtn').click();
     await page.waitForFunction(() => !document.body.classList.contains('presentation-mode-open'));
     await page.locator('#courseCanvas').waitFor({ state:'visible', timeout:TIMEOUT });
@@ -93,7 +119,7 @@ async function main() {
     assert.deepEqual(consoleErrors, []);
 
     console.log('✓ LAYOUT and OUTPUT tabs are visible with the approved English labels');
-    console.log('✓ OUTPUT opens the existing output window with PNG and A4 controls');
+    console.log('✓ OUTPUT is grouped in 2D確認 / 3D確認 / 出力操作 order');\n    console.log('✓ 2D/3D switching exposes 3D camera controls only when needed');\n    console.log('✓ PNG and A4 controls stay inside the export section');
     console.log('✓ returning to LAYOUT preserves the course and connection state');
     console.log('Browser workspace tab rehearsal passed.');
   } finally {
