@@ -161,6 +161,27 @@
     return { label, input };
   }
 
+  function createSectionCard(id, titleText, descriptionText) {
+    const section = root.document.createElement('section');
+    section.id = id;
+    section.className = 'presentation-section-card';
+
+    const heading = root.document.createElement('div');
+    heading.className = 'presentation-section-heading';
+    const title = root.document.createElement('strong');
+    title.className = 'presentation-section-title';
+    title.textContent = titleText;
+    const description = root.document.createElement('span');
+    description.className = 'presentation-section-description';
+    description.textContent = descriptionText;
+    heading.append(title, description);
+
+    const body = root.document.createElement('div');
+    body.className = 'presentation-section-body';
+    section.append(heading, body);
+    return { section, body };
+  }
+
   function ensureView() {
     let view = root.document.getElementById('presentationView');
     if (view) return view;
@@ -209,27 +230,46 @@
     const toolbar = root.document.createElement('div');
     toolbar.className = 'presentation-toolbar';
 
-    const viewGroup = root.document.createElement('div');
-    viewGroup.id = 'presentationViewModeGroup';
-    viewGroup.className = 'presentation-control-group presentation-view-mode-group';
-    const viewLabel = root.document.createElement('span');
-    viewLabel.className = 'presentation-control-label';
-    viewLabel.textContent = 'VIEW';
-    const view2d = optionButton('presentationView2d','2D','2d','output-view');
-    const view3d = optionButton('presentationView3d','3D','3d','output-view');
+    const twoDSection = createSectionCard(
+      'presentation2dSection',
+      '2D確認',
+      '上面図で全体・色・接続を確認'
+    );
+    const twoDGroup = root.document.createElement('div');
+    twoDGroup.id = 'presentationViewModeGroup';
+    twoDGroup.className = 'presentation-control-group presentation-view-mode-group presentation-single-choice-group';
+    const twoDLabel = root.document.createElement('span');
+    twoDLabel.className = 'presentation-control-label';
+    twoDLabel.textContent = '表示モード';
+    const view2d = optionButton('presentationView2d','2Dを表示','2d','output-view');
+    twoDGroup.append(twoDLabel, view2d);
+    twoDGroup.addEventListener('click', onChoice);
+    twoDSection.body.append(twoDGroup);
+
+    const threeDSection = createSectionCard(
+      'presentation3dSection',
+      '3D確認',
+      '立体で高さ・接続・形状を確認'
+    );
+    const threeDGroup = root.document.createElement('div');
+    threeDGroup.className = 'presentation-control-group presentation-view-mode-group presentation-single-choice-group';
+    const threeDLabel = root.document.createElement('span');
+    threeDLabel.className = 'presentation-control-label';
+    threeDLabel.textContent = '表示モード';
+    const view3d = optionButton('presentationView3d','3Dを表示','3d','output-view');
     if (!RENDERER_3D || !GEOMETRY_3D) {
       view3d.disabled = true;
       view3d.title = '3Dモジュールを読み込めません';
     }
-    viewGroup.append(viewLabel, view2d, view3d);
-    viewGroup.addEventListener('click', onChoice);
+    threeDGroup.append(threeDLabel, view3d);
+    threeDGroup.addEventListener('click', onChoice);
 
     const cameraGroup = root.document.createElement('div');
     cameraGroup.id = 'presentation3dCameraGroup';
     cameraGroup.className = 'presentation-control-group presentation-3d-camera-group';
     const cameraLabel = root.document.createElement('span');
     cameraLabel.className = 'presentation-control-label';
-    cameraLabel.textContent = '3D';
+    cameraLabel.textContent = '視点';
     const cameraTop = root.document.createElement('button');
     cameraTop.id = 'presentation3dTopBtn';
     cameraTop.type = 'button';
@@ -244,8 +284,9 @@
     cameraIso.addEventListener('click', () => set3dCamera(RENDERER_3D?.ISO_CAMERA));
     const cameraHelp = root.document.createElement('span');
     cameraHelp.className = 'presentation-3d-help';
-    cameraHelp.textContent = 'Drag: Rotate / Wheel: Zoom';
+    cameraHelp.textContent = 'ドラッグ: 回転 / ホイール: ズーム';
     cameraGroup.append(cameraLabel, cameraTop, cameraIso, cameraHelp);
+    threeDSection.body.append(threeDGroup, cameraGroup);
 
     const back = root.document.createElement('button');
     back.id = 'presentationBackBtn';
@@ -253,6 +294,12 @@
     back.className = 'presentation-back';
     back.textContent = '← 編集へ戻る';
     back.addEventListener('click', close);
+
+    const exportSection = createSectionCard(
+      'presentationExportSection',
+      '出力操作',
+      '大会情報・背景・A4・保存/印刷をまとめて設定'
+    );
 
     const name1 = createLabeledInput('大会名 1行目', 'presentationEventName1', '例：第19回');
     const name2 = createLabeledInput('大会名 2行目', 'presentationEventName2', '例：ミニ四駆大会');
@@ -300,7 +347,12 @@
     status.className = 'presentation-status';
     status.setAttribute('role','status');
 
-    toolbar.append(back, viewGroup, cameraGroup, name1.label, name2.label, layouter.label, bgGroup, orientationGroup, png, print, status);
+    const exportActions = root.document.createElement('div');
+    exportActions.className = 'presentation-export-actions';
+    exportActions.append(png, print);
+    exportSection.body.append(name1.label, name2.label, layouter.label, bgGroup, orientationGroup, exportActions, status);
+
+    toolbar.append(back, twoDSection.section, threeDSection.section, exportSection.section);
 
     const stage = root.document.createElement('div');
     stage.className = 'presentation-stage';
@@ -368,10 +420,15 @@
   }
 
   function syncOutputViewControls() {
+    const is3d = outputView === '3d';
     const cameraGroup = root.document.getElementById('presentation3dCameraGroup');
-    if (cameraGroup) cameraGroup.hidden = outputView !== '3d';
+    if (cameraGroup) cameraGroup.hidden = !is3d;
+    const twoDSection = root.document.getElementById('presentation2dSection');
+    const threeDSection = root.document.getElementById('presentation3dSection');
+    if (twoDSection) twoDSection.classList.toggle('is-current', !is3d);
+    if (threeDSection) threeDSection.classList.toggle('is-current', is3d);
     const canvas = root.document.getElementById('presentationCanvas');
-    if (canvas) canvas.classList.toggle('is-3d', outputView === '3d');
+    if (canvas) canvas.classList.toggle('is-3d', is3d);
   }
 
   function setOutputView(value) {
