@@ -85,7 +85,8 @@ async function main() {
     assert.deepEqual(outputSections, [
       { id:'presentation2dSection', title:'2D確認' },
       { id:'presentation3dSection', title:'3D確認' },
-      { id:'presentationExportSection', title:'出力操作' }
+      { id:'presentationExportSection', title:'出力操作' },
+      { id:'presentationCheckSection', title:'確認チェック' }
     ]);
     assert.equal(await page.locator('#presentationSummary').count(), 1);
     assert.equal(await page.locator('#presentationSummaryEvent').textContent(), '未入力');
@@ -96,6 +97,27 @@ async function main() {
     assert.equal(await page.locator('#presentationExportSection #presentationPrintBtn').count(), 1);
     await page.waitForFunction(() => document.querySelector('#presentationExportSection #presentationCourseOnlyPngBtn'));
     assert.equal(await page.locator('#presentationExportSection #presentationCourseOnlyPngBtn').count(), 1);
+
+    const checklistLabels = await page.locator('#presentationChecklist .presentation-check-item span').allTextContents();
+    assert.deepEqual(checklistLabels, [
+      '1. 2D表示を確認',
+      '2. 3D表示を確認',
+      '3. 色整合を確認',
+      '4. 文字情報を確認',
+      '5. 出力結果を確認'
+    ]);
+    for (const id of [
+      '#presentationCheck2d',
+      '#presentationCheck3d',
+      '#presentationCheckColor',
+      '#presentationCheckText',
+      '#presentationCheckOutput'
+    ]) {
+      await page.locator(id).check();
+    }
+    assert.equal(await page.locator('#presentationChecklist input:checked').count(), 5);
+    await page.locator('#presentationChecklistResetBtn').click();
+    assert.equal(await page.locator('#presentationChecklist input:checked').count(), 0);
 
     await page.locator('#presentationView3d').click();
     await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView() === '3d');
@@ -127,6 +149,7 @@ async function main() {
     console.log('✓ OUTPUT is grouped in 2D確認 / 3D確認 / 出力操作 order');
     console.log('✓ 2D/3D switching exposes 3D camera controls only when needed');
     console.log('✓ PNG and A4 controls stay inside the export section');
+    console.log('✓ five-step confirmation checklist checks and resets without layout mutation');
     console.log('✓ returning to LAYOUT preserves the course and connection state');
     console.log('Browser workspace tab rehearsal passed.');
   } finally {
