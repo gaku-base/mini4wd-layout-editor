@@ -145,6 +145,7 @@
 
   let ctx;
   let dpr = 1;
+  let skipCanvasCenterPreservationOnce = false;
   let renderScheduler;
   let wheelRotation;
   let toastTimer = 0;
@@ -1965,7 +1966,21 @@
 
   function syncCanvasSizeForFrame() {
     const frame = measureCanvasFrame();
-    if (!canvasFrameNeedsResize(frame)) return false;
+    if (!canvasFrameNeedsResize(frame)) {
+      skipCanvasCenterPreservationOnce = false;
+      return false;
+    }
+    const previousWidth = Number.parseFloat(els.courseCanvas.style.width) || (els.courseCanvas.width / Math.max(dpr, .001));
+    const previousHeight = Number.parseFloat(els.courseCanvas.style.height) || (els.courseCanvas.height / Math.max(dpr, .001));
+    const nextWidth = Number.parseFloat(frame.styleWidth);
+    const nextHeight = Number.parseFloat(frame.styleHeight);
+    if (!skipCanvasCenterPreservationOnce
+      && previousWidth > 1 && previousHeight > 1
+      && Number.isFinite(nextWidth) && Number.isFinite(nextHeight)) {
+      state.view.offsetX += (nextWidth - previousWidth) / 2;
+      state.view.offsetY += (nextHeight - previousHeight) / 2;
+    }
+    skipCanvasCenterPreservationOnce = false;
     dpr = frame.dpr;
     if (els.courseCanvas.width !== frame.width) els.courseCanvas.width = frame.width;
     if (els.courseCanvas.height !== frame.height) els.courseCanvas.height = frame.height;
@@ -1976,6 +1991,7 @@
 
   function fitView() {
     const rect = els.canvasWrap.getBoundingClientRect();
+    skipCanvasCenterPreservationOnce = true;
     const margin = 42;
     const sx = (rect.width - margin * 2) / state.field.widthCm;
     const sy = (rect.height - margin * 2) / state.field.heightCm;
