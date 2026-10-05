@@ -68,6 +68,7 @@ jobs:
           test -f browser-output-3d-smoke.js
           test -f browser-part-color-independence-smoke.js
           test -f browser-layout-details-drawer-smoke.js
+          test -f browser-layout-center-resize-smoke.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -170,6 +171,7 @@ jobs:
           fi
           node browser-ui-controls-smoke.js
           node browser-layout-details-drawer-smoke.js
+          node browser-layout-center-resize-smoke.js
           node browser-slope-visibility-smoke.js
           node browser-workspace-tabs-smoke.js
           node browser-output-3d-smoke.js
