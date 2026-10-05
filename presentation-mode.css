@@ -191,6 +191,46 @@ body.presentation-mode-open > #app { display: none !important; }
   gap: 7px;
 }
 
+.presentation-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.presentation-check-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0,1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid var(--pr-line-soft);
+  border-radius: 8px;
+  background: rgba(8,14,21,.72);
+  color: #dbe3ec;
+  cursor: pointer;
+}
+.presentation-check-item input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--pr-orange);
+  cursor: pointer;
+}
+.presentation-check-item span {
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+.presentation-check-item:has(input:checked) {
+  border-color: #9b6426;
+  background: rgba(255,138,0,.09);
+}
+.presentation-check-reset {
+  width: 100%;
+}
+
 .presentation-toolbar button,
 .presentation-toolbar input { font: inherit; }
 
