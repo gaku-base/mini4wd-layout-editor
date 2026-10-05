@@ -11,8 +11,8 @@ const css = fs.readFileSync('presentation-mode.css', 'utf8');
 test('OUTPUT exposes explicit 2D and 3D view buttons', () => {
   assert.match(mode, /presentationView2d/);
   assert.match(mode, /presentationView3d/);
-  assert.match(mode, /optionButton\\('presentationView2d','2Dを表示','2d','output-view'\\)/);
-  assert.match(mode, /optionButton\\('presentationView3d','3Dを表示','3d','output-view'\\)/);
+  assert.match(mode, /optionButton\('presentationView2d','2Dを表示','2d','output-view'\)/);
+  assert.match(mode, /optionButton\('presentationView3d','3Dを表示','3d','output-view'\)/);
 });
 
 test('3D geometry and renderer load before presentation mode', () => {
