@@ -45,6 +45,7 @@
   let previewScheduled = false;
   let runtimeGuardAtOpen = null;
   let pendingNewLayout = null;
+  let reviewState = { viewed2d:false, viewed3d:false, exported:false };
 
   function clone(value) {
     return value == null ? value : JSON.parse(JSON.stringify(value));
@@ -173,6 +174,75 @@
     value.textContent = '—';
     item.append(label, value);
     return item;
+  }
+
+  function createReviewItem(id, labelText) {
+    const row = root.document.createElement('div');
+    row.id = id;
+    row.className = 'presentation-review-item';
+    row.dataset.state = 'pending';
+    const mark = root.document.createElement('span');
+    mark.className = 'presentation-review-mark';
+    mark.setAttribute('aria-hidden','true');
+    mark.textContent = '○';
+    const label = root.document.createElement('span');
+    label.className = 'presentation-review-label';
+    label.textContent = labelText;
+    const status = root.document.createElement('strong');
+    status.className = 'presentation-review-status';
+    status.textContent = '未確認';
+    row.append(mark, label, status);
+    return row;
+  }
+
+  function resetReviewState() {
+    reviewState = { viewed2d:false, viewed3d:false, exported:false };
+    syncReview(currentModel, lastDiagnostics);
+  }
+
+  function markOutputDirty() {
+    if (!reviewState.exported) return;
+    reviewState.exported = false;
+    syncReview(currentModel, lastDiagnostics);
+  }
+
+  function colorIntegrity(model) {
+    const colors = new Set((CATALOG.COURSE_COLORS || []).map(color => color?.key).filter(Boolean));
+    if (!colors.size) return false;
+    const placements = [];
+    if (model?.layout?.start) placements.push(model.layout.start);
+    if (Array.isArray(model?.layout?.parts)) placements.push(...model.layout.parts);
+    return placements.every(part => colors.has(part?.colorKey || 'default'));
+  }
+
+  function setReviewItem(id, complete, completeText, pendingText) {
+    const row = root.document.getElementById(id);
+    if (!row) return;
+    const mark = row.querySelector('.presentation-review-mark');
+    const status = row.querySelector('.presentation-review-status');
+    row.dataset.state = complete ? 'complete' : 'pending';
+    row.classList.toggle('is-complete', complete);
+    if (mark) mark.textContent = complete ? '✓' : '○';
+    if (status) status.textContent = complete ? completeText : pendingText;
+  }
+
+  function syncReview(model, diagnostics = lastDiagnostics) {
+    const metadataOk = Boolean(model && DATA.validateMetadata(model.metadata).valid);
+    const colorOk = Boolean(model && colorIntegrity(model));
+    const invalid3d = diagnostics?.course3dDiagnostics?.invalidParts?.length || 0;
+    const threeDOk = reviewState.viewed3d && invalid3d === 0;
+
+    setReviewItem('presentationReview2d', reviewState.viewed2d, '確認済み', '2Dを表示');
+    setReviewItem('presentationReview3d', threeDOk, '確認済み', invalid3d ? '形状エラー' : '3Dを表示');
+    setReviewItem('presentationReviewColor', colorOk, 'OK', '要確認');
+    setReviewItem('presentationReviewText', metadataOk, 'OK', '大会名を入力');
+    setReviewItem('presentationReviewOutput', reviewState.exported, '確認済み', 'PNG / A4で確認');
+
+    const completed = [reviewState.viewed2d, threeDOk, colorOk, metadataOk, reviewState.exported].filter(Boolean).length;
+    const progress = root.document.getElementById('presentationReviewProgress');
+    if (progress) progress.textContent = `${completed} / 5`;
+    const card = root.document.getElementById('presentationReviewCard');
+    if (card) card.classList.toggle('is-complete', completed === 5);
   }
 
   function createSectionCard(id, titleText, descriptionText) {
@@ -404,7 +474,31 @@
     exportActions.append(png, print);
     exportSection.body.append(name1.label, name2.label, layouter.label, bgGroup, orientationGroup, exportActions, status);
 
-    toolbar.append(back, twoDSection.section, threeDSection.section, exportSection.section);
+    const reviewCard = root.document.createElement('section');
+    reviewCard.id = 'presentationReviewCard';
+    reviewCard.className = 'presentation-review-card';
+    const reviewHeading = root.document.createElement('div');
+    reviewHeading.className = 'presentation-review-heading';
+    const reviewTitle = root.document.createElement('strong');
+    reviewTitle.className = 'presentation-review-title';
+    reviewTitle.textContent = '仕上げ確認';
+    const reviewProgress = root.document.createElement('span');
+    reviewProgress.id = 'presentationReviewProgress';
+    reviewProgress.className = 'presentation-review-progress';
+    reviewProgress.textContent = '0 / 5';
+    reviewHeading.append(reviewTitle, reviewProgress);
+    const reviewList = root.document.createElement('div');
+    reviewList.className = 'presentation-review-list';
+    reviewList.append(
+      createReviewItem('presentationReview2d', '2D表示'),
+      createReviewItem('presentationReview3d', '3D表示'),
+      createReviewItem('presentationReviewColor', '色整合'),
+      createReviewItem('presentationReviewText', '文字情報'),
+      createReviewItem('presentationReviewOutput', '出力結果')
+    );
+    reviewCard.append(reviewHeading, reviewList);
+
+    toolbar.append(back, twoDSection.section, threeDSection.section, exportSection.section, reviewCard);
 
     const main = root.document.createElement('div');
     main.className = 'presentation-main';
@@ -481,6 +575,7 @@
   }
 
   function onMetadataInput() {
+    markOutputDirty();
     saveMetadata({
       eventNameLine1: root.document.getElementById('presentationEventName1')?.value,
       eventNameLine2: root.document.getElementById('presentationEventName2')?.value,
@@ -492,8 +587,8 @@
   function onChoice(event) {
     const button = event.target.closest?.('button[data-group]');
     if (!button) return;
-    if (button.dataset.group === 'background') background = button.dataset.value;
-    if (button.dataset.group === 'orientation') orientation = button.dataset.value;
+    if (button.dataset.group === 'background') { background = button.dataset.value; markOutputDirty(); }
+    if (button.dataset.group === 'orientation') { orientation = button.dataset.value; markOutputDirty(); }
     if (button.dataset.group === 'output-view') setOutputView(button.dataset.value);
     syncChoiceButtons();
     schedulePreview();
@@ -528,6 +623,7 @@
     }
     outputView = next;
     cameraDrag3d = null;
+    markOutputDirty();
     syncChoiceButtons();
     syncOutputViewControls();
     schedulePreview();
@@ -536,6 +632,7 @@
 
   function set3dCamera(value) {
     if (!RENDERER_3D) return camera3d;
+    markOutputDirty();
     camera3d = RENDERER_3D.normalizeCamera(value || RENDERER_3D.ISO_CAMERA);
     schedulePreview();
     return { ...camera3d };
@@ -543,6 +640,7 @@
 
   function adjust3dCamera(change = {}) {
     if (!RENDERER_3D) return camera3d;
+    markOutputDirty();
     const yawDelta = Number(change.yawDeg) || 0;
     const zoomFactor = Number(change.zoomFactor);
     camera3d = RENDERER_3D.normalizeCamera({
@@ -565,6 +663,7 @@
 
   function on3dPointerMove(event) {
     if (!cameraDrag3d || event.pointerId !== cameraDrag3d.pointerId || !RENDERER_3D) return;
+    markOutputDirty();
     const dx = event.clientX - cameraDrag3d.x;
     const dy = event.clientY - cameraDrag3d.y;
     camera3d = RENDERER_3D.normalizeCamera({
@@ -585,6 +684,7 @@
 
   function on3dWheel(event) {
     if (outputView !== '3d' || !RENDERER_3D) return;
+    markOutputDirty();
     const factor = Math.exp(-Number(event.deltaY || 0) * .0012);
     camera3d = RENDERER_3D.normalizeCamera({ ...camera3d, zoom:camera3d.zoom * factor });
     schedulePreview();
@@ -665,6 +765,9 @@
       viewMode:outputView
     });
     const invalid3d = lastDiagnostics?.course3dDiagnostics?.invalidParts?.length || 0;
+    if (outputView === '2d') reviewState.viewed2d = true;
+    if (outputView === '3d' && invalid3d === 0) reviewState.viewed3d = true;
+    syncReview(model, lastDiagnostics);
     if (outputView === '3d' && invalid3d) {
       setStatus(`3D形状チェックエラー ${invalid3d}件`, true);
     } else {
@@ -706,6 +809,7 @@
     }
     runtimeGuardAtOpen = clone(readRuntime());
     metadata = loadMetadata();
+    resetReviewState();
     syncMetadataInputs();
     view.hidden = false;
     root.document.body.classList.add('presentation-mode-open');
@@ -738,6 +842,8 @@
     const filename = `${DATA.sanitizeFilename(metadata)}_レイアウト${suffix}.png`;
     setStatus('PNGを作成しています…', false);
     const blob = await EXPORT.downloadPng(canvas, filename, root.document);
+    reviewState.exported = true;
+    syncReview(model, diagnostics);
     setStatus(`PNG保存完了 (${Math.round(blob.size / 1024)} KB)`, false);
     return { blob, filename, diagnostics };
   }
@@ -764,6 +870,8 @@
     setStatus(`A4${resolved === 'landscape' ? '横' : '縦'}で印刷`, false);
     await new Promise(resolve => root.requestAnimationFrame(() => root.requestAnimationFrame(resolve)));
     root.print();
+    reviewState.exported = true;
+    syncReview(model, diagnostics);
     return diagnostics;
   }
 

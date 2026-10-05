@@ -35,7 +35,7 @@ test('presentation UI uses condensed racing typography without remote font depen
 test('cache-safe racing stylesheet is preloaded by the editor extension bootstrap', () => {
   assert.match(bootstrap, /presentationModeStyles/);
   assert.match(bootstrap, /presentation-mode\.css\?v=\$\{CACHE_KEY\}/);
-  assert.match(bootstrap, /const CACHE_KEY = 'v1\.1-rc7-7-camera1'/);
+  assert.match(bootstrap, /const CACHE_KEY = 'v1\.1-rc7-8-checklist1'/);
 });
 
 test('presentation output remains print-friendly Grid White Transparent rather than dark paper', () => {

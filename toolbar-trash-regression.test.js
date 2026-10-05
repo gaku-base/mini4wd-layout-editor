@@ -33,10 +33,10 @@ test('course-part drop on trash consumes normal move pointerup and keeps one-ste
 test('private production bridge is temporary, cache-busted, and shut down by the bootstrap', () => {
   assert.match(wheel, /prepareEditorExtensionBridge/);
   assert.match(wheel, /root\.__COURSE_ENABLE_DEBUG__ = true/);
-  assert.match(wheel, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-7-camera1/);
+  assert.match(wheel, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-8-checklist1/);
   assert.match(bootstrap, /simple-ui\.js\?v=\$\{CACHE_KEY\}/);
   assert.match(bootstrap, /root\.__COURSE_ENABLE_DEBUG__ = false/);
   assert.match(bootstrap, /delete root\.__mini4wdCourseDebug/);
-  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc7-7-camera1/);
+  assert.match(index, /wheel-rotation\.js\?v=v1\.1-rc7-8-checklist1/);
   assert.doesNotMatch(wheel, /simple-ui\.js\?v=/);
 });

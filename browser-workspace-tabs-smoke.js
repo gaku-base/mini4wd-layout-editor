@@ -97,10 +97,37 @@ async function main() {
     await page.waitForFunction(() => document.querySelector('#presentationExportSection #presentationCourseOnlyPngBtn'));
     assert.equal(await page.locator('#presentationExportSection #presentationCourseOnlyPngBtn').count(), 1);
 
+    await page.waitForFunction(() => document.querySelector('#presentationReviewProgress')?.textContent === '2 / 5', null, {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationReview2d').getAttribute('data-state'), 'complete');
+    assert.equal(await page.locator('#presentationReviewColor').getAttribute('data-state'), 'complete');
+    assert.equal(await page.locator('#presentationReview3d').getAttribute('data-state'), 'pending');
+    assert.equal(await page.locator('#presentationReviewText').getAttribute('data-state'), 'pending');
+    assert.equal(await page.locator('#presentationReviewOutput').getAttribute('data-state'), 'pending');
+
+    await page.locator('#presentationEventName1').fill('動作確認大会');
+    await page.waitForFunction(() => document.querySelector('#presentationReviewText')?.dataset.state === 'complete', null, {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationReviewProgress').textContent(), '3 / 5');
+
     await page.locator('#presentationView3d').click();
     await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView() === '3d');
     assert.equal(await page.locator('#presentation3dSection').evaluate(el => el.classList.contains('is-current')), true);
     assert.equal(await page.locator('#presentation3dCameraGroup').evaluate(el => el.hidden), false);
+    await page.waitForFunction(() => document.querySelector('#presentationReview3d')?.dataset.state === 'complete', null, {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationReviewProgress').textContent(), '4 / 5');
+
+    await page.evaluate(() => { window.print = () => {}; });
+    await page.locator('#presentationPrintBtn').click();
+    await page.waitForFunction(() => document.querySelector('#presentationReviewOutput')?.dataset.state === 'complete', null, {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationReviewProgress').textContent(), '5 / 5');
+    assert.equal(await page.locator('#presentationReviewCard').evaluate(el => el.classList.contains('is-complete')), true);
+
+    await page.locator('#presentationBgWhite').click();
+    await page.waitForFunction(() => document.querySelector('#presentationReviewOutput')?.dataset.state === 'pending', null, {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationReviewProgress').textContent(), '4 / 5');
+    assert.equal(await page.locator('#presentationReviewCard').evaluate(el => el.classList.contains('is-complete')), false);
+
+    await page.locator('#presentationPrintBtn').click();
+    await page.waitForFunction(() => document.querySelector('#presentationReviewProgress')?.textContent === '5 / 5', null, {timeout:TIMEOUT});
 
     await page.locator('#presentationView2d').click();
     await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView() === '2d');
@@ -127,6 +154,8 @@ async function main() {
     console.log('✓ OUTPUT is grouped in 2D確認 / 3D確認 / 出力操作 order');
     console.log('✓ 2D/3D switching exposes 3D camera controls only when needed');
     console.log('✓ PNG and A4 controls stay inside the export section');
+    console.log('✓ live finish checklist advances from 2D/color to 3D/text/output');
+    console.log('✓ changing output settings invalidates only the previous output-result confirmation');
     console.log('✓ returning to LAYOUT preserves the course and connection state');
     console.log('Browser workspace tab rehearsal passed.');
   } finally {

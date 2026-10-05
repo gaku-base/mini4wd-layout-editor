@@ -132,7 +132,7 @@
     });
   }
 
-  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc7-7-camera1';
+  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc7-8-checklist1';
   const canonicalScriptKey = src => {
     const raw = String(src || '').trim();
     if (!raw) return '';

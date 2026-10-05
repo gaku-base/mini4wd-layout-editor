@@ -191,6 +191,91 @@ body.presentation-mode-open > #app { display: none !important; }
   gap: 7px;
 }
 
+.presentation-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px;
+  box-sizing: border-box;
+  border: 1px solid #344253;
+  border-radius: 11px;
+  background: linear-gradient(180deg, rgba(13,21,29,.96), rgba(9,15,22,.96));
+}
+.presentation-review-card.is-complete {
+  border-color: #4f956f;
+  box-shadow: inset 3px 0 0 #55c989, 0 0 0 1px rgba(85,201,137,.08);
+}
+.presentation-review-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.presentation-review-title {
+  color: #f2f6fb;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .04em;
+}
+.presentation-review-progress {
+  min-width: 44px;
+  padding: 3px 7px;
+  border: 1px solid #35465a;
+  border-radius: 999px;
+  background: #09111a;
+  color: #aab6c4;
+  font-size: 10px;
+  font-weight: 900;
+  text-align: center;
+}
+.presentation-review-card.is-complete .presentation-review-progress {
+  color: #aaf2c9;
+  border-color: #4f956f;
+}
+.presentation-review-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.presentation-review-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid #253342;
+  border-radius: 7px;
+  background: rgba(7,13,19,.72);
+}
+.presentation-review-mark {
+  color: #718196;
+  font-size: 13px;
+  font-weight: 950;
+  text-align: center;
+}
+.presentation-review-label {
+  min-width: 0;
+  color: #d8e0e9;
+  font-size: 10px;
+  font-weight: 800;
+}
+.presentation-review-status {
+  color: #7f8d9f;
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.presentation-review-item.is-complete {
+  border-color: rgba(85,201,137,.34);
+  background: rgba(29,75,51,.22);
+}
+.presentation-review-item.is-complete .presentation-review-mark,
+.presentation-review-item.is-complete .presentation-review-status {
+  color: #79dda4;
+}
+
 .presentation-toolbar button,
 .presentation-toolbar input { font: inherit; }
 
@@ -507,6 +592,8 @@ body.presentation-mode-open > #app { display: none !important; }
   .presentation-toolbar > * { min-width: 0; }
   .presentation-section-card { grid-column: 1 / -1; padding: 8px; }
   .presentation-section-body { gap: 7px; }
+  .presentation-review-card { grid-column: 1 / -1; padding: 8px; }
+  .presentation-review-item { padding-block: 5px; }
   .presentation-back { grid-column: 1 / -1; }
   .presentation-field { padding: 7px; }
   .presentation-control-group {
