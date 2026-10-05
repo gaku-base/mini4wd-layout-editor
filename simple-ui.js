@@ -235,9 +235,9 @@
       body.simple-ui-enabled .canvas-area { position: relative; }
       body.simple-ui-enabled .right-sidebar {
         display: block !important;
-        position: absolute !important;
+        position: fixed !important;
         z-index: 30;
-        top: 0;
+        top: 120px;
         right: 0;
         bottom: 0;
         width: min(320px, calc(100vw - 56px));
@@ -481,10 +481,19 @@
       }
     }
 
+    function positionDrawerBelowToolbar() {
+      const toolbarRect = canvasToolbar.getBoundingClientRect();
+      const viewportHeight = Number(rootRef?.innerHeight) || documentRef.documentElement.clientHeight || 0;
+      const top = Math.max(0, Math.min(Math.round(toolbarRect.bottom), Math.max(0, viewportHeight - 96)));
+      drawer.style.top = `${top}px`;
+      drawer.style.right = '0px';
+    }
+
     function renderDrawer() {
       const context = contextSnapshot();
       lastContextSignature = context.signature;
       const state = computeDrawerState({ manualOpen });
+      positionDrawerBelowToolbar();
       drawer.classList.toggle('simple-drawer-open', state.open);
       drawer.classList.remove('simple-context-only');
       detailsToggleBtn.setAttribute('aria-expanded', String(state.open));
@@ -542,8 +551,14 @@
     });
     canvasToolbar.addEventListener('scroll', () => setToolbarMoreOpen(false), { passive: true });
     rootRef?.addEventListener?.('resize', () => {
+      positionDrawerBelowToolbar();
       if (!toolbarMoreMenu.hidden) positionToolbarMoreMenu();
     });
+    if (rootRef?.ResizeObserver) {
+      const drawerToolbarObserver = new rootRef.ResizeObserver(() => positionDrawerBelowToolbar());
+      drawerToolbarObserver.observe(canvasToolbar);
+    }
+    positionDrawerBelowToolbar();
 
     const contextObserver = new MutationObserver(() => renderDrawer());
     contextObserver.observe(statusSelected, { childList: true, subtree: true, characterData: true });
