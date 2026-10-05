@@ -47,6 +47,9 @@ test('legacy course-only PNG is preserved inside presentation output', () => {
   assert.equal(UI.PRESENTATION_ACTION_LABELS.courseOnly, 'コース図のみ保存');
   assert.match(SOURCE, /presentationCourseOnlyPngBtn/);
   assert.match(SOURCE, /button\.addEventListener\('click', \(\) => legacy\.click\(\)\)/);
+  assert.match(SOURCE, /querySelector\?\.\('\.presentation-export-actions'\)/);
+  assert.match(SOURCE, /actions\.appendChild\(button\)/);
+  assert.doesNotMatch(SOURCE, /toolbar\.insertBefore\(button, status/);
   assert.match(SOURCE, /exportButton\.classList\.add\('ui-legacy-export-source'\)/);
 });
 
