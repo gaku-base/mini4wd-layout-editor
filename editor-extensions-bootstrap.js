@@ -4,7 +4,7 @@
   root.__M4WD_EDITOR_EXTENSIONS_BOOTSTRAP_INSTALLED__ = true;
 
   const documentRef = root.document;
-  const CACHE_KEY = 'v1.1-rc7-7-camera1';
+  const CACHE_KEY = 'v1.1-rc7-8-checklist1';
 
   function canonicalScriptKey(src) {
     const raw = String(src || '').trim();
