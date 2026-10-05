@@ -94,6 +94,18 @@ async function main() {
     ]);
     assert.equal(diagnostics.length.available, true);
     assert.ok(diagnostics.length.totalM > 0);
+    await page.waitForFunction(() => {
+      const eventName = document.querySelector('#presentationSummaryEvent')?.textContent;
+      const parts = document.querySelector('#presentationSummaryParts')?.textContent;
+      const length = document.querySelector('#presentationSummaryLength')?.textContent;
+      return eventName === '第19回 / テストミニ四駆大会'
+        && parts === '10 個'
+        && / m$/.test(length || '');
+    }, {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationSummaryEvent').textContent(), '第19回 / テストミニ四駆大会');
+    assert.equal(await page.locator('#presentationSummaryParts').textContent(), '10 個');
+    assert.match(await page.locator('#presentationSummaryLength').textContent(), /^\d+\.\d{2} m$/);
+    console.log('✓ live OUTPUT header shows tournament, total length and part count');
     console.log('✓ two-line tournament name, optional layouter, counts and total length are correct');
 
     mark('optional-layouter');
@@ -101,6 +113,9 @@ async function main() {
     await page.waitForFunction(() => window.M4WD_PRESENTATION.getMetadata().layouterName === 'GAKU', {timeout:TIMEOUT});
     diagnostics = await page.evaluate(() => window.M4WD_PRESENTATION.getDiagnostics());
     assert.equal(diagnostics.metadata.layouterName, 'GAKU');
+    await page.waitForFunction(() => document.querySelector('#presentationSummaryLayouter')?.textContent === 'GAKU', {timeout:TIMEOUT});
+    assert.equal(await page.locator('#presentationSummaryLayouter').textContent(), 'GAKU');
+    console.log('✓ live OUTPUT header follows layouter input');
     console.log('✓ layouter is included only after input');
 
     mark('part-color-coverage');
