@@ -71,6 +71,11 @@
 
   function colorContract(type, part = {}, catalog = {}) {
     const definition = definitionFor(type, catalog);
+    const key = part?.colorKey || 'default';
+    const shared = Array.isArray(catalog?.COURSE_COLORS)
+      ? catalog.COURSE_COLORS.find(color => color?.key === key)
+      : null;
+    if (shared) return { base:shared.base, lane:shared.lane, edge:shared.edge };
     const variants = {
       default: { base: definition.base || '#efede9', lane: definition.lane || '#8d8c89', edge: definition.edge || '#858480' },
       red: { base: '#df252d', lane: '#98141b', edge: '#7d1016' },
@@ -79,7 +84,7 @@
       green: { base: '#35bd8b', lane: '#1b8964', edge: '#156c4f' },
       white: { base: '#ffffff', lane: '#b5b5b2', edge: '#999995' }
     };
-    return variants[part.colorKey] || variants.default;
+    return variants[key] || variants.default;
   }
 
   function sourceDimensionSnapshot(type, catalog) {

@@ -160,6 +160,7 @@
     if (layout.start !== null) {
       if (!isRecord(layout.start)) return false;
       if (!isFiniteNumber(layout.start.x) || !isFiniteNumber(layout.start.y) || !isRotation(layout.start.rotation)) return false;
+      if (!knownColors.has(layout.start.colorKey || 'default')) return false;
       if (Object.prototype.hasOwnProperty.call(layout.start, 'zMm') && !isFiniteNumber(layout.start.zMm)) return false;
       if (Object.prototype.hasOwnProperty.call(layout.start, 'zOrder') && !isFiniteNumber(layout.start.zOrder)) return false;
     }

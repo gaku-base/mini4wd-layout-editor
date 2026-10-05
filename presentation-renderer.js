@@ -22,8 +22,12 @@
     return Number.isFinite(number) ? number : fallback;
   }
 
-  function paletteFor(part) {
-    return PALETTES[part?.colorKey] || PALETTES.default;
+  function paletteFor(part, catalog = {}) {
+    const key = part?.colorKey || 'default';
+    const shared = Array.isArray(catalog?.COURSE_COLORS)
+      ? catalog.COURSE_COLORS.find(color => color?.key === key)
+      : null;
+    return shared || PALETTES[key] || PALETTES.default;
   }
 
   function rotatePoint(point, degrees) {
@@ -220,7 +224,7 @@
 
   function drawPart(c,part,definition,dependencies={}) {
     if(!definition)return;
-    const palette=paletteFor(part);
+    const palette=paletteFor(part,dependencies.catalog);
     c.save();c.translate(finite(part.x),finite(part.y));c.rotate(finite(part.rotation)*Math.PI/180);
     if(definition.corner45) drawCorner(c,definition,palette,dependencies.poseApi);
     else if(definition.wave) drawWave(c,definition,palette);
@@ -243,8 +247,9 @@
     const viewport=computeViewport(layout,catalog,width,height,finite(options.paddingPx,30));
     c.save();c.translate(viewport.offsetX,viewport.offsetY);c.scale(viewport.scale,viewport.scale);
     drawBackground(c,canvas,viewport,mode);
-    if(layout.start&&definitions.start) drawPart(c,{...layout.start,id:'start',type:'start'},definitions.start,options.dependencies);
-    (Array.isArray(layout.parts)?layout.parts:[]).map((part,index)=>({part,index,layer:layerValue(part,index)})).sort((a,b)=>a.layer-b.layer||a.index-b.index).forEach(item=>drawPart(c,item.part,definitions[item.part.type],options.dependencies));
+    const drawDependencies={...(options.dependencies||{}),catalog};
+    if(layout.start&&definitions.start) drawPart(c,{...layout.start,id:'start',type:'start'},definitions.start,drawDependencies);
+    (Array.isArray(layout.parts)?layout.parts:[]).map((part,index)=>({part,index,layer:layerValue(part,index)})).sort((a,b)=>a.layer-b.layer||a.index-b.index).forEach(item=>drawPart(c,item.part,definitions[item.part.type],drawDependencies));
     c.restore();
     return Object.freeze({ background:mode, viewport, gridCm:mode==='grid'?GRID_CM:null, width, height });
   }
@@ -254,8 +259,8 @@
     const size=Math.max(24,Math.round(finite(options.size,72)));canvas.width=size;canvas.height=size;
     const c=canvas.getContext('2d');c.clearRect(0,0,size,size);
     const b=localBounds(definition);const w=Math.max(1,b.maxX-b.minX),h=Math.max(1,b.maxY-b.minY);const scale=Math.min((size-10)/w,(size-10)/h);
-    c.save();c.translate(size/2,size/2);c.scale(scale,scale);c.translate(-(b.minX+b.maxX)/2,-(b.minY+b.maxY)/2);drawPart(c,{...(part||{}),type,x:0,y:0,rotation:0},definition,options.dependencies);c.restore();return true;
+    c.save();c.translate(size/2,size/2);c.scale(scale,scale);c.translate(-(b.minX+b.maxX)/2,-(b.minY+b.maxY)/2);drawPart(c,{...(part||{}),type,x:0,y:0,rotation:0},definition,{...(options.dependencies||{}),catalog});c.restore();return true;
   }
 
-  return Object.freeze({ PALETTES,BACKGROUNDS,GRID_CM,localBounds,transformedBounds,presentationWorldBounds,computeViewport,renderCourse,drawPartIcon });
+  return Object.freeze({ PALETTES,BACKGROUNDS,GRID_CM,paletteFor,localBounds,transformedBounds,presentationWorldBounds,computeViewport,renderCourse,drawPartIcon });
 });

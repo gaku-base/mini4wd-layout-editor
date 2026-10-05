@@ -4,7 +4,7 @@
   root.__M4WD_EDITOR_EXTENSIONS_BOOTSTRAP_INSTALLED__ = true;
 
   const documentRef = root.document;
-  const CACHE_KEY = 'v1.1-rc7-3-persistentmarkers1';
+  const CACHE_KEY = 'v1.1-rc7-4-outputcolors1';
 
   function canonicalScriptKey(src) {
     const raw = String(src || '').trim();
