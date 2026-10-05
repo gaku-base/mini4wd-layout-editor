@@ -111,8 +111,8 @@ async function main() {
     await page.locator('#presentationView2d').waitFor({state:'visible',timeout:TIMEOUT});
     await page.locator('#presentationView3d').waitFor({state:'visible',timeout:TIMEOUT});
 
-    assert.equal(await page.locator('#presentationView2d').textContent(),'2D');
-    assert.equal(await page.locator('#presentationView3d').textContent(),'3D');
+    assert.equal(await page.locator('#presentationView2d').textContent(),'2Dを表示');
+    assert.equal(await page.locator('#presentationView3d').textContent(),'3Dを表示');
     assert.equal(await page.locator('#presentationView2d').evaluate(el=>el.classList.contains('is-active')),true);
 
     const canvasChecksum = () => page.evaluate(() => {
