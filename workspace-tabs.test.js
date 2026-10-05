@@ -74,3 +74,15 @@ test('3D camera controls stay inside the 3D confirmation block', () => {
   assert.match(source, /cameraGroup\.hidden = !is3d/);
   assert.match(source, /threeDSection\.classList\.toggle\('is-current', is3d\)/);
 });
+
+test('OUTPUT exposes a live four-item information header above the preview', () => {
+  assert.match(source, /id = 'presentationSummary'/);
+  assert.match(source, /createSummaryItem\('presentationSummaryEvent', '大会名'\)/);
+  assert.match(source, /createSummaryItem\('presentationSummaryLayouter', 'レイアウター'\)/);
+  assert.match(source, /createSummaryItem\('presentationSummaryLength', '総延長'\)/);
+  assert.match(source, /createSummaryItem\('presentationSummaryParts', 'パーツ数'\)/);
+  assert.match(source, /function syncSummary\(model\)/);
+  assert.match(source, /main\.append\(summary, stage\)/);
+  assert.match(presentationCss, /\.presentation-summary-bar/);
+  assert.match(presentationCss, /grid-template-columns:\s*repeat\(4/);
+});
