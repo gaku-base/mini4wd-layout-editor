@@ -65,3 +65,22 @@ test('Bank20 fallback does not add angle labels or artificial wedge guides', () 
   assert.doesNotMatch(block, /for \(const t of \[1 \/ 3, 2 \/ 3\]\)/);
   assert.doesNotMatch(block, /projectY|pivotY/);
 });
+
+
+test('connected bank and slope markers are deferred and redrawn after all seams so they stay visible', () => {
+  const partStart = app.indexOf('function drawPart(c, part');
+  const partEnd = app.indexOf('function drawPartConnectionFaces', partStart);
+  const partBlock = app.slice(partStart, partEnd);
+  assert.match(partBlock, /if \(!opts\.deferElevationMarkers\) drawElevationEndMarkers\(c, part, def, opts\)/);
+
+  const layerStart = app.indexOf('function drawPartsInLayerOrder');
+  const layerEnd = app.indexOf('function drawOwnedConnectionSeams', layerStart);
+  const layerBlock = app.slice(layerStart, layerEnd);
+  assert.match(layerBlock, /deferElevationMarkers: true/);
+  const seamIndex = layerBlock.indexOf('drawOwnedConnectionSeams(c, part, options);');
+  const markerLoopIndex = layerBlock.indexOf('for (const part of orderedParts)');
+  const secondMarkerCall = layerBlock.lastIndexOf('drawElevationEndMarkers(c, part, def');
+  assert.ok(seamIndex >= 0);
+  assert.ok(secondMarkerCall > seamIndex, 'final marker pass must happen after connected seams');
+  assert.ok(markerLoopIndex >= 0);
+});
