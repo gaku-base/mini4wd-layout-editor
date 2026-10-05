@@ -1,15 +1,15 @@
 {
   "channel": "stable",
-  "version": "0.1.87",
+  "version": "0.1.88",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part04.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.87/part05.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.88/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.88/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.88/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.88/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.88/part05.b64"
   ],
-  "sha256": "14e5a481ffb545416fb8b7a458f72aaf47b53ead16cfc2d020ccbfbca7063d23",
-  "publishedAt": "2026-10-05T11:35:00+09:00",
-  "notes": "v0.1.87 promotes the Publish / Upload workspace UI reconstruction to stable. The 1920x1080 no-scroll screen shows final assets and quality gates, YouTube metadata and visibility, connection state, upload action, video ID and custom thumbnail result in one place. Existing music, thumbnail, video, Browser ChatGPT handoff, updater, recovery and analytics logic remain intact. Rehearsal 162/162 PASS; rendered-app interaction 33/33 PASS; 10-minute real FFmpeg render 1/1 PASS."
+  "sha256": "693e7fe2cc1e672357400447479fd3c7b0f25c64a9a267e8258d981c56ec9db3",
+  "publishedAt": "2026-10-05T11:53:40+09:00",
+  "notes": "v0.1.88 promotes the Stage 6 management and analytics UI reconstruction to stable. Project Management is rebuilt into a 1920x1080 no-scroll list-and-detail workspace with Sheets sync, search, filters and sorting. YouTube Analytics is rebuilt into a ranking-and-detail workspace with period switching, views, watch time, average view duration and percentage, subscriber change, likes, shares, DROWSEWAVE popularity score and trend. Existing music, thumbnail, video, Browser ChatGPT handoff, publish/upload, updater and recovery flows remain intact. Rehearsal 168/168 PASS; rendered-app interaction 37/37 PASS; soak 3/3 PASS; 10-minute real FFmpeg render 1/1 PASS."
 }
