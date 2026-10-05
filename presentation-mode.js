@@ -175,6 +175,18 @@
     return item;
   }
 
+  function createChecklistItem(id, labelText) {
+    const label = root.document.createElement('label');
+    label.className = 'presentation-check-item';
+    const input = root.document.createElement('input');
+    input.id = id;
+    input.type = 'checkbox';
+    const text = root.document.createElement('span');
+    text.textContent = labelText;
+    label.append(input, text);
+    return label;
+  }
+
   function createSectionCard(id, titleText, descriptionText) {
     const section = root.document.createElement('section');
     section.id = id;
@@ -404,7 +416,34 @@
     exportActions.append(png, print);
     exportSection.body.append(name1.label, name2.label, layouter.label, bgGroup, orientationGroup, exportActions, status);
 
-    toolbar.append(back, twoDSection.section, threeDSection.section, exportSection.section);
+    const checkSection = createSectionCard(
+      'presentationCheckSection',
+      '確認チェック',
+      '出力前に上から順番に確認'
+    );
+    const checklist = root.document.createElement('div');
+    checklist.id = 'presentationChecklist';
+    checklist.className = 'presentation-checklist';
+    checklist.append(
+      createChecklistItem('presentationCheck2d', '1. 2D表示を確認'),
+      createChecklistItem('presentationCheck3d', '2. 3D表示を確認'),
+      createChecklistItem('presentationCheckColor', '3. 色整合を確認'),
+      createChecklistItem('presentationCheckText', '4. 文字情報を確認'),
+      createChecklistItem('presentationCheckOutput', '5. 出力結果を確認')
+    );
+    const checklistReset = root.document.createElement('button');
+    checklistReset.id = 'presentationChecklistResetBtn';
+    checklistReset.type = 'button';
+    checklistReset.className = 'presentation-choice presentation-check-reset';
+    checklistReset.textContent = '確認をリセット';
+    checklistReset.addEventListener('click', () => {
+      root.document.querySelectorAll('#presentationChecklist input[type="checkbox"]').forEach(input => {
+        input.checked = false;
+      });
+    });
+    checkSection.body.append(checklist, checklistReset);
+
+    toolbar.append(back, twoDSection.section, threeDSection.section, exportSection.section, checkSection.section);
 
     const main = root.document.createElement('div');
     main.className = 'presentation-main';
