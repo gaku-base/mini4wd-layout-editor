@@ -138,11 +138,23 @@
   const BANK20_PROJECTED_LENGTH_CM = mmToCm(BANK20_PROJECTED_LENGTH_MM);
   const BANK20_HALF_PROJECTED_LENGTH_CM = BANK20_PROJECTED_LENGTH_CM / 2;
 
+  // Single color authority shared by LAYOUT, OUTPUT 2D and OUTPUT 3D.
+  // A placed part stores only colorKey; every view resolves that key here.
+  const COURSE_COLORS = deepFreeze([
+    { key: 'default', name: '標準（グレー）', base: '#efede9', lane: '#8d8c89', edge: '#858480', accent: '#e52f38' },
+    { key: 'red', name: 'レッド', base: '#df252d', lane: '#98141b', edge: '#7d1016', accent: '#f7bdc0' },
+    { key: 'blue', name: 'ブルー', base: '#087fc2', lane: '#07557f', edge: '#06405f', accent: '#b8e5ff' },
+    { key: 'orange', name: 'オレンジ', base: '#f4b42b', lane: '#b67800', edge: '#865800', accent: '#fff0bd' },
+    { key: 'green', name: 'グリーン', base: '#35bd8b', lane: '#1b8964', edge: '#156c4f', accent: '#c4f4e2' },
+    { key: 'white', name: '白', base: '#ffffff', lane: '#b5b5b2', edge: '#999995', accent: '#e52f38' }
+  ]);
+  const defaultCourseColor = COURSE_COLORS[0];
+
   const palette = {
-    base: '#efede9',
-    lane: '#8d8c89',
-    edge: '#858480',
-    accent: '#e52f38'
+    base: defaultCourseColor.base,
+    lane: defaultCourseColor.lane,
+    edge: defaultCourseColor.edge,
+    accent: defaultCourseColor.accent
   };
 
   // StartはStraightの派生であり、実寸・回転中心・コネクタ姿勢を同じ参照から使用する。
@@ -431,6 +443,7 @@
     OFFICIAL_JCJC_CURVE_180_OUTER_WIDTH_MM,
     DIMENSION_AUDIT_VERSION,
     BANK20_PROJECTED_LENGTH_MM,
+    COURSE_COLORS,
     PARTS,
     MENU_ORDER
   });
