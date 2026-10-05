@@ -9,13 +9,13 @@ const VERSION_FILE = fs.readFileSync('./VERSION.txt', 'utf8').trim();
 const WHEEL_SOURCE = fs.readFileSync('./wheel-rotation.js', 'utf8');
 const BOOTSTRAP_SOURCE = fs.readFileSync('./editor-extensions-bootstrap.js', 'utf8');
 
-test('formal version marker is v1.1 RC7.10', () => {
-  assert.equal(VERSION_FILE, 'v1.1 RC7.10');
+test('formal version marker is v1.1 RC7.11', () => {
+  assert.equal(VERSION_FILE, 'v1.1 RC7.11');
   assert.equal(UI.APP_VERSION, VERSION_FILE);
-  assert.equal(UI.APP_VERSION_SLUG, 'v1.1-rc7-10');
+  assert.equal(UI.APP_VERSION_SLUG, 'v1.1-rc7-11');
 });
 
-test('runtime version label is updated to v1.1 RC7.10', () => {
+test('runtime version label is updated to v1.1 RC7.11', () => {
   const version = { textContent: 'v1.1 RC7' };
   const documentRef = {
     title: 'Mini 4WD Course Layout',
@@ -27,14 +27,14 @@ test('runtime version label is updated to v1.1 RC7.10', () => {
 
   UI.applyVersionLabel(documentRef);
 
-  assert.equal(version.textContent, 'v1.1 RC7.10');
-  assert.equal(documentRef.documentElement.dataset.appVersion, 'v1.1-rc7-10');
-  assert.equal(documentRef.title, 'Mini 4WD Course Layout — v1.1 RC7.10');
+  assert.equal(version.textContent, 'v1.1 RC7.11');
+  assert.equal(documentRef.documentElement.dataset.appVersion, 'v1.1-rc7-11');
+  assert.equal(documentRef.title, 'Mini 4WD Course Layout — v1.1 RC7.11');
 });
 
-test('editor extensions use one RC7.10 center-view cache key', () => {
-  assert.match(WHEEL_SOURCE, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-10-centerview1/);
-  assert.match(BOOTSTRAP_SOURCE, /const CACHE_KEY = 'v1\.1-rc7-10-centerview1'/);
+test('editor extensions use one RC7.11 phone-compact cache key', () => {
+  assert.match(WHEEL_SOURCE, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-11-phonecompact1/);
+  assert.match(BOOTSTRAP_SOURCE, /const CACHE_KEY = 'v1\.1-rc7-11-phonecompact1'/);
   assert.match(BOOTSTRAP_SOURCE, /ui-controls-cleanup\.js\?v=\$\{CACHE_KEY\}/);
   assert.match(BOOTSTRAP_SOURCE, /presentation-mode\.css\?v=\$\{CACHE_KEY\}/);
 });

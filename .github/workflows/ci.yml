@@ -68,6 +68,7 @@ jobs:
           test -f browser-output-3d-smoke.js
           test -f browser-part-color-independence-smoke.js
           test -f browser-layout-details-drawer-smoke.js
+          test -f browser-layout-phone-density-smoke.js
           test -f browser-layout-center-resize-smoke.js
 
       - name: Setup Node.js
@@ -171,6 +172,7 @@ jobs:
           fi
           node browser-ui-controls-smoke.js
           node browser-layout-details-drawer-smoke.js
+          node browser-layout-phone-density-smoke.js
           node browser-layout-center-resize-smoke.js
           node browser-slope-visibility-smoke.js
           node browser-workspace-tabs-smoke.js
