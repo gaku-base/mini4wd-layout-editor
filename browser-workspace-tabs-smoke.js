@@ -91,6 +91,8 @@ async function main() {
     assert.equal(await page.locator('#presentation3dCameraGroup').evaluate(el => el.hidden), true);
     assert.equal(await page.locator('#presentationExportSection #presentationPngBtn').count(), 1);
     assert.equal(await page.locator('#presentationExportSection #presentationPrintBtn').count(), 1);
+    await page.waitForFunction(() => document.querySelector('#presentationExportSection #presentationCourseOnlyPngBtn'));
+    assert.equal(await page.locator('#presentationExportSection #presentationCourseOnlyPngBtn').count(), 1);
 
     await page.locator('#presentationView3d').click();
     await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView() === '3d');
