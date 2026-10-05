@@ -60,7 +60,7 @@ test('temporary selection identity compatibility bridge stays small and explicit
   assert.match(WHEEL_SOURCE, /canonicalize\(snapshot\?\.selectedIds\)/);
   assert.match(WHEEL_SOURCE, /getElementById\('simpleUiSelectionIdentity'\)/);
   assert.match(WHEEL_SOURCE, /marker\.dataset\.selectedIds = identity/);
-  assert.match(WHEEL_SOURCE, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-7-camera1/);
+  assert.match(WHEEL_SOURCE, /editor-extensions-bootstrap\.js\?v=v1\.1-rc7-8-checklist1/);
   assert.doesNotMatch(WHEEL_SOURCE, /function integrateModeHelpIntoToolbar/);
   assert.doesNotMatch(WHEEL_SOURCE, /const loadPresentationMode/);
   assert.doesNotMatch(WHEEL_SOURCE, /presentation-mode\.css/);
