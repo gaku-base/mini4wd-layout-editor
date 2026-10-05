@@ -307,6 +307,23 @@ async function main() {
     assert.equal(isoCamera.yawDeg,-42);
     assert.equal(isoCamera.tiltDeg,58);
 
+    await page.locator('#presentation3dRotateRightBtn').click();
+    await page.waitForTimeout(80);
+    const rotatedCamera=await page.evaluate(() => window.M4WD_PRESENTATION.get3dCamera());
+    assert.equal(rotatedCamera.yawDeg,-27);
+
+    await page.locator('#presentation3dZoomInBtn').click();
+    await page.waitForTimeout(80);
+    const zoomedCamera=await page.evaluate(() => window.M4WD_PRESENTATION.get3dCamera());
+    assert.ok(zoomedCamera.zoom > isoCamera.zoom);
+
+    await page.locator('#presentation3dResetBtn').click();
+    await page.waitForTimeout(80);
+    const resetCamera=await page.evaluate(() => window.M4WD_PRESENTATION.get3dCamera());
+    assert.equal(resetCamera.yawDeg,-42);
+    assert.equal(resetCamera.tiltDeg,58);
+    assert.equal(resetCamera.zoom,1);
+
     await page.locator('#presentationView2d').click();
     await page.waitForFunction(() => window.M4WD_PRESENTATION.getOutputView()==='2d',null,{timeout:TIMEOUT});
     await page.locator('#presentationView3d').click();
@@ -328,7 +345,7 @@ async function main() {
     console.log('✓ Lane Change renders a 95mm ±10mm photo-derived provisional bridge rise with two center supports');
     console.log('✓ LC Jump inherits the first 1/3 of the Lane Change vertical profile and launches at 71.25mm');
     console.log('✓ Burning LC renders a provisional 120mm ±25mm bridge rise and smooth 20° peak bank');
-    console.log('✓ 3D drag orbit, wheel zoom, TOP and ISO controls work');
+    console.log('✓ explicit rotate / zoom / reset plus drag / wheel / TOP / ISO controls work');
     console.log('✓ returning to LAYOUT preserves parts and connections');
     console.log('Browser OUTPUT 3D rehearsal passed.');
   } catch(error) {
