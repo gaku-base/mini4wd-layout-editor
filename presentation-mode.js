@@ -296,11 +296,49 @@
     cameraIso.className = 'presentation-choice';
     cameraIso.textContent = 'ISO';
     cameraIso.addEventListener('click', () => set3dCamera(RENDERER_3D?.ISO_CAMERA));
+    const cameraReset = root.document.createElement('button');
+    cameraReset.id = 'presentation3dResetBtn';
+    cameraReset.type = 'button';
+    cameraReset.className = 'presentation-choice';
+    cameraReset.textContent = 'リセット';
+    cameraReset.addEventListener('click', () => set3dCamera(RENDERER_3D?.ISO_CAMERA));
+    cameraGroup.append(cameraLabel, cameraTop, cameraIso, cameraReset);
+
+    const cameraAdjust = root.document.createElement('div');
+    cameraAdjust.id = 'presentation3dAdjustGroup';
+    cameraAdjust.className = 'presentation-control-group presentation-3d-adjust-group';
+    const adjustLabel = root.document.createElement('span');
+    adjustLabel.className = 'presentation-control-label';
+    adjustLabel.textContent = '簡単操作';
+    const rotateLeft = root.document.createElement('button');
+    rotateLeft.id = 'presentation3dRotateLeftBtn';
+    rotateLeft.type = 'button';
+    rotateLeft.className = 'presentation-choice';
+    rotateLeft.textContent = '↶ 左回転';
+    rotateLeft.addEventListener('click', () => adjust3dCamera({ yawDeg: -15 }));
+    const rotateRight = root.document.createElement('button');
+    rotateRight.id = 'presentation3dRotateRightBtn';
+    rotateRight.type = 'button';
+    rotateRight.className = 'presentation-choice';
+    rotateRight.textContent = '↷ 右回転';
+    rotateRight.addEventListener('click', () => adjust3dCamera({ yawDeg: 15 }));
+    const zoomOut = root.document.createElement('button');
+    zoomOut.id = 'presentation3dZoomOutBtn';
+    zoomOut.type = 'button';
+    zoomOut.className = 'presentation-choice';
+    zoomOut.textContent = '− 縮小';
+    zoomOut.addEventListener('click', () => adjust3dCamera({ zoomFactor: 0.85 }));
+    const zoomIn = root.document.createElement('button');
+    zoomIn.id = 'presentation3dZoomInBtn';
+    zoomIn.type = 'button';
+    zoomIn.className = 'presentation-choice';
+    zoomIn.textContent = '＋ 拡大';
+    zoomIn.addEventListener('click', () => adjust3dCamera({ zoomFactor: 1.18 }));
     const cameraHelp = root.document.createElement('span');
     cameraHelp.className = 'presentation-3d-help';
-    cameraHelp.textContent = 'ドラッグ: 回転 / ホイール: ズーム';
-    cameraGroup.append(cameraLabel, cameraTop, cameraIso, cameraHelp);
-    threeDSection.body.append(threeDGroup, cameraGroup);
+    cameraHelp.textContent = 'マウス操作も使用可: ドラッグで回転 / ホイールでズーム';
+    cameraAdjust.append(adjustLabel, rotateLeft, rotateRight, zoomOut, zoomIn, cameraHelp);
+    threeDSection.body.append(threeDGroup, cameraGroup, cameraAdjust);
 
     const back = root.document.createElement('button');
     back.id = 'presentationBackBtn';
@@ -470,7 +508,9 @@
   function syncOutputViewControls() {
     const is3d = outputView === '3d';
     const cameraGroup = root.document.getElementById('presentation3dCameraGroup');
+    const cameraAdjust = root.document.getElementById('presentation3dAdjustGroup');
     if (cameraGroup) cameraGroup.hidden = !is3d;
+    if (cameraAdjust) cameraAdjust.hidden = !is3d;
     const twoDSection = root.document.getElementById('presentation2dSection');
     const threeDSection = root.document.getElementById('presentation3dSection');
     if (twoDSection) twoDSection.classList.toggle('is-current', !is3d);
@@ -497,6 +537,19 @@
   function set3dCamera(value) {
     if (!RENDERER_3D) return camera3d;
     camera3d = RENDERER_3D.normalizeCamera(value || RENDERER_3D.ISO_CAMERA);
+    schedulePreview();
+    return { ...camera3d };
+  }
+
+  function adjust3dCamera(change = {}) {
+    if (!RENDERER_3D) return camera3d;
+    const yawDelta = Number(change.yawDeg) || 0;
+    const zoomFactor = Number(change.zoomFactor);
+    camera3d = RENDERER_3D.normalizeCamera({
+      ...camera3d,
+      yawDeg: camera3d.yawDeg + yawDelta,
+      zoom: Number.isFinite(zoomFactor) && zoomFactor > 0 ? camera3d.zoom * zoomFactor : camera3d.zoom
+    });
     schedulePreview();
     return { ...camera3d };
   }

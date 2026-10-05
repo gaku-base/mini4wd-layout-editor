@@ -329,9 +329,13 @@ body.presentation-mode-open > #app { display: none !important; }
   grid-template-columns: repeat(2, minmax(0,1fr));
 }
 .presentation-3d-camera-group {
+  grid-template-columns: repeat(3, minmax(0,1fr));
+}
+.presentation-3d-adjust-group {
   grid-template-columns: repeat(2, minmax(0,1fr));
 }
-.presentation-3d-camera-group[hidden] {
+.presentation-3d-camera-group[hidden],
+.presentation-3d-adjust-group[hidden] {
   display: none !important;
 }
 .presentation-3d-help {
