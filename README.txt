@@ -1,4 +1,4 @@
-Mini 4WD Course Layout — v1.1 RC7.9
+Mini 4WD Course Layout — v1.1 RC7.10
 ===================================
 
 ブラウザー上でミニ四駆コースを2D設計するレイアウトエディターです。
