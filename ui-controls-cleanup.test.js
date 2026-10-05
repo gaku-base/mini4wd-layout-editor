@@ -69,3 +69,13 @@ test('UI cleanup loading belongs to the editor extension bootstrap, not snap sta
   assert.doesNotMatch(SNAP_SOURCE, /ui-controls-cleanup\.js/);
   assert.doesNotMatch(SNAP_SOURCE, /presentation-mode\.css/);
 });
+
+test('phone LAYOUT chrome is compacted without hiding core controls', () => {
+  assert.match(SOURCE, /@media \(max-width: 480px\)/);
+  assert.match(SOURCE, /grid-template-columns:\s*minmax\(0, 1fr\) auto/);
+  assert.match(SOURCE, /\.workspace-tabs \{[\s\S]*?grid-column:\s*1 \/ -1/);
+  assert.match(SOURCE, /#newBtn \{[\s\S]*?min-height:\s*30px/);
+  assert.match(SOURCE, /\.canvas-toolbar \{[\s\S]*?min-height:\s*0/);
+  assert.match(SOURCE, /#instruction\.toolbar-mode-help[\s\S]*?flex:\s*1 1 100%/);
+  assert.match(SOURCE, /#instruction\.toolbar-mode-help span \{[\s\S]*?display:\s*none/);
+});
