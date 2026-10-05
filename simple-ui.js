@@ -415,6 +415,9 @@
       mirrors.set(id, dd);
     }
     drawer.appendChild(detailStatusPanel);
+    // Keep the fixed drawer in the body portal so no workspace/grid containing
+    // block can push its right edge outside the viewport.
+    if (drawer.parentElement !== body) body.appendChild(drawer);
 
     const toolbarGroups = canvasToolbar.querySelectorAll('.toolbar-group');
     const rightToolbarGroup = toolbarGroups[toolbarGroups.length - 1] || canvasToolbar;
