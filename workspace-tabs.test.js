@@ -58,15 +58,17 @@ test('OUTPUT retains PNG and A4 controls', () => {
   assert.match(presentationCss, /\.presentation-workspace-tabs/);
 });
 
-test('OUTPUT controls are grouped in the approved 2D / 3D / export order', () => {
+test('OUTPUT controls are grouped in the approved 2D / 3D / export / checklist order', () => {
   assert.match(source, /createSectionCard\(\s*'presentation2dSection',\s*'2D確認'/);
   assert.match(source, /createSectionCard\(\s*'presentation3dSection',\s*'3D確認'/);
   assert.match(source, /createSectionCard\(\s*'presentationExportSection',\s*'出力操作'/);
+  assert.match(source, /createSectionCard\(\s*'presentationCheckSection',\s*'確認チェック'/);
   const twoD = source.indexOf("'presentation2dSection'");
   const threeD = source.indexOf("'presentation3dSection'");
   const exportSection = source.indexOf("'presentationExportSection'");
-  assert.ok(twoD >= 0 && threeD > twoD && exportSection > threeD);
-  assert.match(source, /toolbar\.append\(back, twoDSection\.section, threeDSection\.section, exportSection\.section\)/);
+  const checkSection = source.indexOf("'presentationCheckSection'");
+  assert.ok(twoD >= 0 && threeD > twoD && exportSection > threeD && checkSection > exportSection);
+  assert.match(source, /toolbar\.append\(back, twoDSection\.section, threeDSection\.section, exportSection\.section, checkSection\.section\)/);
 });
 
 test('3D camera controls stay inside the 3D confirmation block', () => {
@@ -86,4 +88,16 @@ test('OUTPUT exposes a live four-item information header above the preview', () 
   assert.match(source, /main\.append\(summary, stage\)/);
   assert.match(presentationCss, /\.presentation-summary-bar/);
   assert.match(presentationCss, /grid-template-columns:\s*repeat\(4/);
+});
+
+test('OUTPUT confirmation checklist has five ordered manual checks and one reset action', () => {
+  assert.match(source, /presentationCheck2d/);
+  assert.match(source, /presentationCheck3d/);
+  assert.match(source, /presentationCheckColor/);
+  assert.match(source, /presentationCheckText/);
+  assert.match(source, /presentationCheckOutput/);
+  assert.match(source, /presentationChecklistResetBtn/);
+  assert.match(source, /querySelectorAll\('#presentationChecklist input\[type="checkbox"\]'\)/);
+  assert.match(presentationCss, /\.presentation-checklist/);
+  assert.match(presentationCss, /\.presentation-check-item/);
 });
