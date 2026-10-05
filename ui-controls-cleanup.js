@@ -7,8 +7,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const APP_VERSION = 'v1.1 RC7.4';
-  const APP_VERSION_SLUG = 'v1.1-rc7-4';
+  const APP_VERSION = 'v1.1 RC7.5';
+  const APP_VERSION_SLUG = 'v1.1-rc7-5';
 
   const TOP_ACTION_LABELS = Object.freeze({
     newBtn: '＋ 新規作成',
