@@ -132,7 +132,7 @@
     });
   }
 
-  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc7-8-checklist1';
+  const bootstrapSrc = 'editor-extensions-bootstrap.js?v=v1.1-rc7-9-layoutdrawer1';
   const canonicalScriptKey = src => {
     const raw = String(src || '').trim();
     if (!raw) return '';
