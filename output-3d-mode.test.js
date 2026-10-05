@@ -49,9 +49,15 @@ test('3D mode surfaces geometry audit failures instead of silently exporting bro
   assert.match(mode, /3D形状チェックエラー/);
 });
 
-test('3D view supports drag orbit, wheel zoom, TOP and ISO', () => {
+test('3D view supports explicit rotate zoom reset plus drag wheel TOP and ISO', () => {
   assert.match(mode, /presentation3dTopBtn/);
   assert.match(mode, /presentation3dIsoBtn/);
+  assert.match(mode, /presentation3dResetBtn/);
+  assert.match(mode, /presentation3dRotateLeftBtn/);
+  assert.match(mode, /presentation3dRotateRightBtn/);
+  assert.match(mode, /presentation3dZoomOutBtn/);
+  assert.match(mode, /presentation3dZoomInBtn/);
+  assert.match(mode, /function adjust3dCamera\(change = \{\}\)/);
   assert.match(mode, /on3dPointerDown/);
   assert.match(mode, /on3dPointerMove/);
   assert.match(mode, /on3dWheel/);
