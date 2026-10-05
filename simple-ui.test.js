@@ -167,4 +167,5 @@ test('Details drawer is viewport-fixed and positioned below the live LAYOUT tool
   assert.match(SOURCE, /drawer\.style\.top = `\$\{top\}px`/);
   assert.match(SOURCE, /positionDrawerBelowToolbar\(\);[\s\S]*drawer\.classList\.toggle\('simple-drawer-open'/);
   assert.match(SOURCE, /new rootRef\.ResizeObserver\(\(\) => positionDrawerBelowToolbar\(\)\)/);
+  assert.match(SOURCE, /if \(drawer\.parentElement !== body\) body\.appendChild\(drawer\)/);
 });
