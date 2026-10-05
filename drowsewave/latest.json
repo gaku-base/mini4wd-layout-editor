@@ -1,14 +1,15 @@
 {
   "channel": "stable",
-  "version": "0.1.83",
+  "version": "0.1.86",
   "url": "",
   "parts": [
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.83/part01.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.83/part02.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.83/part03.b64",
-    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.83/part04.b64"
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part01.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part02.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part03.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part04.b64",
+    "https://raw.githubusercontent.com/gaku-base/mini4wd-layout-editor/drowsewave-update-feed/drowsewave/v0.1.86/part05.b64"
   ],
-  "sha256": "7f83c41d6d02ed201895aab72a5fc42d6fa8d2f8fd20ff207acfede05fe7766c",
-  "publishedAt": "2026-10-05T08:40:00+09:00",
-  "notes": "v0.1.83 promotes DROWSEWAVE Studio UI reconstruction stages 1 and 2 to stable. The 1920x1080 dashboard/common layout is rebuilt for no-scroll daily use. Music Production is rebuilt into three focused no-scroll workspaces: Design, Generate, and Audio Review, while preserving existing Lyria, similarity, approval, recovery, video, and updater logic. Resume now opens the appropriate workspace based on project progress. Update restart wording explicitly means restarting the DROWSEWAVE Studio app, not the PC. Total rehearsal: 144/144 PASS; rendered-app interaction: 18/18 PASS; 10-minute real render: 1/1 PASS."
+  "sha256": "505a95ba350593241c31c389d22ab1edbd83dede0c7e1b9b6a2dd59d8828b807",
+  "publishedAt": "2026-10-05T11:15:00+09:00",
+  "notes": "v0.1.86 promotes UI reconstruction stages 3 and 4 to stable. Thumbnail creation/review is rebuilt for 1920x1080 no-scroll use with quality-gated approval. Video workflow is rebuilt into Materials, 5-minute Preview, and 2h05 Production stages. Browser ChatGPT handoff is integrated for background image and narration/subtitle generation, including persistent required-text conditions, prompt copy/open actions, clipboard/file/drag-and-drop import, validation, and automatic correction-request prompts. Existing Lyria ambience, local TTS, SRT, FFmpeg rendering, checkpoints, revisions, approval, recovery, and updater flows remain intact. Rehearsal 159/159 PASS; rendered-app interaction 31/31 PASS; 10-minute real FFmpeg render 1/1 PASS."
 }
