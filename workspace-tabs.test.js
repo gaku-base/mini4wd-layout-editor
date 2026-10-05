@@ -66,7 +66,7 @@ test('OUTPUT controls are grouped in the approved 2D / 3D / export order', () =>
   const threeD = source.indexOf("'presentation3dSection'");
   const exportSection = source.indexOf("'presentationExportSection'");
   assert.ok(twoD >= 0 && threeD > twoD && exportSection > threeD);
-  assert.match(source, /toolbar\.append\(back, twoDSection\.section, threeDSection\.section, exportSection\.section\)/);
+  assert.match(source, /toolbar\.append\(back, twoDSection\.section, threeDSection\.section, exportSection\.section, reviewCard\)/);
 });
 
 test('3D camera controls stay inside the 3D confirmation block', () => {
