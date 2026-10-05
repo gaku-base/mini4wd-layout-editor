@@ -121,8 +121,8 @@ test('CAD model is loaded before app code and persisted field names remain addit
   const index = fs.readFileSync('index.html', 'utf8');
   const persistence = fs.readFileSync('persistence.js', 'utf8');
   const app = fs.readFileSync('app.js', 'utf8');
-  assert.ok(index.indexOf('src="room-boundary.js"') < index.indexOf('src="app.js?v=v1.1-rc7-7-camera1"'));
-  assert.ok(index.indexOf('src="render-scheduler.js"') < index.indexOf('src="app.js?v=v1.1-rc7-7-camera1"'));
+  assert.ok(index.indexOf('src="room-boundary.js"') < index.indexOf('src="app.js?v=v1.1-rc7-8-checklist1"'));
+  assert.ok(index.indexOf('src="render-scheduler.js"') < index.indexOf('src="app.js?v=v1.1-rc7-8-checklist1"'));
   assert.match(persistence, /'siteBoundary', 'roomCutouts'/);
   assert.match(app, /visibleCutoutIntersections\(state\.siteBoundary, state\.roomCutouts\)/);
   assert.match(app, /c\.rect\(box\.x, box\.y, box\.w, box\.h\); c\.closePath\(\);/);
